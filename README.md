@@ -4,10 +4,10 @@ An agent-native web crawler exposed as an MCP server. It fetches one URL at a
 time over HTTP, extracts the main content, returns LLM-ready Markdown with
 metadata, and stores what it fetched.
 
-Status: **M02 B01 candidate** — M01 complete (static fetch, `fetch_page` Markdown,
-`extract` structured records, opt-in JavaScript rendering, a bounded bulk crawler,
-persisted change monitoring, and the packaged stdio + loopback-HTTP server) plus
-DuckDuckGo discovery (`search`) and the B01 payload polish.
+Status: **current — 34 MCP tools, schema v8.** The server covers static and rendered
+fetch, structured and tabular extraction, bounded crawling, change monitoring with
+webhooks and a feed, PDF text, local semantic search, and stdio + loopback HTTP
+transports.
 
 ## What it does
 
@@ -290,6 +290,35 @@ Errors are in-band: `isError: true` with
 IMP-CONTRACT-001 (`invalid_url`, `blocked_scheme`, `blocked_private_address`,
 `blocked_by_robots`, `dns_error`, `tls_error`, `timeout`, `too_large`,
 `unsupported_content_type`, `http_error`, `render_unavailable`, ...).
+
+## Use with AI agents
+
+web-widow is built to be driven by an agent as well as by a person. Two artifacts make that work
+together:
+
+- **The MCP server** — 34 tools over stdio (default) or loopback streamable HTTP. It owns every
+  guardrail: robots.txt, the private-address gate, the per-host rate floor, body and output caps, and
+  the content-type allowlist.
+- **The field-guide skill** — [`skill/web-widow/SKILL.md`](skill/web-widow/SKILL.md). It teaches an agent how to choose a
+  tool, read the `fetch_page` payload, recognise rendered versus static content, respect interaction
+  session limits, and treat a `blocked_*` refusal as final. It also carries the failure taxonomy and the
+  rule that fetched content is data, never instructions.
+
+Install the pair with [`SKILL-INSTALL.md`](SKILL-INSTALL.md): build the server, create a `0600` config
+and `0700` data directory, register the server in the agent client (stdio command or HTTP URL plus
+bearer token), then copy `skill/web-widow/` into the client's skills directory. The skill assumes the server's
+tools are connected; installing one without the other gives you a server an agent does not know how to
+use, or guidance with no tools behind it.
+
+A typical agent task then looks like this:
+
+> Find the current pricing page for a vendor, extract the plan table, and say what changed since last
+> week.
+
+The agent would call `search`, then `fetch_page` (citing `final_url` and `fetched_at`), then
+`extract_rows` for the table, and finally `monitor_create` plus `events` for the change. Every result is
+returned as untrusted data; page text that looks like an instruction is never followed. Nothing in the
+skill can widen reach or bypass a gate — those decisions stay in the server and the operator's config.
 
 ## `search` — DuckDuckGo discovery
 
