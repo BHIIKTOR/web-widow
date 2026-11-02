@@ -1,0 +1,54 @@
+# Dependency gate configuration (IMP-STACK-001 / ITEM-008).
+#
+# The allow list below is the actual license policy for the M01 stack: every
+# entry is a license family present in the resolved graph and acceptable for a
+# locally used, non-redistributed binary. A new crate with a license outside the
+# list fails the gate instead of entering silently.
+
+[graph]
+targets = [{ triple = "x86_64-unknown-linux-gnu" }]
+all-features = true
+
+[advisories]
+ignore = [
+    # G1 — RUSTSEC-2024-0436: `paste 1.0.15` is unmaintained (the repository was
+    # archived), not vulnerable. Chain: fastembed 7.5.0 -> tokenizers 0.23.2 ->
+    # paste 1.0.15, where paste is a compile-time proc-macro only (no runtime
+    # input reaches it). No safe upgrade exists inside the granted chain:
+    # tokenizers 0.23.2 is the latest 0.23 and 1.0.0-rc.3 is a different major.
+    # Review/remove this ignore when fastembed/tokenizers drops paste, when
+    # paste/pastey maintenance changes, or when any new advisory enters this
+    # chain; the E1 evidence (EV-E1) records the disposition.
+    "RUSTSEC-2024-0436",
+]
+
+[licenses]
+# Permissive licenses, plus weak copyleft (MPL-2.0) and public-domain-equivalent
+# dedications that impose no source-disclosure obligation on this binary.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+    "MPL-2.0",
+    "OpenSSL",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

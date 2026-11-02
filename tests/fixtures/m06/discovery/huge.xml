@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h0</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h1</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h2</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h3</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h4</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h5</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h6</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h7</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h8</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h9</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h10</loc></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/h11</loc></url>
+</urlset>

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M06 tall fixture</title>
+<style>html,body{margin:0}.block{height:1200px;background:linear-gradient(#ffffff,#dddddd)}
+#middle{height:80px;background:#cccccc}</style>
+</head><body><h1>Tall capture fixture</h1>
+<div class="block"></div>
+<div id="middle">middle marker</div>
+<div class="block"></div>
+<p id="bottom">bottom marker</p>
+<script>
+let timer;
+addEventListener('scroll', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const middle = document.getElementById('middle');
+    fetch('/scroll?y=' + Math.round(window.scrollY) +
+          '&top=' + Math.round(middle.getBoundingClientRect().top));
+  }, 60);
+});
+</script>
+</body></html>

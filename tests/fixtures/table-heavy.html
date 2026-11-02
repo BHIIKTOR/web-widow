@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sensor comparison table</title></head>
+<body>
+  <h1>Sensor comparison</h1>
+  <p>The table lists measured values from the 2026 bench run. All sensors were powered from a linear regulator and sampled at 1 Hz.</p>
+  <table>
+    <thead><tr><th>Sensor</th><th>Range</th><th>Accuracy</th><th>Interface</th></tr></thead>
+    <tbody>
+      <tr><td>BME280</td><td>300–1100 hPa</td><td>±1 hPa</td><td>I²C</td></tr>
+      <tr><td>SCD41</td><td>400–5000 ppm</td><td>±50 ppm</td><td>I²C</td></tr>
+      <tr><td>DS18B20</td><td>−55–125 °C</td><td>±0.5 °C</td><td>1-Wire</td></tr>
+      <tr><td>SHT45</td><td>0–100 %RH</td><td>±1.8 %RH</td><td>I²C</td></tr>
+    </tbody>
+  </table>
+  <p>The SCD41 needs a background calibration period of at least seven days before its readings are trustworthy.</p>
+</body>
+</html>

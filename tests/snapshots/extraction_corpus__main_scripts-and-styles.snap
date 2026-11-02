@@ -1,0 +1,7 @@
+---
+source: tests/extraction_corpus.rs
+expression: extraction.markdown
+---
+## Removal check
+
+The only sentence that matters is this one: copper kettles cool slowly.

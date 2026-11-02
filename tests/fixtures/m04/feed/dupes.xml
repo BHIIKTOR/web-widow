@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Dupes</title><link>https://example.com/</link>
+  <item><title>Kept first</title><link>https://example.com/dup</link><guid>dup:1</guid>
+    <description>First copy.</description></item>
+  <item><title>Dropped by id</title><link>https://example.com/other</link><guid>dup:1</guid>
+    <description>Same id, dropped.</description></item>
+  <item><title>Dropped by stable link id</title><link>https://example.com/dup</link>
+    <guid isPermaLink="false">dup:1</guid><description>Same link, dropped.</description></item>
+</channel></rss>

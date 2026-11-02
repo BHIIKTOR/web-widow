@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://127.0.0.1:{{PORT}}/site/a</loc><lastmod>2026-01-02</lastmod></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/b?x=1&amp;y=2</loc><lastmod>2026-01-02T03:04:05Z</lastmod></url>
+  <url><loc><![CDATA[http://127.0.0.1:{{PORT}}/site/c]]></loc><lastmod>not-a-date</lastmod></url>
+  <url><loc>ftp://example.com/ignored</loc></url>
+  <url><loc>http://127.0.0.2:{{PORT}}/site/other-host</loc></url>
+</urlset>

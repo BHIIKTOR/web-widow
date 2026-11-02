@@ -1,0 +1,3 @@
+Le café ouvre à sept heures et ferme quand la dernière chaloupe rentre.
+
+La spécialité est une tarte aux pommes servie tiède.

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Canonical feed</title>
+  <link>https://example.com/</link>
+  <description>Identity fixtures.</description>
+  <item>
+    <title>First tracking variant</title>
+    <link>https://example.com/story?utm_source=newsletter&amp;b=2&amp;a=1</link>
+    <guid>canon:1</guid>
+    <description>First copy wins.</description>
+  </item>
+  <item>
+    <title>Second tracking variant</title>
+    <link>https://example.com/story?a=1&amp;b=2</link>
+    <guid>canon:2</guid>
+    <description>Same canonical, dropped.</description>
+  </item>
+  <item>
+    <title>Unknown parameter variant</title>
+    <link>https://example.com/story?syn=abc</link>
+    <guid>canon:3</guid>
+    <description>syn stays in the identity.</description>
+  </item>
+  <item>
+    <title>Unknown parameter plus tracking</title>
+    <link>https://example.com/story?syn=abc&amp;utm_campaign=x</link>
+    <guid>canon:4</guid>
+    <description>Same syn identity after stripping tracking, dropped.</description>
+  </item>
+  <item>
+    <title>No link item</title>
+    <guid>canon:5</guid>
+    <description>No URL, no canonical.</description>
+  </item>
+</channel></rss>

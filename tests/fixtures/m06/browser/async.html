@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M06 async fixture</title></head>
+<body><h1>Async fixture</h1><div id="container"></div>
+<input id="q" autocomplete="off">
+<script>
+setTimeout(() => {
+  const late = document.createElement('div');
+  late.id = 'late';
+  late.textContent = 'LATE_MARKER';
+  document.getElementById('container').appendChild(late);
+}, 300);
+document.getElementById('q').addEventListener('input', () => {
+  fetch('/api/slow?from=type');
+});
+</script>
+</body></html>

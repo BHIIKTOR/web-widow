@@ -1,0 +1,13 @@
+---
+source: tests/extraction_corpus.rs
+expression: extraction.markdown
+---
+## Unclosed heading
+
+This paragraph never closes and contains **bold text that runs on** 
+
+**Another paragraph with a [link](https://example.com/somewhere)** 
+
+**[nested without closing](https://example.com/somewhere)** 
+
+**[The final sentence still needs to survive parsing: amber lanterns lined the pier.](https://example.com/somewhere)**

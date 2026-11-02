@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M06 form fixture</title></head>
+<body><h1>Form fixture</h1>
+<form action="/echo" method="get">
+  <input name="q" id="q" autocomplete="off">
+  <button type="submit" id="send">Send</button>
+</form>
+<script>
+document.getElementById('q').addEventListener('input', (event) => {
+  console.log('TYPED_VALUE:' + event.target.value);
+});
+</script>
+</body></html>

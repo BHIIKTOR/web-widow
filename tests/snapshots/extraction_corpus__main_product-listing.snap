@@ -1,0 +1,21 @@
+---
+source: tests/extraction_corpus.rs
+expression: extraction.markdown
+---
+## Featherweight Canister Stove
+
+€39.90
+
+72 g, 2.6 kW, piezo ignition
+
+## Basecamp Two-Burner
+
+€129.00
+
+3.1 kg, 2 × 2.2 kW, runs on propane
+
+## Alcohol Spirit Burner
+
+€24.50
+
+96 g, silent, no pressurised fuel

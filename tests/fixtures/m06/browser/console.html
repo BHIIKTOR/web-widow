@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M06 console fixture</title></head>
+<body><h1>Console fixture</h1>
+<p>console capture fixture</p>
+<script>
+console.error('APP_CONSOLE_ERROR');
+console.log('L'.repeat(900));
+console.log('CTRL:\u001b]8;;http://x\u0007hello\u0000');
+setTimeout(() => { throw new Error('APP_UNCAUGHT'); }, 100);
+fetch('http://127.0.0.1:1/refused').catch(() => {});
+</script>
+</body></html>

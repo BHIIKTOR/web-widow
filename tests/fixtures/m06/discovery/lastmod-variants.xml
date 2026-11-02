@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://127.0.0.1:{{PORT}}/site/date-only</loc><lastmod>2026-01-02</lastmod></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/rfc3339</loc><lastmod>2026-01-02T03:04:05+02:00</lastmod></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/invalid</loc><lastmod>yesterday</lastmod></url>
+  <url><loc>http://127.0.0.1:{{PORT}}/site/empty</loc><lastmod></lastmod></url>
+</urlset>

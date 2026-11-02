@@ -1,0 +1,5 @@
+---
+source: tests/extraction_corpus.rs
+expression: extraction.markdown
+---
+

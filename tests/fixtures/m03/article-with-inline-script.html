@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Inline script</title></head>
+<body>
+<main><article><h1>Visible article</h1>
+<div class="body">Visible sentence with prose only.
+<script>var leaked = "SCRIPT_LEAK_TOKEN_178K";</script>
+<style>.leak { color: red; }</style>
+<div class="nested">Nested <b>visible</b> text <script>NESTED_SCRIPT_TOKEN</script></div>
+</div>
+</article></main>
+</body></html>

@@ -1,0 +1,4 @@
+http://127.0.0.1:{{PORT}}/site/t1
+http://127.0.0.1:{{PORT}}/site/t2
+
+ftp://example.com/skip

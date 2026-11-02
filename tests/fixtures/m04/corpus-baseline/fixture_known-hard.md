@@ -1,0 +1,9 @@
+## Comments (48)
+
+Commenter one writes at length about ferries, ferries they have known, ferries their grandmother knew, and the price of a return ticket in 1978.
+
+Commenter two disagrees about the timetable and quotes a notice from 2019 at length.
+
+Commenter three asks whether bicycles are allowed on the upper deck during the resumed service.
+
+Commenter four replies with a story about a bicycle lost on a ferry in another country entirely.

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M06 app fixture</title>
+<style>#styled { display: none; }</style>
+<link rel="stylesheet" href="/asset/style.css">
+</head><body>
+<h1>App fixture</h1>
+<button id="toggle">Toggle</button>
+<div id="panel" hidden>panel content</div>
+<button id="styled">CSS-only visible</button>
+<a id="next" href="/next.html">next page</a>
+<script>
+console.error('APP_CONSOLE_ERROR');
+document.getElementById('toggle').addEventListener('click', () => {
+  const panel = document.getElementById('panel');
+  panel.hidden = !panel.hidden;
+  console.log('panel toggled');
+});
+</script>
+</body></html>

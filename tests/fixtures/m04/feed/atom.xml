@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Fixture atom</title>
+  <link href="https://example.com/"/>
+  <updated>2026-10-31T08:00:00Z</updated>
+  <entry>
+    <title>Atom fixture item</title>
+    <id>urn:fixture:atom:1</id>
+    <link href="/atom-item"/>
+    <updated>2026-10-31T08:30:00Z</updated>
+    <summary>Atom fixture summary.</summary>
+  </entry>
+</feed>

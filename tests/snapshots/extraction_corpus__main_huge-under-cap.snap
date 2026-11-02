@@ -1,0 +1,405 @@
+---
+source: tests/extraction_corpus.rs
+expression: extraction.markdown
+---
+Section 1. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-001.
+
+Section 2. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-002.
+
+Section 3. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-003.
+
+Section 4. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-004.
+
+Section 5. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-005.
+
+Section 6. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-006.
+
+Section 7. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-007.
+
+Section 8. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-008.
+
+Section 9. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-009.
+
+Section 10. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-010.
+
+Section 11. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-011.
+
+Section 12. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-012.
+
+Section 13. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-013.
+
+Section 14. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-014.
+
+Section 15. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-015.
+
+Section 16. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-016.
+
+Section 17. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-017.
+
+Section 18. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-018.
+
+Section 19. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-019.
+
+Section 20. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-020.
+
+Section 21. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-021.
+
+Section 22. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-022.
+
+Section 23. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-023.
+
+Section 24. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-024.
+
+Section 25. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-025.
+
+Section 26. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-026.
+
+Section 27. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-027.
+
+Section 28. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-028.
+
+Section 29. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-029.
+
+Section 30. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-030.
+
+Section 31. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-031.
+
+Section 32. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-032.
+
+Section 33. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-033.
+
+Section 34. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-034.
+
+Section 35. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-035.
+
+Section 36. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-036.
+
+Section 37. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-037.
+
+Section 38. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-038.
+
+Section 39. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-039.
+
+Section 40. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-040.
+
+Section 41. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-041.
+
+Section 42. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-042.
+
+Section 43. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-043.
+
+Section 44. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-044.
+
+Section 45. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-045.
+
+Section 46. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-046.
+
+Section 47. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-047.
+
+Section 48. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-048.
+
+Section 49. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-049.
+
+Section 50. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-050.
+
+Section 51. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-051.
+
+Section 52. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-052.
+
+Section 53. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-053.
+
+Section 54. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-054.
+
+Section 55. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-055.
+
+Section 56. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-056.
+
+Section 57. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-057.
+
+Section 58. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-058.
+
+Section 59. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-059.
+
+Section 60. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-060.
+
+Section 61. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-061.
+
+Section 62. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-062.
+
+Section 63. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-063.
+
+Section 64. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-064.
+
+Section 65. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-065.
+
+Section 66. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-066.
+
+Section 67. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-067.
+
+Section 68. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-068.
+
+Section 69. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-069.
+
+Section 70. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-070.
+
+Section 71. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-071.
+
+Section 72. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-072.
+
+Section 73. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-073.
+
+Section 74. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-074.
+
+Section 75. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-075.
+
+Section 76. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-076.
+
+Section 77. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-077.
+
+Section 78. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-078.
+
+Section 79. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-079.
+
+Section 80. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-080.
+
+Section 81. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-081.
+
+Section 82. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-082.
+
+Section 83. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-083.
+
+Section 84. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-084.
+
+Section 85. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-085.
+
+Section 86. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-086.
+
+Section 87. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-087.
+
+Section 88. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-088.
+
+Section 89. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-089.
+
+Section 90. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-090.
+
+Section 91. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-091.
+
+Section 92. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-092.
+
+Section 93. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-093.
+
+Section 94. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-094.
+
+Section 95. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-095.
+
+Section 96. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-096.
+
+Section 97. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-097.
+
+Section 98. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-098.
+
+Section 99. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-099.
+
+Section 100. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-100.
+
+Section 101. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-101.
+
+Section 102. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-102.
+
+Section 103. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-103.
+
+Section 104. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-104.
+
+Section 105. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-105.
+
+Section 106. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-106.
+
+Section 107. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-107.
+
+Section 108. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-108.
+
+Section 109. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-109.
+
+Section 110. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-110.
+
+Section 111. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-111.
+
+Section 112. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-112.
+
+Section 113. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-113.
+
+Section 114. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-114.
+
+Section 115. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-115.
+
+Section 116. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-116.
+
+Section 117. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-117.
+
+Section 118. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-118.
+
+Section 119. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-119.
+
+Section 120. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-120.
+
+Section 121. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-121.
+
+Section 122. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-122.
+
+Section 123. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-123.
+
+Section 124. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-124.
+
+Section 125. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-125.
+
+Section 126. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-126.
+
+Section 127. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-127.
+
+Section 128. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-128.
+
+Section 129. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-129.
+
+Section 130. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-130.
+
+Section 131. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-131.
+
+Section 132. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-132.
+
+Section 133. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-133.
+
+Section 134. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-134.
+
+Section 135. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-135.
+
+Section 136. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-136.
+
+Section 137. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-137.
+
+Section 138. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-138.
+
+Section 139. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-139.
+
+Section 140. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-140.
+
+Section 141. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-141.
+
+Section 142. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-142.
+
+Section 143. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-143.
+
+Section 144. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-144.
+
+Section 145. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-145.
+
+Section 146. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-146.
+
+Section 147. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-147.
+
+Section 148. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-148.
+
+Section 149. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-149.
+
+Section 150. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-150.
+
+Section 151. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-151.
+
+Section 152. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-152.
+
+Section 153. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-153.
+
+Section 154. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-154.
+
+Section 155. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-155.
+
+Section 156. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-156.
+
+Section 157. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-157.
+
+Section 158. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-158.
+
+Section 159. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-159.
+
+Section 160. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-160.
+
+Section 161. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-161.
+
+Section 162. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-162.
+
+Section 163. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-163.
+
+Section 164. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-164.
+
+Section 165. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-165.
+
+Section 166. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-166.
+
+Section 167. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-167.
+
+Section 168. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-168.
+
+Section 169. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-169.
+
+Section 170. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-170.
+
+Section 171. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-171.
+
+Section 172. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-172.
+
+Section 173. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-173.
+
+Section 174. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-174.
+
+Section 175. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-175.
+
+Section 176. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-176.
+
+Section 177. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-177.
+
+Section 178. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-178.
+
+Section 179. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-179.
+
+Section 180. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-180.
+
+Section 181. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-181.
+
+Section 182. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-182.
+
+Section 183. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-183.
+
+Section 184. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-184.
+
+Section 185. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-185.
+
+Section 186. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-186.
+
+Section 187. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-187.
+
+Section 188. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-188.
+
+Section 189. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-189.
+
+Section 190. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-190.
+
+Section 191. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-191.
+
+Section 192. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-192.
+
+Section 193. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-193.
+
+Section 194. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-194.
+
+Section 195. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-195.
+
+Section 196. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-196.
+
+Section 197. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-197.
+
+Section 198. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-198.
+
+Section 199. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-199.
+
+Section 200. The calibration procedure repeats for each channel, and the technician records the offset in the log book before moving on. Each channel is driven from a stable reference, allowed to settle for two minutes, and then sampled twenty times; the median is written into the calibration table and the spread is noted separately so a drifting channel can be recognised later. Marker-200.
+
+The final instruction is to seal the enclosure with the supplied gasket.
