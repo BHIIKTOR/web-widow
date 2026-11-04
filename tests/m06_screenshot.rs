@@ -1,5 +1,4 @@
-//! M06 B1 — `screenshot` + `blob_get` (IMP-DEC-032; checks B1-1…B1-3,
-//! B1-5…B1-7).
+//! v0.6 — `screenshot` + `blob_get`.
 //!
 //! Lane-local fixture server: `tests/fixtures/m06/browser/` (tall, styled with
 //! CSS/font/image/media, plain) plus a robots.txt that disallows `/private`.
@@ -583,7 +582,7 @@ async fn the_visual_profile_loads_assets_and_the_text_profile_keeps_blocking_the
         "media is blocked for fetch_page too: {text_entries:?}"
     );
 
-    // Direct text-profile attribution: the same blocked counters as M03.
+    // Direct text-profile attribution: the same blocked counters as v0.3.
     // The linked stylesheet is blocked, so the inline `@font-face` is the only
     // reason a font request exists to block in this profile.
     let rendered = env

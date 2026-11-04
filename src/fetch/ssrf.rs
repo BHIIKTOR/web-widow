@@ -1,5 +1,5 @@
 //! SSRF gate: scheme check, our own DNS resolution, and classification of every
-//! resolved address (IMP-SAFE-001 / ITEM-003).
+//! resolved address.
 //!
 //! The allowlist is config-file only. A match is logged at info with the rule
 //! that matched, so an operator can audit why a private fetch happened.

@@ -46,7 +46,7 @@ impl RobotsDecision {
 }
 
 /// `None` means "no authoritative policy" (transport failure, 5xx, unparseable
-/// file): that is a conservative disallow for the cache window (IMP-SAFE-001).
+/// file): that is a conservative disallow for the cache window.
 pub fn decide(rules: Option<&dyn RobotsRules>, url: &str) -> RobotsDecision {
     match rules {
         None => RobotsDecision::Disallowed {

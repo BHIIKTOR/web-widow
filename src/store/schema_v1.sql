@@ -1,4 +1,4 @@
--- Migration 001_init.sql — schema v1 (IMP-DATA-001).
+-- Migration 001_init.sql — schema v1.
 -- Applied inside a transaction by the writer; forward-only, tracked by PRAGMA
 -- user_version. B04 and B05 add their own tables in later migrations.
 
@@ -80,7 +80,7 @@ CREATE TABLE hosts (
     robots_hash          TEXT,
     robots_body          BLOB,
     -- Effective cache expiry: min(24 h, Cache-Control max-age) for a successful
-    -- file, 60 min for a failure. IMP-DATA-001's column list does not name it;
+    -- file, 60 min for a failure. The column list does not name it;
     -- it exists so the stated TTL rule does not need a second cache.
     robots_expires_at    TEXT,
     next_allowed_at      TEXT,

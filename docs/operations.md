@@ -1,7 +1,7 @@
 # web-widow operations
 
-Operator runbook for the B06 packaged server. Every command here is executed in
-the B06 evidence run on a clean data directory; the defaults below are checked
+Operator runbook for the packaged server. Every command here was executed
+on a clean data directory; the defaults below are checked
 against `config.example.toml` and the running binary, not inferred from internal
 notes.
 
@@ -56,10 +56,10 @@ lower `max_pages`/`max_chars`, never raise the server ceiling.
 removes the route and returns 404) and `feed_items` (1..=200, default 100; the
 RSS document itself caps at 100).
 
-`[embeddings]` (M07 E1) and `[webhooks]` (M07 W1) are **live**. With
+`[embeddings]` and `[webhooks]` are **live**. With
 `enabled = true`, `serve` loads the local embedding artifacts and runs the lazy
-backfill, and/or starts the webhook dispatcher. `[scheduler]` (M07 S1) is the
-**opt-in in-process timer** (ITEM-009/GRANT-009 amended; default false). This
+backfill, and/or starts the webhook dispatcher. `[scheduler]` is the
+**opt-in in-process timer** (default false). This
 build starts no timer unless enabled. All three `enabled` keys default to
 `false`.
 
@@ -86,9 +86,8 @@ build starts no timer unless enabled. All three `enabled` keys default to
   other 4xx/redirect dead; backoff `[60,300,1800,7200,21600]` s). The URL is
   treated as a secret and is never logged or returned — status shows the host
   only. See §9.8 for the egress disclosure and HMAC recipe.
-- `[scheduler]`: the opt-in in-process timer (ITEM-009/GRANT-009 amended by
-  IMP-ITEM-006). `enabled` is **false by default**; `tick_ms` is 1 000..=600 000
-  (default 30 000) and `max_checks_per_tick` 1..=500 (also clamped by
+- `[scheduler]`: the opt-in in-process timer. `enabled` is **false by default**;
+  `tick_ms` is 1 000..=600 000 (default 30 000) and `max_checks_per_tick` 1..=500 (also clamped by
   `monitor.max_checks_per_call`). It runs only in `serve`; `run-due` is unchanged
   and never starts the timer. One driver per instance: the data-directory lock
   makes a local `run-due` fail while the server runs, and `run-due --http` goes
@@ -161,7 +160,7 @@ decide a page-retention policy) if that is too much.
 
 GC runs at startup and is idempotent. A referenced blob surviving over budget is
 intentional: content the index or change history reads is never silently traded
-for space. The B6-4 drill (`tests/retention.rs`, plus the real-data transcript)
+for space. The retention drill (`tests/retention.rs`, plus the real-data transcript)
 verifies eviction order, change-point survival, and that every `raw_hash`,
 `normalized_hash` and `result_hash` in `pages`, `fetch_events` and `snapshots`
 still has a `blobs` row and a file.
@@ -233,11 +232,11 @@ sha256sum "$BIN"                                  # must equal the recorded roll
 strings "$BIN" | grep -q 'text/event-stream'      # http-capable when the unit passes --http
 ```
 
-For the M02 deployment the durable artifacts are
+For the deployed release the durable artifacts are
 `~/.local/share/web-widow-backups/B02-shared-rollback-binary-ac31015-http`
 (`403254f0…`, built from `ac31015 --features http`, schema v4, 11 tools) and
 `~/.local/share/web-widow-backups/B02-shared-previous-runtime-9ba61b68`
-(`9ba61b68…`, the M01 runtime image, http + v4, 10 tools). The B01 **default**
+(`9ba61b68…`, the original runtime image, http + v4, 10 tools). The **default**
 build `e7fd8a4c…` is not a valid rollback for an `--http` unit.
 
 A **v4 binary refuses a v5 database**:
@@ -253,11 +252,11 @@ preserved v4 rollback binary (expect the refusal above against the v5 copy; the
 pristine v4 file opens normally). Also start the rollback binary over
 `serve --http` on a copy of the v4 backup, verify `initialize` + `tools/list`
 shows the **11-tool v4-era surface**, and stop it cleanly. The exact executed
-commands and observations are retained with the M02 B02 evidence.
+commands and observations are retained in the release evidence.
 
 ### Upgrade v7 → v8 (embeddings/webhooks, additive)
 
-Schema v8 is additive (M07 P0, IMP-DEC-043): `embeddings`, `embedding_state`,
+Schema v8 is additive: `embeddings`, `embedding_state`,
 `monitor_webhooks` and `webhook_deliveries`, plus their indexes. No existing
 table, column or row is changed, and P0 adds no tool and no background task. A
 failed migration rolls back inside its transaction; a v7 binary refuses a v8
@@ -280,7 +279,7 @@ rollback means restoring the pre-migration database.
    timer means removing/disabling any cron `run-due` entry for that instance
    (one driver); leaving it off keeps cron valid.
 
-### Embedding artifacts (M07 E1)
+### Embedding artifacts
 
 `search_semantic` needs two provisioned artifacts; they are **not** crates and
 must not be committed. Verify their pinned SHA-256 before installing:
@@ -294,6 +293,24 @@ must not be committed. Verify their pinned SHA-256 before installing:
 | `models/minilm-l6-v2-q/special_tokens_map.json` | 125 B | `b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3` |
 | `models/minilm-l6-v2-q/tokenizer_config.json` | 366 B | `9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3` |
 
+The model files are the quantized ONNX export of `Xenova/all-MiniLM-L6-v2` on
+Hugging Face. Fetch them (the ONNX file keeps its `onnx/` subdirectory; the four
+JSON files sit at the model root), then verify the table above:
+
+```sh
+base=https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main
+mkdir -p "<data_dir>/models/minilm-l6-v2-q/onnx"
+curl -fsSL "$base/onnx/model_quantized.onnx" \
+  -o "<data_dir>/models/minilm-l6-v2-q/onnx/model_quantized.onnx"
+for f in tokenizer.json config.json special_tokens_map.json tokenizer_config.json; do
+  curl -fsSL "$base/$f" -o "<data_dir>/models/minilm-l6-v2-q/$f"
+done
+```
+
+ONNX Runtime itself comes from the Microsoft
+`onnxruntime-linux-x64-1.31.0.tgz` release archive (extract
+`lib/libonnxruntime.so`). Nothing is fetched at runtime.
+
 Install the library beside the binary (or set `[embeddings].ort_dylib_path`) and
 the model directory under `<data_dir>/models/minilm-l6-v2-q/`. The server never
 downloads either file; a missing or mismatched file is the typed
@@ -304,7 +321,7 @@ them automatically); `[embeddings].enabled = false` disables the whole path.
 
 ### Upgrade v6 → v7 (recipes/screenshots, additive)
 
-Schema v7 is additive (M06 P0, IMP-DEC-042): `recipes`, `recipe_versions` and
+Schema v7 is additive: `recipes`, `recipe_versions` and
 `screenshots`, plus their indexes. No existing table, column or row is changed,
 and P0 adds no tool. A failed migration rolls back inside its transaction; a v6
 binary refuses a v7 database (`database schema v7 is newer than this binary
@@ -334,7 +351,7 @@ pre-migration database.
    §6 above). Record `PRAGMA user_version` and the `pages` count.
 2. Stop the unit (`systemctl --user stop web-widow.service`).
 3. Install the new binary; verify its `sha256sum` and that it is feature-matched
-   for the unit (see the M02 note below).
+   for the unit (see the deployment note below).
 4. Start. The first start migrates to v6 and runs the backfill **before serving**:
    200 pages per transaction, capped at `[fts].max_index_chars`, idempotent. The
    log line is `fts backfill complete (schema v6)` with `scanned`, `with_text`,
@@ -353,15 +370,15 @@ thousands: a startup pause). A page whose stored extraction the backfill cannot
 parse (a monitor-only page, whose stored payload is a bare records array) is
 indexed by **title only** until its next check stores the delivered text.
 
-### M03 code-only release (no schema change)
+### v0.3 code-only release (no schema change)
 
-M03 changes only the HTTP transport (stateless, B01) and the `fetch_page`/
-`extract` payload/quality paths (B02). There is **no schema or data change**:
+v0.3 changes only the HTTP transport (stateless) and the `fetch_page`/
+`extract` payload/quality paths. There is **no schema or data change**:
 `user_version` stays 5, monitor rows and snapshots are untouched, and the
 rollback is a binary swap, not a database restore.
 
-1. Preserve the deployed M02 http artifact `99ab3a4…` as
-   `~/.local/share/web-widow-backups/M03-shared-rollback-m02-http` (and a
+1. Preserve the previously deployed http artifact `99ab3a4…` as
+   `~/.local/share/web-widow-backups/v0.3-shared-rollback-http` (and a
    second-instance copy) with `sha256sum`; verify it has
    the HTTP transport (`strings "$BIN" | grep -q 'text/event-stream'`).
 2. Stop the unit, install the new `--features http` artifact at its
@@ -375,9 +392,9 @@ rollback is a binary swap, not a database restore.
 4. Rollback: stop, swap `99ab3a4…` back, start, verify 12 tools and the same
    monitor list. No database restore is involved.
 
-### M04 behaviour note (`:main` scope, `selector:"*"`)
+### v0.4 behaviour note (`:main` scope, `selector:"*"`)
 
-M04 does not change the schema or the tool surface. Two evaluation meanings
+v0.4 does not change the schema or the tool surface. Two evaluation meanings
 change and are worth knowing at upgrade time:
 
 - `container: ":main"` now evaluates fields inside the **`body` of the same
@@ -396,10 +413,10 @@ extraction cached under the old meaning can be served for up to
 `use_cache: false` when the new scope must apply immediately. The rollback is a
 binary swap; no database restore is involved.
 
-### M04 code-only release (13 tools, no schema change)
+### v0.4 code-only release (13 tools, no schema change)
 
-M04 adds `fetch_feed`, `run-due --http`, normalized tool schemas, the `:main`/
-`selector:"*"` semantics (B01) and the bounded section-gap repair (B02). There is
+v0.4 adds `fetch_feed`, `run-due --http`, normalized tool schemas, the `:main`/
+`selector:"*"` semantics and the bounded section-gap repair. There is
 **no schema or data change**: `user_version` stays 5 and monitor/snapshot rows
 are untouched; the rollback is a binary swap.
 
@@ -415,7 +432,7 @@ are untouched; the rollback is a binary swap.
 - **Schemas.** `tools/list` no longer advertises the schemars integer formats
   (`uint*`, `int64`, `double`); `type`/`minimum`/`maximum` and string formats are
   unchanged and serde validation is untouched. The surface is now **13 tools**.
-- **Deployment.** Preserve the deployed M03 artifact `366ab64c…` as
+- **Deployment.** Preserve the deployed v0.3 artifact `366ab64c…` as
   shared and second-instance copies under `~/.local/share/web-widow-backups/`
   (sha + `strings … | grep -q 'text/event-stream'`) **before** the swap; stop,
   install the new `--features http` binary at the unit's `ExecStart`, verify its
@@ -449,14 +466,14 @@ are untouched; the rollback is a binary swap.
   or missing content is `not_found`. `page_id` is the existing page row for the
   canonical URL or null; a screenshot never creates a page row.
 - Visual assets are browser subresources: the top-level SSRF/robots gate does
-  not vet them (IMP-RISK-004). Treat captured pages and PNG bytes as untrusted
+  not vet them. Treat captured pages and PNG bytes as untrusted
   data.
 - `render=always` on a missing browser is `render_unavailable`; a render failure
   is `render_failed`, never a silent static result (`auto` reports
   `static_fallback` + `render_warning` instead).
 - `render=always` on JSON/XML treats the browser DOM as `text/html`; use
   `render=never` for non-markup content. Subresources and iframes/popups are
-  outside the top-level SSRF/robots gate (IMP-RISK-004).
+  outside the top-level SSRF/robots gate.
 - A rendered **monitor** re-fetches every check; the static validator cannot
   prove the rendered DOM is unchanged. Budget one navigation per check.
 
@@ -539,7 +556,7 @@ are untouched; the rollback is a binary swap.
   egress filter**, and it does not cover WebRTC/UDP or DNS-only channels (DNS
   prefetch and non-proxied WebRTC UDP are disabled by launch flags).
   **Rebinding:** the vet resolves DNS and the browser resolves again, so a
-  short-TTL zone can still reach a private address (IMP-RISK-044; this wording,
+  short-TTL zone can still reach a private address (this wording,
   plus the README "Target scope" bullet, is the lane's discoverable record —
   the risk card is owned by Implementation-Flow).
 - `interact_state` captures an optional viewport screenshot through the same CAS
@@ -576,9 +593,9 @@ WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
   a request without the streamable `Accept` header gets `406` (MCP clients send
   it automatically).
 - A non-loopback bind is refused unless `--allow-non-loopback` is passed.
-  Remote exposure, TLS and multi-user auth are out of M01 scope; terminate TLS
+  Remote exposure, TLS and multi-user auth are out of scope; terminate TLS
   in a local reverse proxy if a network deployment is ever required.
-- **Stateless streamable HTTP (ISS-001 / IMP-DEC-013).** Every POST is served
+- **Stateless streamable HTTP.** Every POST is served
   directly; `Mcp-Session-Id` is neither required nor issued, and stale, unknown
   or absent ids are ignored rather than answered with `404`. `initialize`
   completes normally with an `application/json` response. Only POST is served:
@@ -620,8 +637,8 @@ WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
   job with the remaining ids and the partial typed results are returned. One
   in-flight check may overrun by at most one check. `monitor_id` + `wait_ms` is
   `schema_invalid`.
-- **Scheduler is opt-in (ITEM-009/GRANT-009 amended).** The M01 decision chose
-  no scheduler; IMP-ITEM-006 amends it. With `[scheduler].enabled = true`
+- **Scheduler is opt-in (amended).** The original design chose
+  no scheduler; an amendment adds one. With `[scheduler].enabled = true`
   (default false), `serve` runs a resident timer that drives the same `run_due`
   pass; `run-due` remains supported and is unchanged. One driver per instance:
   the serving process holds the data-directory lock, so a local `run-due` fails
@@ -646,7 +663,7 @@ WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
   re-fetched. Restart an in-flight pre-upgrade crawl job that carried a schema as
   a new job so its profile identity and result join stay consistent.
 
-### 9.8 Webhook emission (M07 W1)
+### 9.8 Webhook emission
 
 Webhooks are a deliberate **outbound egress** of monitor metadata. Enabling one
 is the operator's decision, and the config file is the control surface: it is not
@@ -706,10 +723,10 @@ through a tool, a monitor, page content or a prompt.
   metadata. No webhook fires for a monitor with no attached target; remove the
   target from config or set `[webhooks].enabled = false` to stop all delivery.
 
-### 9.9 In-process scheduler (M07 S1, opt-in)
+### 9.9 In-process scheduler (opt-in)
 
-M01 ITEM-009/GRANT-009 chose no scheduler: `monitor_check` on demand plus a
-single-shot `run-due` for cron/systemd. **IMP-ITEM-006 amends it** with a
+The original design chose no scheduler: `monitor_check` on demand plus a
+single-shot `run-due` for cron/systemd. **An amendment adds** a
 resident timer that is **opt-in and off by default**; every surrounding guarantee
 stays.
 
@@ -745,7 +762,7 @@ stays.
 
 ## 10. Search (DuckDuckGo discovery)
 
-- **One SERP page per call.** DDG returns ten organic results; M02 has no
+- **One SERP page per call.** DDG returns ten organic results; there is no
   pagination. A call makes at most two SERP requests: the configured html
   endpoint, then the lite endpoint only when the primary fails at transport or
   parse level. Route refusals (`blocked_by_robots`, `blocked_private_address`,
@@ -776,10 +793,10 @@ stays.
   `extraction_failed` (DDG challenge/anomaly or markup drift) — never an empty
   success. Transient DDG challenge: one later retry is reasonable, never a loop;
   watch recurrence in the access log (`grep 'search failed'`/`'search completed'`)
-  before treating it as a defect (ISS-008). A lite fallback rate near 100 % is the
-  IMP-RISK-015 indicator that the html markup drifted.
+  before treating it as a defect. A lite fallback rate near 100 % is the
+  indicator that the html markup drifted.
 
-### Field signals (M05; no schema or data change)
+### Field signals (no schema or data change)
 
 - **`fetch_page` `content_warning`.** `"interstitial_suspect"` appears only when
   all four hold: status 200, the final URL drifted from the request in host or
@@ -815,7 +832,7 @@ the board, check `PRAGMA user_version` (must be 6) and
 `meta.fts_backfill_v6`; without the marker, a backfill is still pending (it runs
 only at startup).
 
-### `search_semantic` — local semantic index (M07 E1)
+### `search_semantic` — local semantic index
 
 `search_semantic` embeds the query once with the configured local model
 (`minilm-l6-v2-q`, all-MiniLM-L6-v2 quantized, 384 dims) and ranks stored chunk
@@ -856,7 +873,7 @@ two are deliberately distinct and neither replaces the other.
   pages, whose recall is weaker. Results are retrieval candidates, not authority;
   the stored text is untrusted data, never instructions.
 
-### Sitemap discovery (M06 C1)
+### Sitemap discovery
 
 `sitemap` and `crawl_start.sitemap_urls` read a `<urlset>`, `<sitemapindex>` or
 plain-text sitemap, gzip included. Discovery only: no page, extraction, blob or
@@ -869,7 +886,7 @@ seeded from a sitemap applies the job's scope to the entries, dedupes them again
 `start_urls` and `max_pages`, and records a sitemap failure in the start payload
 while the other seeds still start.
 
-### PDF text layer (M06 C2, PDFium)
+### PDF text layer (PDFium)
 
 `pdf_extract` reads one PDF's text layer through the shared adapter (SSRF, robots,
 redirect vetting, per-host politeness, streamed `[pdf].max_bytes`). It returns
@@ -879,7 +896,7 @@ redirect vetting, per-host politeness, streamed `[pdf].max_bytes`). It returns
 empty-user-password PDF opens), `pdf_invalid` (malformed; a Rust parse panic is
 caught) and `render_unavailable` (the engine cannot load) are typed. PDFium is
 not reentrant: parsing is serialized by a process-wide mutex and runs on a
-blocking thread; a **native** PDFium crash is not catchable (RISK-046). A complete
+blocking thread; a **native** PDFium crash is not catchable. A complete
 text layer is stored (page row `render_mode: "pdf"`, raw blob = the PDF, one
 extraction row) and indexed for `search_content`; a later HTML acquisition of the
 same URL replaces the indexed text. `no_text_layer`/`partial` store nothing.
@@ -897,7 +914,7 @@ a fixture PDF that is then findable via `search_content`. The library belongs in
 both units' rollback artifacts alongside the binary and the DB copy. The test
 suite needs `WEB_WIDOW_PDFIUM_PATH`; without it the PDF tests print `SKIP`.
 
-### Change feed and robots cache (M06 C3)
+### Change feed and robots cache
 
 `events` reads the local `changes` join (JSON or RSS 2.0); `robots_cache` reads
 the `hosts` cache and probes a path from the **stored** body with zero network
@@ -928,12 +945,12 @@ sees zero requests.
 
 ## 11. Intended use and risk statements
 
-**Intended use (RISK-011).** Internal agent tooling over publicly accessible
+**Intended use.** Internal agent tooling over publicly accessible
 pages (docs, news, reference sites); robots.txt respected; ≤1 request/s per host;
 no login-gated, authenticated, or paywalled content.
 
-**Readability omission (RISK-014).** `mode=main` can omit whole sibling content
-blocks (readability limitation). M04 repairs the **section-shaped** class (the
+**Readability omission.** `mode=main` can omit whole sibling content
+blocks (readability limitation). v0.4 repairs the **section-shaped** class (the
 sqlite.org/whentouse.html case): a gap between delivered blocks is restored only
 when it begins with an undelivered section heading that is a sibling (same
 parent, no deeper level) of an adjacent delivered heading and is followed by
@@ -941,16 +958,16 @@ content, within a 25 % per-page bound that otherwise skips the whole repair.
 Heading-less runs — card copy, related teasers, complementary notes — are never
 admitted, and pages without such a gap keep byte-identical output. Use
 `mode=full` or `mode=text` when
-completeness matters. The B06 operator run observed **no** whole article-sibling
+completeness matters. The operator run observed **no** whole article-sibling
 omission in a 10-page docs/news/reference sample; navigation, sidebars and
 footers were excluded as intended. Two adjacent observations are recorded rather
-than folded into RISK-014: python.org/about serves a JavaScript-fallback shell to
-both static and headless clients (site behavior; About content not delivered),
+than folded into the readability limitation: python.org/about serves a
+JavaScript-fallback shell to both static and headless clients (site behavior; About content not delivered),
 and a broad `h2` schema selector on mdBook pages can pick theme UI — scope docs
 schemas with `container`. No mitigation is claimed beyond `mode=full`/`text` and
 schema scoping.
 
-**Residual rendering risk (IMP-RISK-004).** The SSRF gate and robots policy cover
+**Residual rendering risk.** The SSRF gate and robots policy cover
 the top-level navigation only. Rendered pages execute untrusted JavaScript and
 may load subresources outside that gate; iframes/popups are not traversed.
 

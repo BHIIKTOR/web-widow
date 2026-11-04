@@ -307,7 +307,7 @@ fn main() -> anyhow::Result<()> {
                                  only for a deliberate local-network deployment"
                             );
                         }
-                        // The feed is loopback-only by grant (IMP-ITEM-004). A
+ // The feed is loopback-only by grant. A
                         // non-loopback listener is refused before any token is
                         // resolved or provisioned, so the posture cannot change
                         // silently.
@@ -443,7 +443,7 @@ fn main() -> anyhow::Result<()> {
     });
     // Tokio's stdin reader is a blocking task that cannot be cancelled; on a
     // signal the explicit cleanup above is already done, so bound the runtime
-    // shutdown instead of waiting forever for that read (B6-7: <=10 s).
+    // shutdown instead of waiting forever for that read (<=10 s).
     runtime.shutdown_timeout(Duration::from_secs(2));
     outcome
 }

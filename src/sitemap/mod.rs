@@ -1,4 +1,4 @@
-//! Sitemap discovery (`sitemap` and `crawl_start.sitemap_urls`, IMP-DEC-030).
+//! Sitemap discovery (`sitemap` and `crawl_start.sitemap_urls`).
 //!
 //! Streaming parse only: `quick-xml` for `<urlset>`/`<sitemapindex>` and a line
 //! reader for the plain-text format. A document type declaration is skipped and
@@ -88,7 +88,7 @@ pub struct ParsedSitemap {
     pub limit_hit: Option<&'static str>,
 }
 
-/// `sitemap` tool input (IMP-CONTRACT-006). Discovery only: nothing is stored.
+/// `sitemap` tool input. Discovery only: nothing is stored.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SitemapInput {

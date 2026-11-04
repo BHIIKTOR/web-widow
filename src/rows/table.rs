@@ -1,4 +1,4 @@
-//! HTML table rows (IMP-DEC-033).
+//! HTML table rows.
 //!
 //! The table is chosen by `selector` (the first `<table>` when omitted). Headers
 //! come from the first `<thead>` row when present, otherwise the first row.

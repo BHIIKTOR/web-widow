@@ -1,4 +1,4 @@
-//! M07 W1 integration: config-named targets, atomic enqueue, HMAC delivery,
+//! v0.7 integration: config-named targets, atomic enqueue, HMAC delivery,
 //! retry/backoff/dead-letter, isolation, tombstoning and history retention.
 
 mod common;

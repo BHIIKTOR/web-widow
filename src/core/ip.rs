@@ -1,4 +1,4 @@
-//! SSRF address classification (IMP-SAFE-001).
+//! SSRF address classification.
 //!
 //! Pure and table-driven: one list feeds both the gate and the test that
 //! asserts every listed range is blocked, so a new range cannot be added to the
@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 
 use ipnet::IpNet;
 
-/// Ranges that a fetch may never reach (IMP-SAFE-001), plus IPv4-mapped IPv6
+/// Ranges that a fetch may never reach, plus IPv4-mapped IPv6
 /// which is unmapped before matching.
 pub const BLOCKED_CIDRS: &[&str] = &[
     // IPv4 special purpose / private / metadata
@@ -48,7 +48,7 @@ static PARSED: LazyLock<Vec<(IpNet, &'static str)>> = LazyLock::new(|| {
 });
 
 /// If `ip` falls in a blocked range, return the matching CIDR as written in
-/// IMP-SAFE-001. IPv4-mapped IPv6 addresses are unmapped first, so
+///. IPv4-mapped IPv6 addresses are unmapped first, so
 /// `::ffff:127.0.0.1` is reported as `127.0.0.0/8`.
 pub fn blocked_range(ip: IpAddr) -> Option<&'static str> {
     let canonical = ip.to_canonical();

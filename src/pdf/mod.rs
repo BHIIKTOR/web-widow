@@ -1,11 +1,11 @@
-//! PDF text-layer extraction (IMP-DEC-041 / DEC-014, PDFium 8125).
+//! PDF text-layer extraction (PDFium 8125).
 //!
 //! Pure parse: bytes + limits in, a bounded document model or a typed error out.
 //! Fetching (SSRF, robots, politeness, the PDF-specific content scope) stays in
 //! [`crate::pipeline`]; engine loading and the process-wide parse mutex live in
 //! [`engine`]. The parser runs on a blocking thread behind `catch_unwind`, so a
 //! Rust panic becomes `pdf_invalid`. A **native** PDFium crash is not catchable
-//! (RISK-046): the pinned library, the caps and process supervision are the
+//!: the pinned library, the caps and process supervision are the
 //! controls, and no OCR/images/forms/JavaScript are used.
 //!
 //! Version pinning: the bindings are `pdfium_8125`; the deployment records the
@@ -89,7 +89,7 @@ pub struct PdfExtracted {
     pub limit_hit: Option<&'static str>,
 }
 
-/// `pdf_extract` tool input (IMP-CONTRACT-007). The URL is fetched fresh (no
+/// `pdf_extract` tool input. The URL is fetched fresh (no
 /// conditional GET); `fetch_page`/`extract` keep refusing PDFs.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

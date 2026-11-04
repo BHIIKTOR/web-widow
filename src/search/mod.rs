@@ -1,5 +1,5 @@
 //! `search`: server-side DuckDuckGo discovery through the shared fetch gate
-//! (IMP-CONTRACT-002 §1).
+//! (§1).
 //!
 //! Discovery only: results are URLs and snippets, never fetched content. The
 //! module owns the request shape and the payload; the pipeline owns acquisition
@@ -51,7 +51,7 @@ impl Freshness {
     }
 }
 
-/// `search` input (IMP-CONTRACT-002 §1.1). Every field except `query` has a
+/// `search` input (§1.1). Every field except `query` has a
 /// documented default; there is deliberately no capability-widening argument.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct SearchInput {
@@ -77,7 +77,7 @@ pub struct SearchResult {
     pub engine: String,
 }
 
-/// `search` output (IMP-CONTRACT-002 §1.4).
+/// `search` output (§1.4).
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
 pub struct SearchPayload {
     pub query: String,

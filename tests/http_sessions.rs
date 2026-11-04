@@ -1,5 +1,5 @@
-//! ISS-001 transport experiment as a test: E1-E6 plus a 10-call burst and the
-//! access-log safety assertion (IMP-B01 B3-1…B3-4).
+//! transport experiment as a test: E1-E6 plus a 10-call burst and the
+//! Access-log safety assertion.
 //!
 //! Only built with the `http` feature. The server is a real child process; the
 //! requests use explicit headers (not the SDK), so a stale or absent

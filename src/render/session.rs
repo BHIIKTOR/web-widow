@@ -1,4 +1,4 @@
-//! Held-page session port (IMP-DEC-039/040).
+//! Held-page session port.
 //!
 //! The interaction layer drives a held page only through [`HeldSession`], so it
 //! never names `chromiumoxide` and the static-only build still compiles. The
@@ -23,7 +23,7 @@ pub type HeldFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>
 pub type OpenSessionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Box<dyn HeldSession>>> + Send + 'a>>;
 
-/// The gates every session request is checked against (IMP-DEC-040).
+/// The gates every session request is checked against.
 #[derive(Debug, Clone)]
 pub struct SessionGate {
     pub ssrf: Arc<SsrfGate>,

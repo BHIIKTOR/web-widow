@@ -20,7 +20,7 @@ pub mod spec_eval;
 use crate::core::error::{Result, WidowError};
 use crate::core::truncate::{normalize_plain_text, truncate_chars, word_count};
 
-/// Test-only counter proving one readability pass per acquisition (B4-4).
+/// Test-only counter proving one readability pass per acquisition.
 /// Thread-local so parallel tests do not share the count.
 #[cfg(test)]
 mod pass_instrumentation {
@@ -43,7 +43,7 @@ mod pass_instrumentation {
     }
 }
 
-/// Subtrees that never contribute text or Markdown (IMP-SAFE-001).
+/// Subtrees that never contribute text or Markdown.
 const SKIP_TAGS: &[&str] = &[
     "script", "style", "noscript", "template", "svg", "iframe", "object", "embed", "canvas", "head",
 ];
@@ -151,7 +151,7 @@ pub struct ExtractOptions {
     pub max_chars: usize,
     pub max_links: usize,
     pub include_links: bool,
-    /// Subtrees removed from the DOM **before** any conversion (B05). Compiled
+    /// Subtrees removed from the DOM **before** any conversion. Compiled
     /// selectors, so a monitor check does not re-parse CSS on every fetch.
     pub ignore_selectors: Vec<Selector>,
 }
@@ -170,7 +170,7 @@ pub fn extract_html(html: &str, base: &Url, options: &ExtractOptions) -> Result<
 }
 
 /// A page read once: the Markdown extraction plus, when a spec is supplied, the
-/// records evaluated against the same parsed tree (IMP-B04: no second parse).
+/// records evaluated against the same parsed tree (: no second parse).
 #[derive(Debug)]
 pub struct PageExtraction {
     pub main: Extraction,
@@ -358,7 +358,7 @@ fn extract_from_document_with_article(
     })
 }
 
-/// Presentation-only truncation for `extract` (IMP-DEC-016). Cuts every string
+/// Presentation-only truncation for `extract`. Cuts every string
 /// value (and each string element of an `all` array) at `max_field_chars`, then
 /// returns records in evaluation order until the serialized total would exceed
 /// `max_chars`. The stored evaluation is never passed through this function.
@@ -522,7 +522,7 @@ pub fn extract_plain(text: &str, options: &ExtractOptions, include_links: bool) 
 ///
 /// Every consumer (the `main` Markdown, `:main` records in `extract_page`, and
 /// the `extract` tool path) goes through this helper, so one acquisition costs
-/// one readability pass and both views describe the same string (IMP-DEC-020).
+/// one readability pass and both views describe the same string.
 pub(crate) fn main_article(document: &Html, html: &str, base: &Url) -> Option<(String, Meta)> {
     #[cfg(test)]
     pass_instrumentation::record();
@@ -537,7 +537,7 @@ pub(crate) fn main_article(document: &Html, html: &str, base: &Url) -> Option<(S
     };
     let content = article.content.to_string();
     // Structural-gap repair runs before Markdown conversion, so both the
-    // delivered body and `:main` see the restored blocks (IMP-DEC-022).
+    // delivered body and `:main` see the restored blocks.
     let content = headings::repair_structural_gaps(document, &content).unwrap_or(content);
     Some((content, meta))
 }
@@ -982,7 +982,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // B01 — one main-article source (IMP-DEC-020), one readability pass
+    // One main-article source, one readability pass
     // -----------------------------------------------------------------------
 
     const SCOPE_PAGE: &str = r#"<!doctype html>

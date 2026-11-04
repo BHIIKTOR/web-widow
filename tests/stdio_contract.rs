@@ -197,7 +197,7 @@ async fn stdio_contract_exposes_all_tools() {
         ],
         "M07 W1 surface exposes thirty-four tools"
     );
-    // B4-16 — advertised schemas never carry schemars' non-standard integer
+    // Advertised schemas never carry schemars' non-standard integer
     // formats, while types and bounds are untouched.
     const NON_STANDARD: &[&str] = &[
         "uint", "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "double",

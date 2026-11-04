@@ -1,8 +1,8 @@
-//! B05 — change monitoring (IMP-B05 B5-1…B5-9 and B5-11).
+//! Change monitoring.
 //!
-//! Hermetic: every monitor watches the loopback fixture server. B5-10
-//! (render-mode monitoring) lives in `monitor_render.rs` because it needs Chrome.
-//! B5-11 runs the real `run-due` binary so the cron path is exercised, not
+//! Hermetic: every monitor watches the loopback fixture server.
+//! Render-mode monitoring lives in `monitor_render.rs` because it needs Chrome.
+//! Runs the real `run-due` binary so the cron path is exercised, not
 //! simulated.
 
 mod common;
@@ -86,7 +86,7 @@ fn change_count(env: &TestEnv, monitor_id: i64) -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// B5-1 — unchanged page: second check is a 304, one snapshot, no blob
+// Unchanged page: second check is a 304, one snapshot, no blob
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -162,7 +162,7 @@ async fn unchanged_check_is_a_304_with_no_new_blob_and_one_snapshot() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-2 — whitespace is cosmetic, a changed word is substantive
+// Whitespace is cosmetic, a changed word is substantive
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -301,7 +301,7 @@ async fn whitespace_is_cosmetic_and_a_changed_word_is_substantive() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-3 — ignore selectors are effective and load-bearing
+// Ignore selectors are effective and load-bearing
 // ---------------------------------------------------------------------------
 
 fn chrome_page(ad: &str, footer: &str) -> String {
@@ -337,7 +337,7 @@ async fn ignore_selectors_suppress_nav_churn_and_are_load_bearing() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-4 — markup churn with identical text is no change
+// Markup churn with identical text is no change
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -388,7 +388,7 @@ async fn script_nonce_and_class_churn_are_not_content_changes() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-5 — field-level monitoring names the changed field
+// Field-level monitoring names the changed field
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -458,7 +458,7 @@ async fn a_schema_monitor_names_the_changed_field_without_page_diff_noise() {
         "an attribute-only change has no text diff"
     );
 
-    // The B02 rejection still applies through monitor_create.
+    // The rejection still applies through monitor_create.
     let error = env
         .monitors
         .create(MonitorCreateInput {
@@ -483,7 +483,7 @@ async fn a_schema_monitor_names_the_changed_field_without_page_diff_noise() {
 }
 
 // ---------------------------------------------------------------------------
-// B02 rules still hold through a monitor: `all: true` with no match is `[]`
+// rules still hold through a monitor: `all: true` with no match is `[]`
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -521,7 +521,7 @@ async fn all_true_with_no_matches_is_an_empty_array_not_a_failure() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-6 — newest-first, capped diff with full stats
+// Newest-first, capped diff with full stats
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -598,7 +598,7 @@ async fn a_large_change_is_capped_but_its_stats_are_complete() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-7 — retention keeps change points and their referenced snapshots
+// Retention keeps change points and their referenced snapshots
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -678,7 +678,7 @@ async fn snapshot_retention_keeps_change_points_and_their_diffs() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-8 — bulk check is polite and returns a job id
+// Bulk check is polite and returns a job id
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -750,7 +750,7 @@ async fn bulk_check_hits_each_host_at_the_configured_rate_and_returns_a_job() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-9 — delete is a tombstone
+// Delete is a tombstone
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -816,7 +816,7 @@ async fn delete_deactivates_but_keeps_history_and_checks_skip_it() {
 }
 
 // ---------------------------------------------------------------------------
-// B5-11 — the real run-due binary checks only due monitors and exits
+// The real run-due binary checks only due monitors and exits
 // ---------------------------------------------------------------------------
 
 fn received(response: &serde_json::Value) -> &serde_json::Value {
@@ -924,7 +924,7 @@ async fn run_due_checks_only_due_monitors_advances_schedule_and_exits() {
 }
 
 // ---------------------------------------------------------------------------
-// Repair (B5-10 second pass): a pre-v4 NULL render mode is unknown, not static
+// Repair (second pass): a pre-v4 NULL render mode is unknown, not static
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -1142,7 +1142,7 @@ async fn monitor_inputs_are_validated() {
 }
 
 // ---------------------------------------------------------------------------
-// B02 — monitor_list, label and monitor_check(wait_ms)
+// Monitor_list, label and monitor_check(wait_ms)
 // ---------------------------------------------------------------------------
 
 async fn create_labeled(

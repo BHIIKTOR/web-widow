@@ -1,4 +1,4 @@
-//! M04 B03 — `fetch_feed` (IMP-DEC-019): happy paths, caps, errors, politeness,
+//! v0.4 — `fetch_feed`: happy paths, caps, errors, politeness,
 //! persistence, and monitor composition.
 //!
 //! Every request goes to the loopback fixture server; the real-feed read is a
@@ -41,7 +41,7 @@ fn row_counts(env: &TestEnv) -> (i64, i64, i64, i64, i64) {
     )
 }
 
-// B4-11 ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
 #[tokio::test]
 async fn rss_items_keep_feed_order_with_normalized_fields() {
     let (fixture, env) = env_with(|_| {}).await;
@@ -176,7 +176,7 @@ async fn duplicate_items_keep_the_first_and_caps_are_reported() {
     assert_eq!(error.code(), ErrorCode::SchemaInvalid);
 }
 
-// M05 A01 — feed item identity (IMP-DEC-026) --------------------------------
+// v0.5 — feed item identity --------------------------------
 #[tokio::test]
 async fn canonical_url_is_the_identity_and_tracking_variants_dedupe() {
     let (fixture, env) = env_with(|_| {}).await;
@@ -231,7 +231,7 @@ async fn canonical_url_is_the_identity_and_tracking_variants_dedupe() {
     );
 }
 
-// B4-12 ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
 #[tokio::test]
 async fn non_feed_and_broken_bodies_are_typed_failures() {
     let (fixture, env) = env_with(|_| {}).await;
@@ -285,7 +285,7 @@ async fn feed_reads_are_polite_and_write_no_content_rows() {
     );
 }
 
-// B4-13 ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
 #[tokio::test]
 async fn a_feed_body_can_be_watched_and_an_item_url_is_an_ordinary_monitor() {
     let (fixture, env) = env_with(|_| {}).await;

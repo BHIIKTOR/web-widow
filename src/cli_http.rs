@@ -1,5 +1,5 @@
 //! `run-due --http`: a cron client that checks due monitors through a running
-//! server and never opens the data directory (IMP-DEC-023).
+//! server and never opens the data directory.
 //!
 //! The client carries `Mcp-Session-Id` when the server returns one (legacy
 //! servers require it, stateless servers ignore it), disables redirects so the

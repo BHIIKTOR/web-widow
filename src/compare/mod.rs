@@ -1,4 +1,4 @@
-//! `snapshot_compare` (IMP-DEC-035): an explicit pair diff.
+//! `snapshot_compare`: an explicit pair diff.
 //!
 //! Two kinds, one shape. **monitor:** the ids are `snapshots.id` and both must
 //! belong to the same monitor; text comes from the snapshot's CAS

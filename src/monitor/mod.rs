@@ -1,5 +1,4 @@
 //! Change monitoring: schedule, snapshots, diffs and the `monitor_*` tools
-//! (IMP-B05).
 //!
 //! One check is one URL. It shares the pipeline's conditional-acquisition path
 //! (so the SSRF gate, robots policy, caps and the 304 short-circuit are the same
@@ -8,7 +7,7 @@
 //! GET. A check produces exactly one terminal result — a snapshot on success, an
 //! advanced schedule and a recorded fetch error on failure — with no retries.
 //!
-//! No scheduler lives in this process (ITEM-009): the operator drives time with
+//! No scheduler lives in this process: the operator drives time with
 //! `web-widow run-due`; `monitor_check` is on demand.
 
 pub mod normalize;
@@ -44,14 +43,14 @@ const MONITOR_LIST_DEFAULT: usize = 100;
 const MONITOR_LIST_MAX: usize = 500;
 
 // ---------------------------------------------------------------------------
-// Tool inputs and payloads (IMP-CONTRACT-001 §7–§10)
+// Tool inputs and payloads (§7–§10)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MonitorCreateInput {
     /// Absolute http(s) URL to watch. Stored canonicalized (tracking parameters
-    /// stripped, query pairs sorted), the B04 rule.
+    /// stripped, query pairs sorted), the rule.
     pub url: String,
     /// `main` (default), `full` or `text`; `raw` is rejected (a snapshot is
     /// content, not untrusted HTML).
@@ -69,7 +68,7 @@ pub struct MonitorCreateInput {
     pub ignore_selectors: Vec<String>,
     /// Optional human-facing label (documented convention `project:slug`).
     /// Trimmed; 1..=64 characters; control characters rejected. Labels are not
-    /// unique and not pattern-enforced (IMP-DEC-012).
+    /// unique and not pattern-enforced.
     #[serde(default)]
     pub label: Option<String>,
 }

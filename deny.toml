@@ -1,6 +1,6 @@
-# Dependency gate configuration (IMP-STACK-001 / ITEM-008).
+# Dependency gate configuration.
 #
-# The allow list below is the actual license policy for the M01 stack: every
+# The allow list below is the actual license policy for this stack: every
 # entry is a license family present in the resolved graph and acceptable for a
 # locally used, non-redistributed binary. A new crate with a license outside the
 # list fails the gate instead of entering silently.

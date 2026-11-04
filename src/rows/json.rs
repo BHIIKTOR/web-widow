@@ -1,4 +1,4 @@
-//! JSON rows (IMP-DEC-033): an RFC6901 pointer selects the record set.
+//! JSON rows: an RFC6901 pointer selects the record set.
 //!
 //! An array of objects is one record per element; a single object is one record;
 //! an array with no object element becomes `{"value": …}` per element, keeping

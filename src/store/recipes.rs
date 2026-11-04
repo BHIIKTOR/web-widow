@@ -1,4 +1,4 @@
-//! Recipe storage (IMP-DEC-034): the name/version layer over `profiles`.
+//! Recipe storage: the name/version layer over `profiles`.
 //!
 //! P0 created `recipes` and `recipe_versions`; this module is the only writer.
 //! The spec text stays in `profiles` (content-addressed), so a version row is a

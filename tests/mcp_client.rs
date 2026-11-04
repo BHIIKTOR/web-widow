@@ -1,4 +1,4 @@
-//! B06 B6-2 — a real MCP SDK client over stdio: initialize, list every tool
+//! The packaged release — a real MCP SDK client over stdio: initialize, list every tool
 //! and exercise the four capability families against the loopback fixture.
 //!
 //! This is deliberately a different implementation from the hand-rolled
@@ -276,7 +276,7 @@ async fn an_mcp_sdk_client_uses_every_tool_family_over_stdio() {
     .await;
     assert_eq!(history["changes"], json!([]), "{history}");
 
-    // B02: a bulk check through the real SDK client is honest about pending.
+    // : a bulk check through the real SDK client is honest about pending.
     let bulk = call(
         &client,
         "monitor_check",

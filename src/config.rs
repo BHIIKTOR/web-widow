@@ -113,9 +113,9 @@ pub struct ExtractConfig {
     /// Safety ceiling for returned Markdown; a per-call `max_chars` cannot raise it.
     pub max_chars: usize,
     pub max_links: usize,
-    /// Safety ceiling for records returned by `extract` (IMP-SAFE-001: 5 000).
+    /// Safety ceiling for records returned by `extract` (5 000).
     pub max_records: usize,
-    /// Per-string-value cap for `extract` (IMP-DEC-016). A per-call value can
+    /// Per-string-value cap for `extract`. A per-call value can
     /// lower it, never raise it.
     pub max_field_chars: usize,
     /// How long `extract` with `use_cache: true` may serve a stored result without
@@ -136,12 +136,12 @@ impl Default for ExtractConfig {
     }
 }
 
-/// Bulk-crawl ceilings (IMP-B04 / IMP-DATA-001). Per-job `limits` may lower
+/// Bulk-crawl ceilings. Per-job `limits` may lower
 /// these but never raise them.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CrawlConfig {
-    /// Hard page ceiling per job (IMP-SAFE-001: 5 000).
+    /// Hard page ceiling per job (5 000).
     pub max_pages: usize,
     /// Hard depth ceiling per job.
     pub max_depth: u8,
@@ -180,7 +180,7 @@ impl Default for CrawlConfig {
     }
 }
 
-/// Change monitoring (IMP-B05 / IMP-DATA-001). Thresholds are our semantics;
+/// Change monitoring. Thresholds are our semantics;
 /// `similar` supplies only the diff.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -224,7 +224,7 @@ impl Default for MonitorConfig {
     }
 }
 
-/// Discovery endpoints (IMP-B01 / IMP-CONTRACT-002 §1.2). Endpoints are server
+/// Discovery endpoints (§1.2). Endpoints are server
 /// config, never tool arguments: an agent cannot repoint the parser at another
 /// site. Both URLs are `Url`-validated at config load.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -240,7 +240,7 @@ pub struct SearchConfig {
     pub max_query_chars: usize,
 }
 
-/// `[feed]` — `fetch_feed` limits (IMP-DEC-019 §4).
+/// `[feed]` — `fetch_feed` limits (§4).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FeedConfig {
@@ -263,7 +263,7 @@ impl Default for FeedConfig {
 }
 
 /// `[sitemap]` — `sitemap` / `crawl_start.sitemap_urls` ceilings
-/// (IMP-DEC-030). Bounds the fetched body, the decompressed size at 4×, the
+///. Bounds the fetched body, the decompressed size at 4×, the
 /// URL entries and the index children.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -296,7 +296,7 @@ impl SitemapConfig {
     }
 }
 
-/// `[pdf]` — `pdf_extract` ceilings and the PDFium engine (IMP-DEC-041).
+/// `[pdf]` — `pdf_extract` ceilings and the PDFium engine.
 /// `pdfium_path`/`pdfium_discovery` are config-file only; no tool argument can
 /// point the engine at another library.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -337,8 +337,7 @@ impl PdfConfig {
     }
 }
 
-/// `[events]` — the change feed (`events` tool + the loopback GET route,
-/// IMP-DEC-038 / IMP-ITEM-004).
+/// `[events]` — the change feed (`events` tool + the loopback GET route).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EventsConfig {
@@ -357,7 +356,7 @@ impl Default for EventsConfig {
     }
 }
 
-/// `[fts]` — the local full-text index and `search_content` (IMP-DEC-027/029).
+/// `[fts]` — the local full-text index and `search_content`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FtsConfig {
@@ -456,7 +455,7 @@ impl Default for RetentionConfig {
     }
 }
 
-/// Browser interaction (`interact_*`, IMP-DEC-039/040). One held page per
+/// Browser interaction (`interact_*`). One held page per
 /// process; the idle TTL is configurable, the hard lifetime and the action
 /// ceiling are server constants.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -477,7 +476,7 @@ impl Default for InteractionConfig {
     }
 }
 
-/// `[embeddings]` — the local semantic index contract (IMP-ITEM-005 / IMP-DEC-049).
+/// `[embeddings]` — the local semantic index contract.
 /// P0 adds the section and its validation only; E1 reads it for behaviour and no
 /// process in P0 loads a model or a native library.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -525,7 +524,7 @@ impl Default for EmbeddingsConfig {
     }
 }
 
-/// `[webhooks]` — deliberate egress contract (IMP-ITEM-007 / IMP-DEC-049).
+/// `[webhooks]` — deliberate egress contract.
 /// Targets exist only in the operator's config file; a tool or a monitor can
 /// attach only a configured name. P0 validates the shape; W1 delivers.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -582,7 +581,7 @@ pub enum WebhookKind {
     Discord,
 }
 
-/// `[scheduler]` — the opt-in in-process timer (IMP-ITEM-006 / IMP-DEC-049).
+/// `[scheduler]` — the opt-in in-process timer.
 /// Default off; S1 reads it. `run-due` semantics are unchanged.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -614,7 +613,7 @@ fn valid_target_name(name: &str) -> bool {
         })
 }
 
-/// JavaScript rendering (IMP-DEC-002 / ITEM-004). The browser is optional: with
+/// JavaScript rendering. The browser is optional: with
 /// `render.chrome_path` unset and discovery enabled, the resolver checks
 /// `$CHROME_PATH` and well-known Chrome/Chromium locations lazily at the first
 /// render call; a missing browser degrades to `render_unavailable`, never a
@@ -1176,7 +1175,7 @@ impl Config {
     }
 }
 
-/// Resolved paths inside the data directory (IMP-DATA-001 layout).
+/// Resolved paths inside the data directory.
 #[derive(Debug, Clone)]
 pub struct Paths {
     root: PathBuf,
@@ -1488,7 +1487,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // M07 P0 — [embeddings]/[webhooks]/[scheduler] contracts
+    // v0.7 — [embeddings]/[webhooks]/[scheduler] contracts
     // -----------------------------------------------------------------------
 
     fn webhook_target(url: &str) -> WebhookTargetConfig {

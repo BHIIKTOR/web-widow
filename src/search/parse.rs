@@ -1,4 +1,4 @@
-//! Pure parsers for the two DuckDuckGo result pages (IMP-CONTRACT-002 §1.3).
+//! Pure parsers for the two DuckDuckGo result pages (§1.3).
 //!
 //! No I/O lives here: the pipeline hands in a decoded body and the engine name.
 //! The selectors mirror the captured markup; a page that does not match is an

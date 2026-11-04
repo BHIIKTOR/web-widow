@@ -1,8 +1,8 @@
-//! B04 — crawl traversal, dedup, politeness, limits, trap resistance,
-//! cancellation and the mining path (IMP-B04 B4-1…B4-4, B4-6…B4-9).
+//! Crawl traversal, dedup, politeness, limits, trap resistance,
+//! cancellation and the mining path.
 //!
-//! Hermetic: every seed is the loopback fixture server. Crash/resume (B4-5) and
-//! the 500-page latency run (B4-10) live in their own files because they need a
+//! Hermetic: every seed is the loopback fixture server. Crash/resume and
+//! the 500-page latency run live in their own files because they need a
 //! real process lifecycle and a longer budget.
 
 mod common;
@@ -93,7 +93,7 @@ fn urls(rows: &[serde_json::Value]) -> BTreeSet<String> {
 }
 
 // ---------------------------------------------------------------------------
-// B4-1 — traversal and the exact fetched URL set
+// Traversal and the exact fetched URL set
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -164,7 +164,7 @@ async fn fixture_site_fetches_exactly_the_expected_url_set() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-2 — canonicalization is enforced at the frontier
+// Canonicalization is enforced at the frontier
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -222,7 +222,7 @@ async fn canonical_variants_fetch_once_and_trailing_slash_is_distinct() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-3 — robots survives the crawl, including redirects into a blocked subtree
+// Robots survives the crawl, including redirects into a blocked subtree
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -258,7 +258,7 @@ async fn robots_disallowed_subtree_is_never_requested() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-4 — per-host rate applies to the crawl, measured server-side
+// Per-host rate applies to the crawl, measured server-side
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -306,7 +306,7 @@ async fn per_host_interval_holds_across_a_hundred_requests() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-6 — max_pages stops cleanly and results paginate
+// Max_pages stops cleanly and results paginate
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -364,7 +364,7 @@ async fn max_pages_stops_cleanly_and_pagination_round_trips() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-7 — calendar trap stops at the near-duplicate rule
+// Calendar trap stops at the near-duplicate rule
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -401,7 +401,7 @@ async fn calendar_trap_stops_at_the_near_duplicate_rule() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-8 — cooperative cancel
+// Cooperative cancel
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -457,7 +457,7 @@ async fn cancel_stops_leasing_and_keeps_partial_results() {
 }
 
 // ---------------------------------------------------------------------------
-// B4-9 — schema-driven mining, and fail-fast on an invalid schema
+// Schema-driven mining, and fail-fast on an invalid schema
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -580,7 +580,7 @@ async fn unknown_job_ids_are_not_found() {
 }
 
 // ---------------------------------------------------------------------------
-// Regression (B04 rework): one result row per attempted page even when several
+// Regression (rework): one result row per attempted page even when several
 // extractions exist for the same page and schema.
 // ---------------------------------------------------------------------------
 

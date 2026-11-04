@@ -1,6 +1,6 @@
-//! Opt-in in-process monitor scheduler (M07 S1, IMP-DEC-048).
+//! Opt-in in-process monitor scheduler (since v0.7).
 //!
-//! The M01 decision chose no scheduler; IMP-ITEM-006 amends it with a resident
+//! The v0.1 decision chose no scheduler; amends it with a resident
 //! timer that is **off by default**, runs only in `serve`, and drives the
 //! existing [`MonitorManager::run_due`] pass. Nothing in `check_one`/`run_due`
 //! changes: the per-monitor lock and the `next_due_at` re-read keep a timer pass,

@@ -1,9 +1,9 @@
 //! Bulk crawl: the persisted frontier, the job worker and the `crawl_*` tool
-//! service (IMP-B04).
+//! service.
 //!
 //! One worker per job, and every fetch goes through [`Pipeline::crawl_page`], so
 //! the SSRF gate, per-hop robots check, caps and render escalation are the same
-//! code as `fetch_page`/`extract` (IMP-B04 carry-forward: no crawl-side bypass).
+//! code as `fetch_page`/`extract` (carry-forward: no crawl-side bypass).
 //! Dedup is the frontier primary key; leases make a killed process resumable.
 
 pub mod scope;
@@ -32,11 +32,11 @@ use scope::{Decision, Scope, ScopeSpec};
 
 const KIND_CRAWL: &str = "crawl";
 const MAX_START_URLS: usize = 20;
-/// `crawl_start.sitemap_urls` ceiling (IMP-DEC-030); each is fetched once.
+/// `crawl_start.sitemap_urls` ceiling; each is fetched once.
 const MAX_SITEMAP_URLS: usize = 5;
 
 // ---------------------------------------------------------------------------
-// Tool inputs and payloads (IMP-CONTRACT-001 §3–§6)
+// Tool inputs and payloads (§3–§6)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -397,7 +397,7 @@ impl CrawlManager {
             ..limits
         };
 
-        // Schema: validate before persisting (B4-9: reject before any fetch).
+        // Schema: validate before persisting (reject before any fetch).
         let (schema, persisted_schema) = match input.schema.as_ref() {
             Some(raw) => {
                 let validated = spec::validate(raw)?;

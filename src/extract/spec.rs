@@ -21,7 +21,7 @@ use serde_json::Value;
 use crate::core::error::{Result, WidowError};
 use crate::core::url::content_hash;
 
-/// The closed transform set (IMP-CONTRACT-001). No XPath, no regex, no JS.
+/// The closed transform set. No XPath, no regex, no JS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Transform {
@@ -92,8 +92,8 @@ pub struct ValidatedSpec {
     /// Canonical JSON (sorted keys, no optional nulls): the profile identity.
     pub canonical_json: String,
     /// `spec/v1/<BLAKE3-256 of canonical_json>`; the `profiles.hash` value.
-    /// The prefix is the semantic version of the spec evaluation rules (B05
-    /// carry-forward): a future refinement that changes what a field means
+    /// The prefix is the semantic version of the spec evaluation rules
+    /// (carry-forward): a future refinement that changes what a field means
     /// bumps the prefix instead of silently reusing an old profile row.
     pub hash: String,
 }
@@ -128,8 +128,8 @@ pub fn validate(raw: &Value) -> Result<ValidatedSpec> {
     compile(&spec)?;
 
     let canonical_json = canonical_json(&spec)?;
-    // Versioned profile identity. B02 shipped unversioned hashes; no snapshot
-    // existed then, so there is nothing to migrate: the first B05 check writes
+    // Versioned profile identity. shipped unversioned hashes; no snapshot
+    // existed then, so there is nothing to migrate: the first check writes
     // the v1 identity.
     let hash = spec_profile_hash(&canonical_json);
     Ok(ValidatedSpec {

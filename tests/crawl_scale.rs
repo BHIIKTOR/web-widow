@@ -1,6 +1,6 @@
-//! B04 B4-10 — 500-page crawl through the single writer: page latency, write
+//! 500-page crawl through the single writer: page latency, write
 //! overhead and the absence of lock errors. A reference measurement, not a
-//! budget (IMP-VALID-001 §8 discipline).
+//! budget (§8 discipline).
 
 mod common;
 

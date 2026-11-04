@@ -1,4 +1,4 @@
-//! M06 C1 — sitemap discovery and crawl seeding (IMP-DEC-030 / C1-1…C1-8).
+//! Sitemap discovery and crawl seeding.
 //!
 //! Hermetic: one lane-local axum fixture server on 0.0.0.0 (so 127.0.0.1,
 //! 127.0.0.2 and 127.0.0.9 reach different robots policies), one temporary data
@@ -226,7 +226,7 @@ async fn env_with(patch: impl FnOnce(&mut Config)) -> (Fixture, TestEnv) {
     config.crawl.lease_s = 2;
     config.crawl.idle_poll_ms = 25;
     // The suite runs serially on a shared host; a 700 ms read timeout is the
-    // known flake source (M05), not a behaviour under test here.
+    // known flake source (v0.5), not a behaviour under test here.
     config.fetch.connect_timeout_ms = 3_000;
     config.fetch.read_timeout_ms = 3_000;
     config.fetch.total_timeout_ms = 10_000;

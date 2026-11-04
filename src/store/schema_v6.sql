@@ -1,8 +1,8 @@
--- Migration 006_fts.sql — schema v6 (M05-field-fidelity-fts, Lane B).
+-- Migration 006_fts.sql — schema v6 (full-text index).
 --
--- Local full-text index over stored page content (IMP-DEC-029). One row per
+-- Local full-text index over stored page content. One row per
 -- `pages` row, `rowid = pages.id`; the store path replaces it inside the same
--- transaction as the page write (explicit upsert, no triggers, IMP-DEC-029).
+-- transaction as the page write (explicit upsert, no triggers).
 --
 -- The indexed text is stored here, so `snippet()` can answer after the
 -- extraction rows age out of retention. That is a deliberate DB-size trade

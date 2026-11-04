@@ -1,4 +1,4 @@
-//! M06 C2 — PDF text-layer extraction on PDFium (`pdf_extract`, C2-1…C2-8).
+//! v0.6 — PDF text-layer extraction on PDFium (`pdf_extract`, C2-1…C2-8).
 //!
 //! Hermetic: a lane-local axum fixture server on 0.0.0.0 (127.0.0.1 allowed,
 //! 127.0.0.2 denies `/blocked`) serving the constructed PDF fixtures; one

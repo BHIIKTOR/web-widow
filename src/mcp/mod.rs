@@ -1403,7 +1403,7 @@ A 200 response that redirected into a verification/login path segment and delive
 impl ServerHandler for WebWidowServer {
     /// Advertised schemas are normalized: schemars emits non-standard integer
     /// formats (`uint*`, `int64`, `double`) that clients warn about. Validation
-    /// is serde-based and unchanged (IMP-DEC-024).
+    /// is serde-based and unchanged.
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,

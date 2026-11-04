@@ -1,5 +1,5 @@
 //! SQLite repository: WAL, one writer thread, a small read pool, and the v1
-//! migration (IMP-DATA-001). Every write goes through the writer actor, so the
+//! migration. Every write goes through the writer actor, so the
 //! "single writer" rule is a property of the type system here rather than a
 //! convention.
 
@@ -77,7 +77,7 @@ pub struct BlobRow {
 #[derive(Debug, Clone)]
 pub struct ProfileRow {
     pub hash: String,
-    /// `None` for inline specs; named profiles are out of M01.
+    /// `None` for inline specs; named profiles are out of v0.1.
     pub name: Option<String>,
     pub spec_json: String,
     pub created_at: DateTime<Utc>,
@@ -142,7 +142,7 @@ pub struct CachedExtraction {
 }
 
 /// One acquisition's contribution to the page's full-text row, and how it may
-/// change an existing one (M05 B01b, IMP-RISK-039).
+/// change an existing one (since v0.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexWrite {
     /// Replace the indexed body with this acquisition's text. Used by the paths
@@ -481,7 +481,7 @@ fn record_fetch(connection: &mut Connection, record: &FetchRecord) -> rusqlite::
     )?;
 
     // Local full-text index: one row per page, written with the page write so
-    // the index can never lag the stored content (IMP-RISK-039). A `None`
+    // the index can never lag the stored content. A `None`
     // `index_text` (304, failure) leaves the previous row alone; the policy on
     // `IndexText` keeps an `extract` from replacing delivered page text.
     if let Some(index_text) = &record.index_text {
@@ -701,7 +701,7 @@ fn gc(
 
     // Snapshots first: the extraction/fetch-event guards below read the rows
     // that survive. Keep the newest N snapshots per monitor plus every change
-    // point and every snapshot a change row references (IMP-DATA-001).
+    // point and every snapshot a change row references.
     let snapshots_pruned = transaction.execute(
         "DELETE FROM snapshots
          WHERE is_change_point = 0
@@ -747,7 +747,7 @@ fn gc(
 
     // A blob is retained when a page, a snapshot, a fetch event, an extraction
     // or a screenshot still references it. `fetch_events.raw_hash` was a log-only
-    // field in B05; B6-4 requires no dangling `raw_hash` in any row, so it is
+    // field in; requires no dangling `raw_hash` in any row, so it is
     // now a reference too (events age out with their blob).
     let blobs_pruned = transaction.execute(
         "DELETE FROM blobs
@@ -1500,7 +1500,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // M06 P0 — schema v7: recipes/recipe_versions/screenshots + retention
+    // v0.6 — schema v7: recipes/recipe_versions/screenshots + retention
     // -----------------------------------------------------------------------
 
     fn write_v6_fixture(path: &Path) {
@@ -1625,7 +1625,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // M07 P0 — schema v8: embeddings, embedding_state, monitor_webhooks,
+    // v0.7 — schema v8: embeddings, embedding_state, monitor_webhooks,
     // webhook_deliveries
     // -----------------------------------------------------------------------
 
@@ -2039,7 +2039,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // M05 Lane B — schema v6: the full-text index and its one-time backfill
+    // v0.5
     // -----------------------------------------------------------------------
 
     /// A v5 database holding one page per stored shape the backfill understands.
@@ -2316,7 +2316,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // M05 B01b — index write policy: delivered page text vs projected records
+    // v0.5 — index write policy: delivered page text vs projected records
     // -----------------------------------------------------------------------
 
     async fn indexed_body(db: &Database, url_hash: &str) -> Option<String> {

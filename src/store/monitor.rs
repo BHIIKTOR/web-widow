@@ -1,4 +1,4 @@
-//! Monitor persistence (IMP-DATA-001 monitoring area, B05).
+//! Monitor persistence (monitoring area).
 //!
 //! A check is one URL, so there is no frontier here: `monitors` is the schedule,
 //! `snapshots` is the append-only history and `changes` is the sparse change
@@ -69,7 +69,7 @@ pub struct NewSnapshot {
     pub render_mode: String,
     /// Blob rows to upsert with the snapshot. Bytes are already in the CAS; a
     /// crash between the file and this transaction leaves an unreferenced file,
-    /// never a row without bytes (the B01 write order).
+    /// never a row without bytes (the write order).
     pub blobs: Vec<BlobRow>,
 }
 

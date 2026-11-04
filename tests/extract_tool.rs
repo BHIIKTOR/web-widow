@@ -1,5 +1,5 @@
-//! B02 — the `extract` service end to end: final-URL resolution (B2-3), profile and
-//! extraction dedup (B2-5), and the B01 safeguards and error taxonomy applied to the
+//! The `extract` service end to end: final-URL resolution, profile and
+//! extraction dedup, and the safeguards and error taxonomy applied to the
 //! second tool.
 
 mod common;
@@ -39,7 +39,7 @@ fn input(url: String, spec: serde_json::Value, use_cache: Option<bool>) -> Extra
 }
 
 // ---------------------------------------------------------------------------
-// B2-3 — absolute URLs use the response's final URL
+// Absolute URLs use the response's final URL
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn relative_urls_resolve_against_the_final_url_after_a_redirect() {
 }
 
 // ---------------------------------------------------------------------------
-// B2-5 — profile dedup and use_cache semantics, counted in the database
+// Profile dedup and use_cache semantics, counted in the database
 // ---------------------------------------------------------------------------
 
 fn counts(env: &TestEnv) -> (i64, i64, i64) {
@@ -221,7 +221,7 @@ async fn a_different_spec_is_a_different_profile() {
 }
 
 // ---------------------------------------------------------------------------
-// Safeguards and taxonomy carried over from B01
+// Safeguards and taxonomy carried over from
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

@@ -1,5 +1,5 @@
 //! Feed ingestion: one `fetch_feed` call returns the item list of an RSS/Atom/
-//! JSON feed (IMP-DEC-019).
+//! JSON feed.
 //!
 //! This is a **discovery primitive**, not page extraction: no readability, no
 //! Markdown, no store write. Acquisition reuses the page client (robots, SSRF
@@ -38,7 +38,7 @@ pub struct FeedItem {
     /// Canonical identity of `url`: the same rule as crawl/monitor (tracking
     /// parameters dropped, remaining query sorted). `null` when `url` is absent
     /// or is not an http(s) URL. Unknown parameters such as `syn` remain part of
-    /// this identity (IMP-DEC-026).
+    /// this identity.
     #[serde(default)]
     pub canonical_url: Option<String>,
     /// RFC3339 UTC.
@@ -48,7 +48,7 @@ pub struct FeedItem {
     pub summary: String,
 }
 
-/// `fetch_feed` output (IMP-DEC-019 §1).
+/// `fetch_feed` output (§1).
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
 pub struct FeedPayload {
     pub url: String,

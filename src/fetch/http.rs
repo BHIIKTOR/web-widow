@@ -36,7 +36,7 @@ pub struct Conditional {
 
 /// Per-hop policy consulted before each request, including redirect targets.
 /// robots.txt lives here so a redirect to a disallowed path is not followed
-/// (IMP-SAFE-001). The guard also returns the hop's `Crawl-delay`, if any.
+///. The guard also returns the hop's `Crawl-delay`, if any.
 pub type HopCheckFuture<'a> = Pin<Box<dyn Future<Output = Result<Option<Duration>>> + Send + 'a>>;
 
 pub trait HopGuard: Send + Sync + std::fmt::Debug {

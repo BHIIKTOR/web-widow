@@ -47,14 +47,14 @@ max_field_chars = 16_384
 cache_freshness_s = 300
 
 [feed]
-# fetch_feed defaults and caps (IMP-DEC-019). default_limit <= max_limit <= 100.
+# fetch_feed defaults and caps. default_limit <= max_limit <= 100.
 default_limit = 20
 max_limit = 100
 # Plain-text summary/description cap; cuts are counted in truncated_summaries.
 max_summary_chars = 2_000
 
 [sitemap]
-# `sitemap` / `crawl_start.sitemap_urls` ceilings (IMP-DEC-030).
+# `sitemap` / `crawl_start.sitemap_urls` ceilings.
 # Fetched body cap (1..=64 MiB); a gzip body is decompressed only up to 4× this.
 max_bytes = 20_971_520
 # URL entries kept per document (1..=50 000) and index children fetched (1..=10).
@@ -62,7 +62,7 @@ max_urls = 5_000
 max_children = 5
 
 [pdf]
-# `pdf_extract` ceilings and the native PDFium engine (IMP-DEC-041).
+# `pdf_extract` ceilings and the native PDFium engine.
 # Strict path to libpdfium.so: when set, exactly this file is loaded and a
 # failure is render_unavailable naming the key; there is no fallback.
 # pdfium_path = "/usr/local/lib/web-widow/libpdfium.so"
@@ -75,7 +75,7 @@ max_pages = 200
 max_chars = 1_000_000
 
 [events]
-# Change feed (events tool + the loopback GET route, IMP-ITEM-004).
+# Change feed (events tool + the loopback GET route).
 # Serve GET /feeds/changes.xml on the loopback HTTP listener (false -> 404).
 feed_enabled = true
 # Feed item cap (1..=200); the RSS document itself never exceeds 100.
@@ -193,7 +193,7 @@ snapshots_per_monitor = 20
 max_blob_bytes = 21_474_836_480
 
 [embeddings]
-# M07 E1 — local semantic index. `serve` loads the provisioned ONNX Runtime
+# Local semantic index. `serve` loads the provisioned ONNX Runtime
 # library + pinned model files when enabled and runs the bounded lazy backfill;
 # `search_semantic` and `embedding_status` read the result. No network access.
 enabled = false
@@ -209,7 +209,7 @@ backfill_interval_ms = 30_000
 query_max_chars = 512
 
 [webhooks]
-# M07 W1 — deliberate outbound change notifications. `serve` runs the
+# Deliberate outbound change notifications. `serve` runs the
 # dispatcher when enabled; local `run-due` performs one bounded flush. A check
 # only inserts an outbox row. Targets exist ONLY here as named entries; tools
 # and monitors attach names, never URLs. The URL is treated as a secret: it is
@@ -228,7 +228,7 @@ allow_http = false
 # include_diff = false         # operator opt-in; diff is omitted by default
 
 [scheduler]
-# M07 S1 — opt-in in-process timer (ITEM-009/GRANT-009 amended). `serve` checks
+# Opt-in in-process timer. `serve` checks
 # due monitors on this tick via the same run_due pass; `run-due` is unchanged.
 # Enabling the timer means removing/disabling any cron run-due for the instance.
 enabled = false

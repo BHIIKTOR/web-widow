@@ -1,4 +1,4 @@
-//! `robots_cache` — the read-only robots cache surface (IMP-DEC-037).
+//! `robots_cache` — the read-only robots cache surface.
 //!
 //! This module never fetches: it reads the `hosts` cache and parses the stored
 //! body with the same `texting_robots` parser enforcement uses. There is no

@@ -1,4 +1,4 @@
-//! Change normalization and classification (IMP-B05 / IMP-DATA-001).
+//! Change normalization and classification.
 //!
 //! Pure functions: the decision that a page "changed" must be testable without
 //! a server or a database. The rules, in order:

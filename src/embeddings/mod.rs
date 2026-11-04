@@ -1,4 +1,4 @@
-//! Semantic retrieval over the stored corpus (M07 E1, IMP-DEC-044/045/046).
+//! Semantic retrieval over the stored corpus (since v0.7).
 //!
 //! The engine is local and loaded lazily; a page is embedded by a bounded lazy
 //! backfill (never in the fetch path). Vectors are f32 little-endian blobs in
@@ -105,7 +105,7 @@ pub struct Chunk {
     pub text: String,
 }
 
-/// Split `source` into overlapping chunks (IMP-DEC-044).
+/// Split `source` into overlapping chunks.
 ///
 /// The source is capped at `max_source_chars`; a boundary is moved back to the
 /// nearest whitespace in the last half of the window so a word is not cut when

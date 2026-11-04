@@ -1,4 +1,4 @@
-//! RFC4180-style delimited text (IMP-DEC-033): quoted fields with `""` escapes,
+//! RFC4180-style delimited text: quoted fields with `""` escapes,
 //! embedded delimiters and newlines, CRLF or LF, and a UTF-8 BOM.
 //!
 //! Two deliberate leniencies, both documented rather than silent: a `"` that is

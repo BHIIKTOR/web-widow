@@ -1,4 +1,4 @@
-//! B06 B6-4 — retention/GC drill: budget eviction order, change-point survival
+//! The packaged release — retention/GC drill: budget eviction order, change-point survival
 //! and no dangling content hash in any row.
 //!
 //! The drill deliberately mixes the reference sources the store has: a page raw

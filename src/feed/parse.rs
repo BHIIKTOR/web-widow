@@ -1,4 +1,4 @@
-//! Pure feed parsing: bytes -> normalized feed and items (IMP-DEC-019).
+//! Pure feed parsing: bytes -> normalized feed and items.
 //!
 //! `feed-rs` handles RSS 2.0/1.0/0.x, Atom and JSON Feed, including CDATA,
 //! namespaces and the date grammars. This module owns only the normalization:

@@ -3,7 +3,7 @@
 //!
 //! The interval is reserved at acquisition time, so concurrent callers queue
 //! instead of all measuring "now". `Crawl-delay` raises the interval and can
-//! never lower it (IMP-SAFE-001). Elapsed time uses `tokio::time::Instant` so
+//! never lower it. Elapsed time uses `tokio:time:Instant` so
 //! the paused-clock tests exercise the same clock as production.
 
 use std::collections::HashMap;

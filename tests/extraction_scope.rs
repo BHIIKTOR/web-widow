@@ -1,8 +1,8 @@
-//! M04 B01 — one shared main-article source for `fetch_page mode=main` and
-//! `:main`, and `selector:"*"` as the record scope itself (ISS-005b, ISS-006-q).
+//! v0.4 — one shared main-article source for `fetch_page mode=main` and
+//! `:main`, and `selector:"*"` as the record scope itself (b, -q).
 //!
 //! The captured pre-fix baselines live under
-//! `plan/artifacts/M04-extraction-fidelity-rss/B01/`; this file is the permanent
+//!; this file is the permanent
 //! hermetic consistency check.
 
 mod common;
@@ -40,7 +40,7 @@ fn extract_input(url: &str, schema: Value) -> ExtractInput {
     }
 }
 
-/// B4-3 — the scope the spec evaluates is the article the delivered body comes
+/// The scope the spec evaluates is the article the delivered body comes
 /// from: the same distinctive sentence appears in both.
 #[tokio::test]
 async fn main_scope_carries_the_delivered_body_sentence() {
@@ -105,7 +105,7 @@ async fn main_scope_carries_the_delivered_body_sentence() {
         "script reached the scope: {body}"
     );
 
-    // B4-2 — `*` is the scope element: inner HTML for `html`, one element for
+    // `*` is the scope element: inner HTML for `html`, one element for
     // `all: true`, and never the wrapper `<html>`/`<head>`.
     let html = record["body_html"].as_str().unwrap_or_default();
     assert!(html.contains("<p>The harbourmaster logged"), "{html}");
@@ -117,7 +117,7 @@ async fn main_scope_carries_the_delivered_body_sentence() {
     assert_eq!(list[0].as_str().unwrap_or_default(), body);
 }
 
-/// B4-2 — a real selector keeps ordinary descendant CSS semantics next to `*`.
+/// A real selector keeps ordinary descendant CSS semantics next to `*`.
 #[tokio::test]
 async fn real_selectors_are_unchanged_next_to_star() {
     let fixture = start_fixture().await;
@@ -154,7 +154,7 @@ async fn real_selectors_are_unchanged_next_to_star() {
     assert!(paragraphs[0].as_str().unwrap_or_default().contains(PROSE));
 }
 
-/// B4-5 — without a container the scope stays the document root, so `*` is the
+/// Without a container the scope stays the document root, so `*` is the
 /// page's visible text (head still skipped) and nothing else changes.
 #[tokio::test]
 async fn star_without_a_container_keeps_the_document_root_scope() {
@@ -183,7 +183,7 @@ async fn star_without_a_container_keeps_the_document_root_scope() {
     );
 }
 
-/// B4-5 — a `:main` field selector is still invalid CSS, and the profile
+/// A `:main` field selector is still invalid CSS, and the profile
 /// identity of a spec is unchanged by this batch (the container text is already
 /// canonical).
 #[tokio::test]
@@ -210,7 +210,7 @@ async fn main_field_selector_is_still_schema_invalid() {
     );
 }
 
-/// B02 (B4-10) — on a repaired page the `:main` records see the restored
+/// On a repaired page the `:main` records see the restored
 /// section, because records and Markdown share the repaired article.
 #[test]
 fn main_scope_on_a_repaired_page_includes_the_restored_section() {

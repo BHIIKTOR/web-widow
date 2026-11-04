@@ -1,4 +1,4 @@
-//! Extraction recipe library (IMP-DEC-034): names and versions over the
+//! Extraction recipe library: names and versions over the
 //! content-addressed `profiles` table.
 //!
 //! A recipe is **CSS-spec only** in v1: the `schema` is exactly the `extract`

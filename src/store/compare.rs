@@ -1,4 +1,4 @@
-//! Reads for `snapshot_compare` (IMP-DEC-035): one page fetch version.
+//! Reads for `snapshot_compare`: one page fetch version.
 //!
 //! A page version is a `fetch_events.id` joined to its page and to the
 //! extraction that event produced (if any). The pair identity for a page compare

@@ -1,4 +1,4 @@
-//! Local ONNX embedding engine (M07 E1, IMP-ITEM-005).
+//! Local ONNX embedding engine (since v0.7).
 //!
 //! The engine is local and offline by construction: `fastembed` is built with
 //! `ort-load-dynamic` (no `hf-hub`, no `ureq`, no native-tls, no image models)

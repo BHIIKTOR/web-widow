@@ -1,4 +1,4 @@
-//! Loopback streamable HTTP transport (IMP-DEC-003 / ITEM-007).
+//! Loopback streamable HTTP transport.
 //!
 //! Same handler as stdio, no extra capability. Bound to a caller-supplied
 //! address; a non-loopback bind requires the explicit operator flag in `main`.
@@ -133,7 +133,7 @@ pub async fn serve(
     let token: Arc<str> = Arc::from(token);
 
     // Defaults keep Host validation to loopback. A deliberate non-loopback bind
-    // still only accepts the bound IP (remote exposure is out of M01 scope).
+    // still only accepts the bound IP (remote exposure is out of v0.1 scope).
     let allowed_hosts = vec![
         local.ip().to_string(),
         local.to_string(),
@@ -146,7 +146,7 @@ pub async fn serve(
         // JSON for simple request/response tools; the service falls back to SSE
         // when a handler emits a notification first.
         .with_json_response(true)
-        // Stateless streamable HTTP (IMP-DEC-013): every POST is served directly;
+        // Stateless streamable HTTP: every POST is served directly;
         // a supplied session id is not consulted, so stale/unknown/absent ids
         // cannot 404. `initialize` still completes the handshake.
         .with_legacy_session_mode(false)

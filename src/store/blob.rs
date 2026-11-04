@@ -1,6 +1,6 @@
 //! Content-addressed blob store: `blobs/<aa>/<bb>/<blake3-hex>`.
 //!
-//! Write order is fixed by IMP-DATA-001: temp file -> fsync -> rename -> (the
+//! Write order is fixed by: temp file -> fsync -> rename -> (the
 //! caller then inserts the `blobs` row in the same transaction as the page
 //! update). A crash therefore leaves at most an unreferenced file, never a row
 //! without bytes.

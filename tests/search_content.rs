@@ -1,9 +1,9 @@
-//! M05 Lane B — the local full-text index and `search_content` over the real
+//! v0.5
 //! store and pipeline paths.
 //!
-//! B4-3 is driven through `fetch_page`, `extract`, `crawl_page` and
+//! Is driven through `fetch_page`, `extract`, `crawl_page` and
 //! `monitor_fetch`, never by inserting an FTS row: the claim under test is that
-//! every acquisition path maintains the index. B4-4/B4-5 check the query
+//! Every acquisition path maintains the index. / check the query
 //! contract on the store's own write API, where the fixture data is precise.
 
 mod common;
@@ -372,7 +372,7 @@ fn nav_extract(url: &str) -> web_widow::pipeline::ExtractInput {
     web_widow::pipeline::ExtractInput {
         url: url.to_string(),
         // Only the page's nav anchor: a projection that must never replace the
-        // delivered article text (M05 B01b).
+        // delivered article text (v0.5).
         schema: json!({
             "container": "nav a",
             "fields": { "label": { "selector": "*", "transform": "text" } }

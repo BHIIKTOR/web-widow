@@ -1,6 +1,6 @@
 //! A11 — performance smoke against the fixture server: 50 sequential and 8
 //! concurrent fetches of a ~100 KiB page. Reference, not a budget: the numbers
-//! are a regression baseline for later batches (IMP-VALID-001 §8).
+//! are a regression baseline for later batches (§8).
 
 mod common;
 
@@ -83,7 +83,7 @@ async fn performance_smoke_reports_p50_p95_and_peak_rss() {
         },
     );
 
-    // Reference ceiling from IMP-VALID-001 §8, applied to the local fixture.
+    // Reference ceiling from §8, applied to the local fixture.
     assert!(
         sequential_p95 < Duration::from_secs(2),
         "sequential p95 {:?} exceeded the 2 s reference",

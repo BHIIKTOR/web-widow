@@ -9,7 +9,7 @@
 //! Two fail-closed repairs live here, applied in this order:
 //!
 //! 1. [`repair_structural_gaps`] restores content blocks (and their headings)
-//!    that sit *between* two already-delivered blocks, following IMP-DEC-022.
+//! that sit *between* two already-delivered blocks, following.
 //!    It never re-selects the article, never inserts at the edges, and skips
 //!    the whole page when the 25 % bound would be exceeded.
 //! 2. [`restore_section_headings`] puts back a heading whose following content
@@ -68,7 +68,7 @@ const MAX_LINK_DENSITY_PERCENT: usize = 50;
 /// is never filtered by phrase.
 const CHROME_DENY_MAX_CHARS: usize = 200;
 
-/// Unmistakable chrome phrases for short candidate blocks (IMP-DEC-022 §5).
+/// Unmistakable chrome phrases for short candidate blocks (§5).
 const CHROME_PHRASES: &[&str] = &[
     "cookie",
     "subscribe to",
@@ -201,7 +201,7 @@ pub fn restore_section_headings(document: &Html, markdown: &str, title: Option<&
 }
 
 /// Restore content blocks that readability dropped *between* two delivered
-/// blocks (IMP-DEC-022). Returns `None` when nothing qualifies, in which case
+/// blocks. Returns `None` when nothing qualifies, in which case
 /// the caller must keep the original article bytes byte-for-byte.
 ///
 /// Insertion happens in the article's own DOM serialization, immediately before
@@ -328,7 +328,7 @@ fn delivered_anchors(blocks: &[Block], haystack: &Normalized) -> Vec<(usize, usi
         .collect()
 }
 
-/// The section-initiation gate (IMP-DEC-022 §5, revised 2026-10-31). A gap is
+/// The section-initiation gate (§5, revised 2026-10-31). A gap is
 /// eligible only when it starts a new section the same way its neighbours do:
 ///
 /// 1. the first candidate is an **undelivered heading** (not an anchor, not a
@@ -395,7 +395,7 @@ fn nearest_adjacent_heading(
         })
 }
 
-/// All gates from IMP-DEC-022 §5, applied to a content candidate.
+/// All gates from §5, applied to a content candidate.
 fn admissible(block: &Block, haystack: &Normalized) -> bool {
     debug_assert!(matches!(block.kind, BlockKind::Content));
     let chars = block.text.chars().count();
@@ -942,7 +942,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // B02 — structural-gap repair (IMP-DEC-022)
+    // Structural-gap repair
     // -----------------------------------------------------------------------
 
     /// Ten delivered paragraphs give the 25 % page bound a realistic base, so a
@@ -1044,7 +1044,7 @@ mod tests {
         assert_eq!(repair_structural_gaps(&document, &gap_article()), None);
     }
 
-    // ---- section-initiation fixtures (IMP-DEC-022 §5, revised) -------------
+    // ---- section-initiation fixtures (§5, revised) -------------
 
     fn gap_fixture(name: &str) -> &'static str {
         match name {

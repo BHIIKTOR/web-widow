@@ -1,5 +1,4 @@
-//! robots.txt acquisition, caching and the policy decision (IMP-SAFE-001 /
-//! ITEM-002).
+//! robots.txt acquisition, caching and the policy decision.
 //!
 //! Enforcement has no per-call switch: the only override is
 //! `robots.enabled = false`, which is announced loudly at startup. A file we
@@ -125,7 +124,7 @@ impl RobotsService {
                 Ok(robot) => {
                     let sitemaps: Vec<String> = robot.sitemaps.clone();
                     if !sitemaps.is_empty() {
-                        info!(host = %host, sitemaps = ?sitemaps, "robots.txt sitemaps recorded (not acted on in M01)");
+                        info!(host = %host, sitemaps = ?sitemaps, "robots.txt sitemaps recorded (not acted on)");
                     }
                     let ttl = match response.cache_control_max_age {
                         Some(max_age) => {

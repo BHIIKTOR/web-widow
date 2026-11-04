@@ -1,6 +1,6 @@
-//! B4-1 / IMP-ITEM-002: the bundled SQLite must compile FTS5 in.
+//! /: the bundled SQLite must compile FTS5 in.
 //!
-//! This is the verification gate for M05 Lane B: the plan's no-manifest-change
+//! This is the verification gate for v0.5
 //! premise holds only if the already-bundled engine exposes FTS5. The test also
 //! pins the two SQL shapes the store depends on (rowid upsert, `bm25`, `snippet`)
 //! so a bundled-engine change cannot silently remove them.
@@ -130,7 +130,7 @@ fn fts5_supports_the_store_query_shapes() {
 
 #[test]
 fn punctuation_only_terms_are_not_syntax_errors() {
-    // IMP-RISK-041: the query builder quotes every term, so a caller cannot
+    //: the query builder quotes every term, so a caller cannot
     // produce an FTS5 syntax error. Pin that for the shapes an agent writes.
     let connection = Connection::open_in_memory().unwrap();
     connection

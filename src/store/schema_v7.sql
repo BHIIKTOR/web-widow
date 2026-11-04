@@ -1,12 +1,12 @@
--- Migration 007_recipes_screenshots.sql — schema v7 (M06-discovery-interaction, P0).
+-- Migration 007_recipes_screenshots.sql — schema v7 (recipes and screenshots).
 --
--- Additive only (IMP-DEC-042): the naming/version layer for extraction recipes and
+-- Additive only: the naming/version layer for extraction recipes and
 -- the reference table that keeps screenshot blobs alive. No existing table,
 -- column or row is touched, and no tool surface is added by P0.
 
 -- Recipe naming/version layer. The spec itself stays in `profiles`
 -- (content-addressed `spec_json`/`hash`); a version row points at the profile
--- hash that a monitor keeps even when the recipe advances (IMP-DEC-034).
+-- hash that a monitor keeps even when the recipe advances.
 CREATE TABLE recipes (
     name            TEXT PRIMARY KEY,
     current_version INTEGER NOT NULL CHECK (current_version >= 1),

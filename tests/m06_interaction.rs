@@ -1,4 +1,4 @@
-//! M06 B2 — browser interaction primitives (`interact_*`; checks B2-1…B2-10).
+//! v0.6 — browser interaction primitives (`interact_*`).
 //!
 //! Lane-local fixture server plus a private probe listener on `127.0.0.2` that
 //! is deliberately **outside** the test SSRF allowlist. A real Chrome is
@@ -210,7 +210,7 @@ async fn setup(chrome: &std::path::Path, ttl_s: u64, max_actions: u32) -> Sessio
     let fixture = start_fixture().await;
     let mut config = common::rendering_test_config(chrome);
     // Only 127.0.0.1 is allowlisted: the 127.0.0.2 probe is a blocked private
-    // address, exactly as B2-7 needs.
+    // address, exactly as needs.
     config.fetch.allow_hosts = vec!["127.0.0.1/32".to_string()];
     config.fetch.min_interval_ms = 5;
     config.fetch.jitter_ms = 0;
@@ -723,7 +723,7 @@ async fn the_session_gate_blocks_private_robots_and_file_requests() {
     let case = setup(&chrome, 120, 60).await;
     let url = format!("{}/gate.html", case.fixture.origin);
 
-    // RED: the plain render path does not SSRF-vet subresources (RISK-004), so
+    // RED: the plain render path does not SSRF-vet subresources, so
     // the page's own fetch reaches the private listener.
     let parsed = url::Url::parse(&url).unwrap();
     let _ = case

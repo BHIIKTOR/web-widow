@@ -1,5 +1,5 @@
 //! `search_content`: query the local full-text index over stored pages
-//! (IMP-DEC-027, schema v6 in `store::fts`).
+//! (schema v6 in `store:fts`).
 //!
 //! Deliberately distinct from [`crate::search`], which is DuckDuckGo web
 //! discovery. This module reads only what the store already holds, and its query

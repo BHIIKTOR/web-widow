@@ -1,4 +1,4 @@
-//! Rendering port (IMP-ARCH-001, IMP-DEC-002).
+//! Rendering port.
 //!
 //! The pipeline depends on [`Renderer`], never on `chromiumoxide`. The CDP
 //! adapter returns HTML plus attribution; extraction stays single-path. With the
@@ -82,7 +82,7 @@ impl RenderMode {
 }
 
 /// One screenshot request: a post-settle wait, never a navigation
-/// (IMP-DEC-032). The visual capture profile is server-fixed.
+///. The visual capture profile is server-fixed.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CaptureOptions {
     /// Capture the scrollable content size instead of the visual viewport.
@@ -110,7 +110,7 @@ impl DimensionsSource {
     }
 }
 
-/// The settled page plus its PNG capture (`screenshot`, IMP-DEC-032). No
+/// The settled page plus its PNG capture (`screenshot`). No
 /// caller-supplied path or bytes ever reach the renderer.
 #[derive(Debug, Clone)]
 pub struct CapturedPage {

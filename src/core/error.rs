@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use schemars::JsonSchema;
 
-/// Stable MCP error codes (IMP-CONTRACT-001).
+/// Stable MCP error codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {

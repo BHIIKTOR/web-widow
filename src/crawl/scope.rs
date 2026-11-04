@@ -1,4 +1,4 @@
-//! Crawl scope predicate (IMP-B04).
+//! Crawl scope predicate.
 //!
 //! Pure: the frontier decides admission here, so the rule is testable without a
 //! server and cannot drift between the worker and a tool handler.

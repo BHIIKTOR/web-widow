@@ -1,4 +1,4 @@
-//! M06 B2b safety probes — popup and child-target egress (F1/F2).
+//! v0.6 safety probes — popup and child-target egress (F1/F2).
 //!
 //! Private listeners sit on loopback addresses **outside** the test SSRF
 //! allowlist. Both TCP connections and HTTP request lines are counted, so a

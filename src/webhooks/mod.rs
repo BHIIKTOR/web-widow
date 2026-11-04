@@ -1,4 +1,4 @@
-//! Webhook emission (M07 W1, IMP-DEC-047) — config-named targets, a durable
+//! Webhook emission — config-named targets, a durable
 //! outbox, HMAC signing and a separate bounded dispatcher.
 //!
 //! The egress posture inverts the SSRF gate: a target URL can only come from

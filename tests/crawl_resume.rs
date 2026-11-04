@@ -1,4 +1,4 @@
-//! B04 B4-5 — crash and resume with a real process: SIGKILL mid-crawl, restart
+//! Crash and resume with a real process: SIGKILL mid-crawl, restart
 //! on the same data directory, and the frontier continues without re-fetching
 //! what was already completed.
 

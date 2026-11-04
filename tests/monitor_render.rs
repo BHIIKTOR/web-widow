@@ -1,4 +1,4 @@
-//! B05 B5-10 — a render-mode monitor sees script-driven content that static
+//! A render-mode monitor sees script-driven content that static
 //! monitoring cannot. Needs Chrome; skips with an explicit marker otherwise.
 
 #![cfg(feature = "render")]
@@ -238,7 +238,7 @@ async fn a_rendered_monitor_never_trusts_a_static_304() {
     let text = String::from_utf8_lossy(&text).replace('\\', "");
     assert!(text.contains("API_VALUE: one"), "{text}");
 
-    // A purely static monitor on a stable page still gets its 304 (B5-1).
+    // A purely static monitor on a stable page still gets its 304.
     let static_url = fixture.url("127.0.0.1", "/monitor/static304");
     fixture.set_page(
         "/monitor/static304",

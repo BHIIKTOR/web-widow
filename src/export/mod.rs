@@ -1,4 +1,4 @@
-//! `corpus_export` (IMP-DEC-035): a machine-readable corpus of the store.
+//! `corpus_export`: a machine-readable corpus of the store.
 //!
 //! Two shapes, one row set: **JSONL** (one page per line) and **markdown** (a
 //! directory with `index.md` and `pages/<url_hash>.md`). A page is a row only

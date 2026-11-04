@@ -39,7 +39,7 @@ pub use webhooks::{
     DeliveryContext, DeliveryRow, DeliveryUpdate, DueDelivery, MonitorAttachmentRow,
 };
 
-/// Read connections used by the pool (IMP-ARCH-001). B01 has one reader at a
+/// Read connections used by the pool. has one reader at a
 /// time; the pool exists so later batches do not change the store's shape.
 pub const READ_CONNECTIONS: usize = 4;
 

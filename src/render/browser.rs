@@ -1,4 +1,4 @@
-//! In-process CDP renderer (IMP-DEC-002, ITEM-004).
+//! In-process CDP renderer.
 //!
 //! One browser process for the server's lifetime, one ephemeral browser context
 //! per page, a throwaway profile directory under the data directory, and a
@@ -91,7 +91,7 @@ struct BrowserSession {
 
 /// Which render profile a page uses. The text profile (fetch/extract) blocks
 /// stylesheets, fonts and images to keep Markdown extraction cheap. The visual
-/// profile (`screenshot`, IMP-DEC-032) allows them so the capture matches what
+/// profile (`screenshot`) allows them so the capture matches what
 /// a user sees; media stays blocked in both. The profile is server-fixed: no
 /// tool argument selects it.
 #[derive(Debug, Clone, Copy)]
@@ -249,7 +249,7 @@ impl BrowserRenderer {
             // Popups are not traversed. This switch is honoured by Chromium's
             // test/headless modes; the ephemeral context is still disposed.
             .arg("block-new-web-contents")
-            // Browser-internal egress reducers (RISK-044): no DNS prefetch and
+            // Browser-internal egress reducers: no DNS prefetch and
             // no non-proxied UDP for WebRTC. These are launch-level, not the
             // Fetch gate.
             .arg("--dns-prefetch-disable")
@@ -759,7 +759,7 @@ impl BrowserRenderer {
     }
 
     /// Post-settle wait, then `Page.captureScreenshot` (PNG) and the layout
-    /// metrics that name the reported dimensions (IMP-DEC-032). A metrics
+    /// metrics that name the reported dimensions. A metrics
     /// failure yields `width`/`height` `None` and `dimensions_source`
     /// `unknown`; it never invents a size. A capture failure is a typed
     /// `render_failed`, not an empty image.
@@ -834,7 +834,7 @@ const ELEMENT_NODE: i64 = 1;
 /// Hard ceiling on paused requests per session, *including refused ones*, so a
 /// page cannot turn the gate into an unbounded vet/DNS channel (review F6).
 const MAX_SESSION_PAUSED_REQUESTS: u64 = 500;
-/// Rolling typed strings scrubbed from console output (RISK-045/F8).
+/// Rolling typed strings scrubbed from console output.
 const MAX_TYPED_SECRETS: usize = 8;
 
 /// Server-owned document guard template. `__NONCE__` is per-session and is
@@ -1700,7 +1700,7 @@ async fn track_responses(
     while let Some(event) = responses.next().await {
         // Document responses include redirect hops and (rarely) subframes. The
         // last one is the best available final-document status; iframes are out
-        // of B03 scope, so a subframe response is a disclosed approximation.
+        // of scope, so a subframe response is a disclosed approximation.
         if event.r#type != ResourceType::Document {
             continue;
         }
@@ -1746,7 +1746,7 @@ async fn stop_tasks(
 }
 
 // ---------------------------------------------------------------------------
-// Held-page browser sessions (IMP-DEC-039/040)
+// Held-page browser sessions
 // ---------------------------------------------------------------------------
 
 /// Shared per-session request state. Every field is observed by the Fetch
@@ -1770,7 +1770,7 @@ struct SessionNet {
     seen: AtomicU64,
     vet_observed: AtomicU64,
     child_targets: AtomicU64,
-    /// Typed strings (last few), scrubbed from console output (RISK-045/F8).
+    /// Typed strings (last few), scrubbed from console output.
     typed: StdMutex<std::collections::VecDeque<String>>,
     /// The first refusal of the top-level document (open fidelity); a blocked
     /// subresource must not fail an otherwise usable open.
@@ -2023,7 +2023,7 @@ impl BrowserRenderer {
 
         // Related page/iframe targets (popups, OOPIFs) do not inherit the page
         // Fetch domain: attach them paused and close them before they run
-        // (IMP-RISK-044, review F1/F2). Dedicated workers are filtered out --
+        // (review F1/F2). Dedicated workers are filtered out --
         // their requests are observed on the page target's Fetch domain.
         let target_filter = TargetFilter::new(vec![
             FilterEntry {
@@ -2378,7 +2378,7 @@ fn effective_target(target: &str, base_target: &str) -> String {
 }
 
 /// A submit control's form owner, resolved in the control's own tree before the
-/// pure predicate runs (review B2g/F1, B2i low).
+/// pure predicate runs.
 #[derive(Clone)]
 enum FormOwner {
     /// The control has a form owner; its content `target`, if any.
@@ -2511,7 +2511,7 @@ fn chain_new_context(
         if name == "a" || name == "area" {
             // An anchor/area without `href` is not a link: the UA navigates
             // nowhere (Blink `IsLink()`), so it must not be refused (review
-            // B2l low).
+            // low).
             if attribute_of(&node.attributes, "href").is_none() {
                 continue;
             }
@@ -2896,7 +2896,7 @@ impl BrowserHeldSession {
         // A submit control's form owner is not necessarily an ancestor: a
         // non-empty `form` attribute names a form in the control's own tree,
         // which for a shadow tree is a sibling invisible to the event path
-        // (review B2g/F1, B2h low #1).
+        // (review).
         let mut owners = Vec::with_capacity(facts.len());
         for (index, fact) in facts.iter().enumerate() {
             let name = fact.local_name.to_ascii_lowercase();
@@ -3533,7 +3533,7 @@ async fn track_created_targets(
 
 /// Replace every remembered typed string (and its form-encoded spellings) in a
 /// console line. Errors are reported in the session, so a page that logs its own
-/// field value cannot echo a typed secret back to the agent (RISK-045/F8).
+/// field value cannot echo a typed secret back to the agent.
 fn scrub_secrets<'a>(text: &str, secrets: impl Iterator<Item = &'a str>) -> String {
     let mut out = text.to_string();
     for secret in secrets {

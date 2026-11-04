@@ -1,4 +1,4 @@
-//! Tabular extraction (IMP-DEC-033): the `extract_rows` data family.
+//! Tabular extraction: the `extract_rows` data family.
 //!
 //! `extract` is CSS-over-HTML and its spec identity is `profiles.hash`; a CSV,
 //! TSV, JSON or HTML-table document is a different family with its own spec

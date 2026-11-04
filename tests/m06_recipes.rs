@@ -1,4 +1,4 @@
-//! M06 A2 — the extraction recipe library: save → list → apply, versioning,
+//! v0.6 — the extraction recipe library: save → list → apply, versioning,
 //! the name/description/spec validation pointers, and the FTS projection rule.
 //!
 //! Lane-local test file: it uses the shared loopback fixture and `TestEnv` but

@@ -2,7 +2,7 @@
 //!
 //! Deliberately independent of `mode=main` Markdown: the spec is evaluated
 //! against the page's own tree, so a page whose readability selection omits a
-//! block still yields records for it (RISK-014 separation). One parse per page,
+//! block still yields records for it (separation). One parse per page,
 //! recorded in [`EvalOutcome::dom_parses`] so the property is testable without
 //! timing.
 
@@ -15,7 +15,7 @@ use url::Url;
 
 use crate::extract::spec::{CompiledField, CompiledSpec, Container, Transform};
 
-/// Per-record/per-field failure codes (IMP-B02). These are field codes, not the
+/// Per-record/per-field failure codes. These are field codes, not the
 /// tool error taxonomy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -87,7 +87,7 @@ pub fn evaluate_document(
 
     let roots: Vec<ElementRef<'_>> = match &spec.container {
         Some(Container::Css(selector)) => document.select(selector).collect(),
-        // `:main` is evaluated inside the readability article's `body` (IMP-DEC-020):
+        // `:main` is evaluated inside the readability article's `body`:
         // the caller supplies that parsed article document, and the wrapper
         // `<html>`/`<head>` are never a field root. A document without a body
         // falls back to its root.
@@ -149,7 +149,7 @@ fn evaluate_field(
     field: &CompiledField,
     base: &Url,
 ) -> Result<Value, FieldFailure> {
-    // `*` as the whole selector means the record scope itself (IMP-DEC-021),
+    // `*` as the whole selector means the record scope itself,
     // not its first descendant: the only useful meaning of a universal selector
     // in a record-shaped spec, and the fix for the silent `<head>` match.
     if field.source.trim() == "*" {
@@ -273,7 +273,7 @@ fn url_source<'a>(
     ))
 }
 
-/// Subtrees a field `text` value must never include (ISS-003). This is a
+/// Subtrees a field `text` value must never include. This is a
 /// field-level list, deliberately separate from the page-flattening skip set in
 /// `extract`: a field is prose, not a page.
 const FIELD_SKIP_TAGS: &[&str] = &["script", "style", "template", "head"];
@@ -728,7 +728,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // B01 — `:main` roots at the article body and `*` is the record scope
+    // `:main` roots at the article body and `*` is the record scope
     // -----------------------------------------------------------------------
 
     const ARTICLE_DOC: &str = r#"<!doctype html>

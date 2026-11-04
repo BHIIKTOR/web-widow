@@ -1,4 +1,4 @@
-//! `events` — the change feed as data and as RSS 2.0 (IMP-DEC-038).
+//! `events` — the change feed as data and as RSS 2.0.
 //!
 //! JSON and RSS read the same `changes`-join query; the feed never carries the
 //! full diff and never fabricates a change. The HTTP route and its capability

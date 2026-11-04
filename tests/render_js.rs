@@ -1,4 +1,4 @@
-//! B03 — JavaScript rendering acceptance checks (IMP-B03 B3-1…B3-9).
+//! JavaScript rendering acceptance checks.
 //!
 //! These tests need a real Chrome/Chromium. When none is available they print an
 //! explicit `SKIP` marker and return instead of failing, so a static-only host
@@ -515,7 +515,7 @@ async fn auto_heuristic_renders_three_of_five_fixtures() {
     println!("AUTO_TRANSCRIPT fixtures=5 modes={modes:?}");
 }
 
-/// IMP-B04 rider (from the B03 disposition): `restart_max = 0` means "no
+/// rider (from the disposition): `restart_max = 0` means "no
 /// relaunches", not "rendering unavailable". Before the fix the budget was
 /// consulted before the first launch, so this configuration failed every render
 /// with `render_unavailable`. The relaunch half of the rule is unit-tested on

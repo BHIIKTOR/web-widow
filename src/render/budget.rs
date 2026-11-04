@@ -1,4 +1,4 @@
-//! Restart budget for the shared browser process (IMP-B03 B3-4).
+//! Restart budget for the shared browser process.
 //!
 //! Three restarts inside ten minutes, then `render_unavailable` until the window
 //! has drained. The clock is injected so the policy is testable without waiting.
@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 /// The restart budget plus the one distinction it must not blur: the **first**
 /// launch is not a restart. `restart_max = 0` therefore means "no relaunches",
-/// not "rendering unavailable" (IMP-B04 rider on the B03 disposition).
+/// not "rendering unavailable" (rider on the disposition).
 #[derive(Debug)]
 pub struct LaunchGate {
     launched_once: bool,

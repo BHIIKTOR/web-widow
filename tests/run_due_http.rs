@@ -1,4 +1,4 @@
-//! M04 B03 — `run-due --http` (IMP-DEC-023): a cron client that checks due
+//! v0.4 — `run-due --http`: a cron client that checks due
 //! monitors beside the running server, prints one JSON line, and never opens
 //! the data directory.
 //!

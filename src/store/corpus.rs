@@ -1,4 +1,4 @@
-//! Corpus reads for `corpus_export` (IMP-DEC-035).
+//! Corpus reads for `corpus_export`.
 //!
 //! One row per page with a successful latest fetch, keyset-paged by `id` so the
 //! exporter can stream without holding the corpus. The page's text and

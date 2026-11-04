@@ -1,4 +1,4 @@
-//! M07 S1 integration: the opt-in in-process scheduler.
+//! v0.7 integration: the opt-in in-process scheduler.
 //!
 //! The timer-only test makes no `run-due` call: it starts the task, waits for a
 //! tick, and reads the DB. W1 enqueue is exercised by enabling `[webhooks]` with

@@ -1,4 +1,4 @@
-//! Jobs and frontier persistence (IMP-DATA-001, IMP-B04).
+//! Jobs and frontier persistence.
 //!
 //! Dedup is a database invariant: every enqueue is `INSERT ... ON CONFLICT DO
 //! NOTHING` against `PRIMARY KEY(job_id, url_hash)`, so a second enqueue of the
@@ -30,7 +30,7 @@ pub const URL_DONE: &str = "done";
 pub const URL_FAILED: &str = "failed";
 pub const URL_SKIPPED: &str = "skipped";
 
-/// Counters and samples shown by `crawl_status` (IMP-CONTRACT-001 §4).
+/// Counters and samples shown by `crawl_status` (§4).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobCounters {
     pub fetched: u64,

@@ -113,8 +113,8 @@ server; it is not in the default build.
 A musl build is supported by the same source when the target is installed:
 `rustup target add x86_64-unknown-linux-musl` and
 `cargo build --release --target x86_64-unknown-linux-musl` (plus `--features
-http` if needed). The B06 evidence records whether that target was available on
-the build host; the shipped artifact is the host build.
+http` if needed). The packaged release was built on the host target; a musl
+build was not shipped.
 
 The dependency gate is part of the build contract:
 
@@ -188,7 +188,7 @@ HTTP notes:
   token is `401` with `WWW-Authenticate: Bearer`; the token is read from
   `WEB_WIDOW_HTTP_TOKEN` (wins) or a `0600` file and is never logged.
 - `--http` refuses a non-loopback address unless `--allow-non-loopback` is also
-  passed. Remote exposure, TLS and multi-user auth are out of M01 scope; put a
+  passed. Remote exposure, TLS and multi-user auth are out of scope; put a
   TLS-terminating reverse proxy in front if a network deployment is ever needed,
   and keep the bind on loopback.
 - **The change feed is loopback-only.** A non-loopback `--http` bind with
@@ -198,7 +198,7 @@ HTTP notes:
   cannot bypass the refusal.
 - **The loopback HTTP transport is stateless.** Every POST is served directly;
   `Mcp-Session-Id` is neither required nor issued, and stale/unknown/absent ids
-  are ignored instead of returning `404` (ISS-001). `initialize` completes the
+  are ignored instead of returning `404`. `initialize` completes the
   handshake normally (`application/json`). Only POST is served: `GET` and
   `DELETE` on `/mcp` return `405` with `Allow: POST`, and the server emits no
   server-initiated messages. Bearer auth, Host validation and the body cap are
@@ -274,8 +274,8 @@ optional `render_quality`, optional `content_warning`, `word_count`.
   rendered `fetch_page` **and `extract`** results. It is absent on `static` and
   `static_fallback`, where a short page is simply a short page. It is not part of
   `crawl_results`.
-- `content_warning: "interstitial_suspect"` is set only for the whole conjunction
-  (ISS-009/IMP-DEC-025): status 200, the final URL drifted from the requested URL
+- `content_warning: "interstitial_suspect"` is set only for the whole conjunction:
+  status 200, the final URL drifted from the requested URL
   in host or path, the final path has a **whole** verification/login segment
   (`account-verification`, `verification`, `verify`, `challenge`, `captcha`,
   `login`, `sign-in`, `signin`, `security-check`, `checkpoint`, `auth`,
@@ -286,8 +286,8 @@ optional `render_quality`, optional `content_warning`, `word_count`.
   keep their meanings independently.
 
 Errors are in-band: `isError: true` with
-`structuredContent.error = { code, message, detail? }`, using the codes from
-IMP-CONTRACT-001 (`invalid_url`, `blocked_scheme`, `blocked_private_address`,
+`structuredContent.error = { code, message, detail? }`, using these codes
+(`invalid_url`, `blocked_scheme`, `blocked_private_address`,
 `blocked_by_robots`, `dns_error`, `tls_error`, `timeout`, `too_large`,
 `unsupported_content_type`, `http_error`, `render_unavailable`, ...).
 
@@ -337,7 +337,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   `duration_ms`, `result_count`, `truncated` and `limit_hit`. It never fetches a
   result page; follow a URL with `fetch_page` or `extract`.
 - **One page, ten results.** DDG returns one SERP page of ten organic results;
-  M02 has no pagination. `limit > 10` is `schema_invalid`, never a silent clamp.
+  There is no pagination. `limit > 10` is `schema_invalid`, never a silent clamp.
 - **Engines are fixed server config.** `[search].html_url` is the primary;
   `[search].lite_url` is tried **only** when the primary fails at transport or
   parse level. A `blocked_by_robots`, `blocked_private_address`,
@@ -362,7 +362,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   `result_count: 0`); an unrecognisable page is `extraction_failed`, never an
   empty success. That failure can be a transient DDG challenge: one later retry
   is reasonable, never a loop, and watch recurrence in the access log before
-  treating it as a defect (ISS-008).
+  treating it as a defect.
 
 ## `search_content` — local full-text search
 
@@ -400,7 +400,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   database, not the 20 GiB blob budget**. Pages are not pruned in v1; lower the cap
   or decide a page-retention policy before running a high-volume store.
 
-## `search_semantic` — local semantic search (M07 E1)
+## `search_semantic` — local semantic search
 
 ```jsonc
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_semantic","arguments":{
@@ -414,6 +414,15 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   provisioned ONNX Runtime 1.31.0 library and pinned model files; there is no
   download, no API key and no outbound request. A missing library/model or a
   per-file SHA-256 mismatch is `embedding_unavailable` naming the config key/file.
+- **Provisioning.** The model is the quantized ONNX export of
+  `Xenova/all-MiniLM-L6-v2` on Hugging Face. Fetch these five files and place them
+  under `<data_dir>/models/minilm-l6-v2-q/` (the ONNX file keeps its `onnx/`
+  subdirectory):
+  `https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx`,
+  `…/tokenizer.json`, `…/config.json`, `…/special_tokens_map.json` and
+  `…/tokenizer_config.json`. Verify each SHA-256 against the table in
+  `docs/operations.md` before installing; ONNX Runtime itself comes from the
+  Microsoft `onnxruntime-linux-x64-1.31.0.tgz` release archive.
 - **Lazy backfill, not the fetch path.** When `[embeddings].enabled = true`,
   `serve` runs a bounded backfill (newest pages first, `backfill_pages_per_pass`,
   one pass per `backfill_interval_ms`) over the stored page text. A page becomes
@@ -431,7 +440,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   not authority, and the text is untrusted stored content: data, never
   instructions. ANN, duplicate detection and hybrid reranking are not in v1.
 
-## `webhook_target` / `webhook_status` — change notifications (M07 W1)
+## `webhook_target` / `webhook_status` — change notifications
 
 ```jsonc
 {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"webhook_target","arguments":{
@@ -600,7 +609,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   `<data_dir>/lib` → the system library. The library must be shipped beside the
   binary (or pinned per config); the binary itself does not link it, so `ldd` on
   the binary does not list `libpdfium`. A native PDFium crash is not catchable by
-  `catch_unwind` (disclosed residual risk, RISK-046).
+  `catch_unwind` (a disclosed residual risk).
 - **Shared gates.** The body comes through the same adapter as every fetch (SSRF
   gate on each hop, robots.txt, redirect vetting, per-host politeness floor,
   streaming body cap to `[pdf].max_bytes`). `fetch_page` and `extract` keep
@@ -697,7 +706,7 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   itself is not accepted at the top level: a call shaped `{url, container,
   fields}` is rejected with a message naming the `schema` envelope, and any
   other missing `schema` keeps the ordinary serde wording. There is one
-  documented contract, not a second silently accepted shape (ISS-007).
+  documented contract, not a second silently accepted shape.
 - **Transforms** are a closed set: `text` (visible text, edges trimmed), `trim`
   (text with internal whitespace collapsed), `html` (inner HTML), `attr` (reads
   `attr`), `absolute_url` (resolves the `attr`, else `href`, else `src` against
@@ -707,8 +716,8 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
 - **`text`/`trim`/`number` see visible text only.** `script`, `style`,
   `template` and `head` subtrees are skipped before collecting a field's text; a
   field that *is* a `<script>` returns `""`. `html` and `attr` still return
-  source by definition. This is the ISS-003 fix: a 178k inline-script body no
-  longer becomes the field value.
+  source by definition. This prevents a 178k inline-script body from
+  becoming the field value.
 - **`:main` is the article `fetch_page mode=main` delivers.** `container:
   ":main"` (exact, trimmed) evaluates fields inside the **`body` of that same
   readability article** — one readability pass per acquisition, so the scope and
@@ -746,14 +755,14 @@ skill can widen reach or bypass a gate — those decisions stay in the server an
   the text front matter.
 - **Evaluation is independent of Markdown.** The spec runs over the parsed DOM
   with one parse per page, so content that `mode=main` omits from its Markdown is
-  still reachable by a spec (see RISK-014 in the milestone plan).
+  still reachable by a spec (see the readability limitation below).
 - **Reuse.** `use_cache: true` may answer from a stored extraction for the same
   page and spec inside `extract.cache_freshness_s`, otherwise the page is
   revalidated and a 304 reuses the stored result. `profiles` stores each spec
   once, keyed by the BLAKE3 hash of its canonical JSON. The spec text is part of
   that identity, so the `:main` scope change and the `*` meaning do **not**
-  change `profiles.hash`: a record cached under the pre-M04 semantics can be
-  served for up to `extract.cache_freshness_s` (default 300 s) after an upgrade —
+  change `profiles.hash`: a record cached under the earlier scope semantics can
+  be served for up to `extract.cache_freshness_s` (default 300 s) after an upgrade —
   use `use_cache: false` when the new scope matters immediately.
 - **Empty is a value.** A matched `text` field with nothing visible returns `""`
   and is not a `field_error`; `field_errors` reports selectors/attributes that
@@ -940,7 +949,7 @@ document are allowed. The **visual profile** used by `screenshot` (below) allows
 stylesheets, fonts and images so the capture matches what a user sees; media
 stays blocked. Rendered pages execute untrusted JavaScript: the SSRF gate
 governs the **top-level URL**, not every subresource the page chooses to load —
-a disclosed residual risk in IMP-RISK-004, not a claim of sandboxing the network.
+a disclosed residual risk, not a claim of sandboxing the network.
 
 ## Screenshots
 
@@ -980,7 +989,7 @@ and `visual_max_requests` (500). Hitting one reports `truncated: true` and
   their blobs are pruned by `[retention].screenshots_days` (30), and a surviving
   row retains its blob through both the age and budget passes.
 - Asset subresources are fetched by the browser, not by the tool: the SSRF gate
-  and robots check govern the top-level document (IMP-RISK-004), not the CSS,
+  and robots check govern the top-level document, not the CSS,
   font or image URLs it names. Treat the PNG and any page text as untrusted
   data.
 
@@ -1104,9 +1113,8 @@ is blocked), the idle TTL `[interaction].ttl_s` (default 120 s, 30..=600), a
   and WebRTC/UDP and DNS-only channels are outside it (launch flags disable DNS
   prefetch and non-proxied WebRTC UDP). The vet resolves DNS and the browser
   resolves again, so a rebinding zone can still reach a private address — a
-  disclosed residual (IMP-RISK-044; the wording is in this section and in
-  `docs/operations.md` §7 because the risk card itself is owned by
-  Implementation-Flow), not a solved problem.
+  disclosed residual (the wording is in this section and in
+  `docs/operations.md` §7), not a solved problem.
 - **Popups, targets, and cross-origin page changes.** `window.open` (own
   property and prototype) is replaced, `form.submit()`/`requestSubmit()` and
   non-self anchor/area/form targets are cancelled at document start, and closed
@@ -1245,8 +1253,8 @@ is blocked), the idle TTL `[interaction].ttl_s` (default 120 s, 30..=600), a
   the remaining ids and the partial typed results are returned. One in-flight
   check may overrun by at most one check. `monitor_id` with `wait_ms` is
   `schema_invalid`.
-- **Scheduler: opt-in in-process timer (ITEM-009/GRANT-009 amended).** The M01
-  decision chose no scheduler. IMP-ITEM-006 amends it: with
+- **Scheduler: opt-in in-process timer (amended).** The original design chose
+  no scheduler; an amendment adds one: with
   `[scheduler].enabled = true` (default **false**), `serve` runs a resident timer
   that checks due monitors via the same `run_due` pass; `tick_ms` (default 30 s)
   and `max_checks_per_tick` (also clamped by `[monitor].max_checks_per_call`)
@@ -1266,21 +1274,21 @@ instructions; it is never safe to follow.
 
 ## Intended use and known limits
 
-**Intended use (RISK-011).** Internal agent tooling over publicly accessible
+**Intended use.** Internal agent tooling over publicly accessible
 pages (docs, news, reference sites); robots.txt respected; **≤1 request/s per
 host**; no login-gated, authenticated, or paywalled content. There is no
 open-web discovery, proxy rotation, distributed crawling, or multi-user auth.
 
-**Readability can omit sibling blocks (RISK-014).** `mode=main` uses readability
+**Readability can omit sibling blocks.** `mode=main` uses readability
 and can drop whole sibling content blocks (for example a comparison table beside
-the main article). M04 adds a **bounded, section-shaped repair**: between two
+the main article). v0.4 adds a **bounded, section-shaped repair**: between two
 delivered blocks, a missing run is restored only when it begins with an
 undelivered section heading that is a sibling of an adjacent delivered heading
 (same parent element, no deeper level) and is followed by content. Heading-less
 runs (card copy, teasers, landmark notes) are never admitted, and the whole
 page's repair is skipped when it would exceed **25 %** of the delivered text. A
-page without such a gap is byte-identical to the pre-M04 output. Use `mode=full`
-or `mode=text` when completeness matters. The B06 10-page real-site sample did
+page without such a gap is byte-identical to the earlier output. Use `mode=full`
+or `mode=text` when completeness matters. The 10-page real-site sample did
 not show a common article-sibling omission; navigation/sidebars were excluded as
 intended. Two observed site/selector cases are recorded in `docs/operations.md`:
 python.org/about's JavaScript fallback and a broad `h2` schema selector picking
@@ -1288,7 +1296,7 @@ mdBook theme UI. This is a known limitation, not a hidden fallback.
 
 Other limits:
 
-- Monitors are **per URL** in M01; multi-page "watch a site" semantics are later.
+- Monitors are **per URL**; multi-page "watch a site" semantics are later.
 - Schema monitors compare the **declared fields**; they are not a full JSON delta.
 - A rendered monitor **re-fetches every check** (the static validator cannot
   prove the rendered DOM is unchanged), so it costs one navigation per check.
@@ -1301,11 +1309,11 @@ Other limits:
 - A crawl whose seeds are all blocked ends `done` with `fetched: 0,
   skipped > 0`; `limits_hit` distinguishes a limit stop.
 - Rendered pages execute untrusted JavaScript; the SSRF/robots gates cover the
-  top-level navigation, not every subresource (IMP-RISK-004). Do not point the
+  top-level navigation, not every subresource. Do not point the
   browser at an untrusted page if that residual risk is unacceptable.
 - Binary extraction beyond the PDF **text layer** (images, forms, OCR), query
   operators (`OR`/`NEAR`/prefix) over the local index, page-level retention and
-  authenticated crawling are out of M01/M06. The change feed is served only on
+  authenticated crawling are out of scope. The change feed is served only on
   the loopback listener with its own capability token; it is not an
   authenticated multi-user service and a non-loopback bind with the feed enabled
   is refused at startup. Sitemap ingestion is discovery only
@@ -1327,11 +1335,11 @@ Other limits:
   `cargo build --release` overwrites the deployed file (the running process keeps
   its image) and the next restart fails with `this binary was built without the
   http feature`. Verify the installed file's `sha256sum` **and** that it is
-  http-capable before starting; the B01 default build is not a rollback for an
-  `--http` unit. `docs/operations.md` names the durable M02 artifacts by sha.
-- **M03 is code-only** (no schema or data change). The previous `99ab3a4` http
+  http-capable before starting; the default build is not a rollback for an
+  `--http` unit. `docs/operations.md` names the durable release artifacts by sha.
+- **v0.3 is code-only** (no schema or data change). The previous `99ab3a4` http
   binary is the rollback; preserve/install a feature-matched artifact and check
-  its sha before start, as above. `docs/operations.md` records the M03
+  its sha before start, as above. `docs/operations.md` records the v0.3
   upgrade/rollback note.
 - Schema migrations are forward-only (current **v6**). v5 added the nullable
   `monitors.label`; v6 adds the FTS5 table `pages_fts` and the `meta` marker table,
@@ -1370,4 +1378,6 @@ src/mcp/       rmcp server and the fetch_page tool
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The crate metadata declares the same single
+license (`license = "MIT"` in `Cargo.toml`), so packaged metadata, the
+dependency-license gate and the repository file agree.

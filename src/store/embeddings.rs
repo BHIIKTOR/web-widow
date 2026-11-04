@@ -1,4 +1,4 @@
-//! Embedding persistence (M07 E1, IMP-DEC-044): candidates, vector rows,
+//! Embedding persistence: candidates, vector rows,
 //! state, coverage counts and the reads `search_semantic` needs.
 //!
 //! All writes go through the single writer closure; vectors are f32

@@ -1,4 +1,4 @@
-//! B01 payload-polish tests (IMP-B01 B1-12, B1-13).
+//! Payload-polish tests.
 //!
 //! The rendered cases use a stub renderer: no browser is needed to prove the
 //! `render_quality` boundary or that the field is absent on static results.
@@ -82,7 +82,7 @@ fn word_page(words: usize) -> String {
     )
 }
 
-// B1-12 ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
 #[tokio::test]
 async fn links_are_an_empty_list_when_not_requested() {
     let fixture = start_fixture().await;
@@ -128,7 +128,7 @@ async fn links_are_present_when_requested() {
     );
 }
 
-/// Rewrite the stored extraction into the pre-M02 shape: `links: null` and no
+/// Rewrite the stored extraction into the pre-v0.2 shape: `links: null` and no
 /// `links_requested` / `render_quality`.
 fn seed_legacy_cache(env: &TestEnv, include_links: bool) {
     let profile_hash = profile_hash_for(Mode::Main, env.config.extract.max_chars, include_links);
@@ -163,7 +163,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
     let url = fixture.url("127.0.0.1", "/article");
 
     // include_links: true stores links under its own profile, then the row is
-    // rewritten to the pre-M02 shape.
+    // rewritten to the pre-v0.2 shape.
     env.pipeline
         .fetch_page(fetch_input(&url, Some(true), None))
         .await
@@ -219,7 +219,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
     assert!(!cached.payload.links_requested);
 }
 
-// B1-13 ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
 #[tokio::test]
 async fn render_quality_is_thin_for_a_rendered_shell() {
     let fixture = start_fixture().await;

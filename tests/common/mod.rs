@@ -56,7 +56,7 @@ pub const ARTICLE_HTML: &str = r#"<!doctype html>
 </body>
 </html>"#;
 
-/// B02 extraction page: two cards and relative links.
+/// extraction page: two cards and relative links.
 pub const EXTRACT_ITEMS_HTML: &str = r#"<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Items</title></head>
 <body>
@@ -66,7 +66,7 @@ pub const EXTRACT_ITEMS_HTML: &str = r#"<!doctype html>
     <a href="/absolute">absolute</a></div>
 </body></html>"#;
 
-/// B01 SERP fixtures: the real 2026-10-30 captures plus the synthetic ad and
+/// SERP fixtures: the real 2026-10-30 captures plus the synthetic ad and
 /// anomaly pages. Expectations live in the fixture tests, not here.
 pub const SERP_HTML_RESULTS: &str = include_str!("../fixtures/serp/html-results.html");
 pub const SERP_LITE_RESULTS: &str = include_str!("../fixtures/serp/lite-results.html");
@@ -75,7 +75,7 @@ pub const SERP_HTML_ANOMALY: &str = include_str!("../fixtures/serp/html-anomaly.
 pub const SERP_HTML_AD: &str = include_str!("../fixtures/serp/html-ad.html");
 pub const SERP_LITE_AD: &str = include_str!("../fixtures/serp/lite-ad.html");
 
-/// M04 B03 feed fixtures (RSS 2.0, Atom, JSON Feed, duplicate ids, many items
+/// v0.4 feed fixtures (RSS 2.0, Atom, JSON Feed, duplicate ids, many items
 /// with long summaries, malformed XML and an entity bomb).
 pub const M04_FEED_RSS: &str = include_str!("../fixtures/m04/feed/rss.xml");
 pub const M04_FEED_ATOM: &str = include_str!("../fixtures/m04/feed/atom.xml");
@@ -85,11 +85,11 @@ pub const M04_FEED_MANY: &str = include_str!("../fixtures/m04/feed/many.xml");
 pub const M04_FEED_MALFORMED: &str = include_str!("../fixtures/m04/feed/malformed.xml");
 pub const M04_FEED_BOMB: &str = include_str!("../fixtures/m04/feed/bomb.xml");
 
-/// M04 B01 fixture: nav/aside/footer decoys around one article, for the shared
+/// v0.4 fixture: nav/aside/footer decoys around one article, for the shared
 /// `:main` source and `selector:"*"` record-scope semantics.
 pub const M04_SCOPE: &str = include_str!("../fixtures/m04/article-scope.html");
 
-/// M05 A01 fixtures: the BUYALFA verbatim shape (redirect to
+/// v0.5 fixtures: the BUYALFA verbatim shape (redirect to
 /// `/gz/account-verification`, 28 words), a direct login page (no drift) and a
 /// short article (no verification segment), plus the feed identity fixtures.
 pub const M05_INTERSTITIAL_VERIFICATION: &str =
@@ -97,7 +97,7 @@ pub const M05_INTERSTITIAL_VERIFICATION: &str =
 pub const M05_SHORT_ARTICLE: &str = include_str!("../fixtures/m05/interstitial-short-article.html");
 pub const M05_FEED_CANONICAL: &str = include_str!("../fixtures/m05/feed-canonical.xml");
 
-/// M03 B02 fixtures: visible text, caps, `:main`, and a rendered thin shell.
+/// v0.3 fixtures: visible text, caps, `:main`, and a rendered thin shell.
 pub const M03_INLINE_SCRIPT: &str = include_str!("../fixtures/m03/article-with-inline-script.html");
 pub const M03_CNBC_BODY: &str = include_str!("../fixtures/m03/cnbc-class-body.html");
 pub const M03_NAV: &str = include_str!("../fixtures/m03/article-with-nav.html");
@@ -105,7 +105,7 @@ pub const M03_THIN_SHELL: &str = include_str!("../fixtures/m03/thin-rendered-she
 pub const M03_LONG_FIELD: &str = include_str!("../fixtures/m03/long-field.html");
 pub const M03_NO_ARTICLE: &str = include_str!("../fixtures/m03/no-article.html");
 
-/// B03: `noscript`-only shell; the static DOM carries under 50 words while the
+/// : `noscript`-only shell; the static DOM carries under 50 words while the
 /// script injects a 60-word article.
 pub const NOSCRIPT_APP_HTML: &str = r#"<!doctype html>
 <html><head><meta charset="utf-8"><title>JS App</title></head>
@@ -119,7 +119,7 @@ pub const NOSCRIPT_APP_HTML: &str = r#"<!doctype html>
   </script>
 </body></html>"#;
 
-/// B03: the final marker is only written after four sequential fetches, so a
+/// : the final marker is only written after four sequential fetches, so a
 /// fixed 500 ms sleep after `load` would stop before it.
 pub const ASYNC_APP_HTML: &str = r#"<!doctype html>
 <html><head><meta charset="utf-8"><title>Async App</title></head>
@@ -140,7 +140,7 @@ pub const ASYNC_APP_HTML: &str = r#"<!doctype html>
   </script>
 </body></html>"#;
 
-/// B03 resource-blocking fixture: image, font and stylesheet are blocked at the
+/// resource-blocking fixture: image, font and stylesheet are blocked at the
 /// CDP layer; the XHR must still be fetched.
 pub const RESOURCES_HTML: &str = r#"<!doctype html>
 <html><head><meta charset="utf-8"><title>Resources</title>
@@ -394,7 +394,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .body(Body::from(ARTICLE_HTML))
                 .unwrap()
         }
-        // M05 A01: the BUYALFA verbatim shape — a product path redirecting to
+ // v0.5: the BUYALFA verbatim shape — a product path redirecting to
         // the whole verification segment, a direct login page (no drift), and a
         // short article with no verification path.
         "/p/MLM26030984" => Response::builder()
@@ -447,7 +447,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .unwrap()
         }
         "/medium" => {
-            // ~200 KiB rendered page for the B3-5 RSS check.
+ // ~200 KiB rendered page for the RSS check.
             let mut body = String::with_capacity(210_000);
             body.push_str("<html><head><title>Medium Page</title></head><body><h1>Medium</h1>");
             for index in 0..1_700 {
@@ -494,7 +494,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .body(Body::from("<html><body>ok</body></html>"))
                 .unwrap()
         }
-        // B04: a small linked site, duplicate variants, redirect chains, a
+ // : a small linked site, duplicate variants, redirect chains, a
         // 404, a 500-once page, a robots-disallowed subtree and a calendar trap.
         "/site/" => {
             let mut body = String::from(
@@ -646,9 +646,9 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 ))
                 .unwrap()
         }
-        // B02: a page whose links are relative, reached through a redirect, so
+ // : a page whose links are relative, reached through a redirect, so
         // absolute-URL resolution must use the final URL.
-        // ---- B03 rendering fixtures -------------------------------------
+ // ---- rendering fixtures -------------------------------------
         "/js/noscript" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(NOSCRIPT_APP_HTML))
@@ -779,7 +779,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .header(header::LOCATION, "file:///etc/passwd")
             .body(Body::empty())
             .unwrap(),
-        // ---- B01 search (SERP) fixtures -----------------------------------
+ // ---- search (SERP) fixtures -----------------------------------
         "/serp/html" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(SERP_HTML_RESULTS))
@@ -809,7 +809,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .header(header::LOCATION, "http://10.0.0.1/")
             .body(Body::empty())
             .unwrap(),
-        // ---- M03 B02 fixtures ----------------------------------------------
+ // ---- v0.3 fixtures ----------------------------------------------
         "/fixtures/inline-script" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(M03_INLINE_SCRIPT))
@@ -834,7 +834,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(M03_NO_ARTICLE))
             .unwrap(),
-        // ---- M04 B03 feed fixtures ----------------------------------------
+ // ---- v0.4 feed fixtures ----------------------------------------
         "/feed/rss" => feed_response(M04_FEED_RSS, "application/rss+xml"),
         "/feed/atom" => feed_response(M04_FEED_ATOM, "application/atom+xml"),
         "/feed/json" => feed_response(M04_FEED_JSON, "application/feed+json"),

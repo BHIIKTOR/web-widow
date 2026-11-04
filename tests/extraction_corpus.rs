@@ -1,5 +1,5 @@
 //! A3 — golden corpus: Markdown snapshots paired with independently written
-//! must-contain / must-not-contain assertions (IMP-VALID-001 §2).
+//! must-contain / must-not-contain assertions (§2).
 //!
 //! The snapshots are regression evidence; the assertions are the quality
 //! evidence. A snapshot regenerated from the implementation still has to satisfy
@@ -134,7 +134,7 @@ const CASES: &[Case] = &[
     },
     Case {
         // Deliberately hard: readability prefers the 48-comment block over a
-        // two-sentence article. M01 does not tune per site, so the fixture
+        // two-sentence article. v0.1 does not tune per site, so the fixture
         // records the wrong choice instead of hiding it.
         name: "known-hard",
         must_contain: &["Commenter one writes at length"],

@@ -1,6 +1,6 @@
--- Migration 008_embeddings_webhooks.sql — schema v8 (M07-semantic-events, P0).
+-- Migration 008_embeddings_webhooks.sql — schema v8 (semantic events).
 --
--- Additive only (IMP-DEC-043): embedding rows + per-page state, monitor→target
+-- Additive only: embedding rows + per-page state, monitor→target
 -- attachments, and the durable webhook delivery outbox. No existing table,
 -- column or row is touched, and no tool surface or behaviour is added by P0.
 

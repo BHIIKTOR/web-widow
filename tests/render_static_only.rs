@@ -1,4 +1,4 @@
-//! B03 — the `--no-default-features` build must stay fully functional without
+//! The `--no-default-features` build must stay fully functional without
 //! Chrome, and an `always` request must fail with a typed `render_unavailable`
 //! rather than a compile error or a silent static result.
 

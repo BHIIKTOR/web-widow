@@ -1,7 +1,7 @@
--- Migration 003_monitor.sql — schema v3 (IMP-DATA-001 monitoring area).
+-- Migration 003_monitor.sql — schema v3 (monitoring area).
 -- Applied inside a transaction by the writer; forward-only, tracked by
 -- PRAGMA user_version. `snapshots.result_hash` is the monitor's schema result
--- identity (the IMP-DATA-001 list has the column); the bytes live in the CAS so
+-- identity (the schema list has the column); the bytes live in the CAS so
 -- a field diff can read the previous values without a second column.
 
 CREATE TABLE monitors (

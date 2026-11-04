@@ -1,4 +1,4 @@
-//! Browser interaction primitives (IMP-DEC-039/040, M06 B2).
+//! Browser interaction primitives (since v0.6).
 //!
 //! One held page per process, one action per call, observe → act → observe.
 //! The manager owns validation, TTL/action bounds, wait timing and screenshot
@@ -38,7 +38,7 @@ const MAX_NETWORK_QUIET_MS: u64 = 5_000;
 const MAX_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
 const MAX_TYPED_CHARS: usize = 2_000;
-/// Screenshot budget per session (RISK-054 residual, review F10).
+/// Screenshot budget per session (residual, review F10).
 const SESSION_SCREENSHOT_CAP: u32 = 10;
 const MAX_TITLE_CHARS: usize = 300;
 const MAX_FINAL_URL_CHARS: usize = 4_096;
@@ -355,7 +355,7 @@ impl ActionSpec {
         }
     }
 
-    /// The result echo. Typed text is deliberately absent (RISK-045).
+    /// The result echo. Typed text is deliberately absent.
     fn describe(&self) -> serde_json::Value {
         match self {
             Self::Click { selector, index } => {

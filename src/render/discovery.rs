@@ -1,4 +1,4 @@
-//! Chrome/Chromium discovery (IMP-DEC-002).
+//! Chrome/Chromium discovery.
 //!
 //! Order: `render.chrome_path`, then `$CHROME_PATH`, then well-known paths,
 //! including the Playwright browser cache. Discovery is lazy: a server with no

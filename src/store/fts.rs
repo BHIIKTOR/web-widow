@@ -1,10 +1,10 @@
-//! Full-text index over stored page content (IMP-DEC-029).
+//! Full-text index over stored page content.
 //!
 //! One `pages_fts` row per `pages` row. The index is maintained by an explicit
 //! upsert inside the same transaction as the page write; there are no triggers,
 //! so every write path that stores content must supply the text (see
 //! [`super::db::FetchRecord::index_text`]). Two write policies keep the row
-//! honest (M05 B01b): delivered page text replaces it, a projection such as
+//! Honest (v0.5): delivered page text replaces it, a projection such as
 //! `extract`'s record text may only fill a page that has none. The backfill
 //! fills the rows that predate schema v6 once, guarded by a marker, preferring
 //! the most recent stored Markdown over a later record-text extraction.
@@ -43,7 +43,7 @@ pub(super) fn upsert(
 /// Write one page's index row only if the page has no indexed body yet.
 ///
 /// `extract` is a projection of a page, not the page: when the delivered
-/// Markdown is already indexed, record text must not replace it (M05 B01b).
+/// Markdown is already indexed, record text must not replace it (v0.5).
 /// A page with no row, or a row whose body is empty (title-only), is filled.
 pub(super) fn fill_empty(
     transaction: &rusqlite::Transaction<'_>,
@@ -145,7 +145,7 @@ pub(super) fn backfill(
         let transaction = connection.transaction()?;
         // Two candidates per page, in the same bounded window as the page rows:
         // the most recent extraction that carries delivered Markdown, and the
-        // most recent extraction of any shape. Markdown wins (M05 B01b): a later
+        // most recent extraction of any shape. Markdown wins (v0.5): a later
         // `extract` of the same page must not erase the page's own text from the
         // index, which is exactly the live-write defect this revision fixed.
         let rows: Vec<(i64, Option<String>, Option<String>)> = {

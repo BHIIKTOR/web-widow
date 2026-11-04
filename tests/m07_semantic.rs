@@ -1,4 +1,4 @@
-//! M07 E1 integration: local semantic index, backfill, invalidation and the
+//! v0.7 integration: local semantic index, backfill, invalidation and the
 //! artifact-gated engine contract.
 //!
 //! The model/runtime are provisioned artifacts, not crates. Like the render and

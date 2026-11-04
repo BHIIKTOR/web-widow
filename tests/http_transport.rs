@@ -1,8 +1,8 @@
-//! B06 B6-2/B6-8 — the loopback streamable HTTP transport: bearer auth, a real
+//! The packaged release / — the loopback streamable HTTP transport: bearer auth, a real
 //! MCP SDK client, stdout hygiene and a clean SIGTERM.
 //!
 //! Only built/run when the `http` feature is enabled (`cargo test --features http`),
-//! which is also the feature set B6-1 packages.
+//! Which is also the feature set packages.
 
 #![cfg(feature = "http")]
 

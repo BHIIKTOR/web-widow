@@ -1,5 +1,5 @@
 //! The single-URL service: fetch, extract, persist and shape the tool payload
-//! (IMP-B01 data flow for `fetch_page`).
+//! (data flow for `fetch_page`).
 //!
 //! Order is fixed: validate -> cache (freshness) -> robots -> gate -> fetch ->
 //! CAS -> decode -> extract -> persist. The safety gate is consulted before the
@@ -52,7 +52,7 @@ use crate::store::recipes::NewRecipe;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RenderPolicy {
-    /// Render only when the static result is thin (B03); static-only in B01.
+    /// Render only when the static result is thin; static-only in.
     Auto,
     /// Never render.
     Never,
@@ -60,7 +60,7 @@ pub enum RenderPolicy {
     Always,
 }
 
-/// `fetch_page` input (IMP-CONTRACT-001). Every field except `url` has a
+/// `fetch_page` input. Every field except `url` has a
 /// documented default; there is deliberately no capability-widening argument.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct FetchPageInput {
@@ -93,7 +93,7 @@ pub struct FetchPageInput {
     pub include_content: Option<bool>,
 }
 
-/// `fetch_page` machine payload (IMP-CONTRACT-001 output).
+/// `fetch_page` machine payload (output).
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FetchPagePayload {
     pub url: String,
@@ -122,8 +122,8 @@ pub struct FetchPagePayload {
     pub cached: bool,
     pub fetched_at: String,
     pub duration_ms: u64,
-    /// Always a list (IMP-CONTRACT-002 §4.1): `[]` when links were not requested.
-    /// A pre-M02 cached payload stored `null`; the custom deserializer maps it to
+    /// Always a list (§4.1): `[]` when links were not requested.
+    /// A pre-v0.2 cached payload stored `null`; the custom deserializer maps it to
     /// an empty list.
     #[serde(default, deserialize_with = "deserialize_nullable_links")]
     pub links: Vec<Link>,
@@ -132,13 +132,13 @@ pub struct FetchPagePayload {
     #[serde(default)]
     pub links_requested: bool,
     pub links_truncated: bool,
-    /// `ok | thin` on rendered results only (IMP-CONTRACT-002 §4.3); absent for
+    /// `ok | thin` on rendered results only (§4.3); absent for
     /// static and static_fallback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub render_quality: Option<String>,
     /// `interstitial_suspect` when a 200 response redirected into a
     /// verification/login path segment and delivered fewer than 50 words
-    /// (IMP-DEC-025). A warning, never an error; absent otherwise.
+    ///. A warning, never an error; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_warning: Option<String>,
     pub word_count: usize,
@@ -152,7 +152,7 @@ pub struct FetchPageResult {
     pub markdown: String,
 }
 
-/// `screenshot` input (IMP-DEC-032). The visual capture profile is
+/// `screenshot` input. The visual capture profile is
 /// server-fixed; no argument selects it.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct ScreenshotInput {
@@ -224,7 +224,7 @@ pub struct BlobGetPayload {
     pub referenced_by: Vec<String>,
 }
 
-/// `extract` input (IMP-CONTRACT-001 §2). The spec is data: it is validated
+/// `extract` input (§2). The spec is data: it is validated
 /// server-side and can never execute code.
 #[derive(Debug, Clone, schemars::JsonSchema)]
 pub struct ExtractInput {
@@ -278,7 +278,7 @@ impl<'de> Deserialize<'de> for ExtractInput {
         let schema = match fields.schema {
             Some(schema) => schema,
             None => {
-                // ISS-007: a caller who passes `{url, container, fields}` gets a
+                //: a caller who passes `{url, container, fields}` gets a
                 // message naming the envelope instead of bare serde wording. The
                 // shape is still rejected: there is one documented contract.
                 if fields.top_level.contains_key("container")
@@ -319,7 +319,7 @@ pub struct ExtractPayload {
     /// String values cut by `max_field_chars` in the returned records.
     pub truncated_fields: usize,
     pub render_mode: String,
-    /// `ok | thin` on rendered results only (ISS-005); absent for static and
+    /// `ok | thin` on rendered results only; absent for static and
     /// static_fallback. An approximation from the delivered page's visible text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub render_quality: Option<String>,
@@ -331,7 +331,7 @@ pub struct ExtractPayload {
     pub duration_ms: u64,
 }
 
-/// `extract_rows` input (IMP-DEC-033). A sibling of `extract`, never a mode of
+/// `extract_rows` input. A sibling of `extract`, never a mode of
 /// it: tabular input is a different data family with its own spec identity.
 /// `format: auto` resolves from the response media type, then from a bounded
 /// sniff of the body; `application/octet-stream` is refused, not guessed.
@@ -414,7 +414,7 @@ fn recipe_version(value: i64) -> Result<u32> {
 }
 
 /// `recipe_apply` payload: the ordinary extraction envelope plus the recipe
-/// identity that produced it (IMP-DEC-034). Flattened, so the JSON shape is
+/// identity that produced it. Flattened, so the JSON shape is
 /// exactly `extract`'s fields with `recipe`, `version` and `profile_hash`.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RecipeApplyPayload {
@@ -523,7 +523,7 @@ pub struct Pipeline {
     hop_guard: Arc<dyn HopGuard>,
     /// The top-level URL a render is given must pass the same SSRF gate as a
     /// static fetch. Subresources a rendered page loads are outside this gate
-    /// (IMP-RISK-004, disclosed residual risk).
+    /// (disclosed residual risk).
     ssrf: Arc<SsrfGate>,
     /// Politeness lease for the top-level render navigation.
     gate: Arc<HostGate>,
@@ -737,7 +737,7 @@ impl Pipeline {
 
     /// The top-level URL is vetted and robots-checked before the browser is
     /// asked to navigate. A rendered page's own subresources are a disclosed
-    /// gap (IMP-RISK-004); this does not claim they pass the gate.
+    /// gap; this does not claim they pass the gate.
     async fn render_page(
         &self,
         page: &PageUrl,
@@ -749,7 +749,7 @@ impl Pipeline {
 
     /// The one top-level render gate: SSRF vet, render preflight (before any
     /// robots request), robots check and the politeness lease. Both the text
-    /// and the visual render paths use it so they cannot drift (IMP-DEC-032).
+    /// and the visual render paths use it so they cannot drift.
     async fn vet_render_target(
         &self,
         page: &PageUrl,
@@ -768,7 +768,7 @@ impl Pipeline {
     }
 
     /// Capture through the same gate/robots/caps/settle path as a render.
-    /// Visual subresources are a disclosed residual (IMP-RISK-004): the
+    /// Visual subresources are a disclosed residual: the
     /// top-level document is vetted; the browser's own asset requests are not.
     async fn capture_page(
         &self,
@@ -818,7 +818,7 @@ impl Pipeline {
     }
 
     /// `screenshot`: render, capture PNG, store it in the CAS and reference it
-    /// from one `screenshots` row (IMP-DEC-032). The blob row is written before
+    /// from one `screenshots` row. The blob row is written before
     /// the screenshot row in the same writer closure: the `screenshots.hash`
     /// foreign key requires that order.
     pub async fn screenshot(&self, input: ScreenshotInput) -> Result<ScreenshotPayload> {
@@ -1064,7 +1064,7 @@ impl Pipeline {
     /// Index text for one page: the delivered body capped at
     /// `[fts].max_index_chars` on a character boundary. The single place every
     /// acquisition path applies that cap, so the store never sees an unbounded
-    /// body (IMP-RISK-040).
+    /// body.
     fn index_text(&self, body: &str) -> String {
         truncate_chars(body, self.config.fts.max_index_chars).0
     }
@@ -1368,7 +1368,7 @@ impl Pipeline {
         Ok(result)
     }
 
-    /// `search`: one SERP page through the shared gate (IMP-CONTRACT-002 §1.2).
+    /// `search`: one SERP page through the shared gate (§1.2).
     ///
     /// Stateless: no page/extraction/profile/blob/job row is written, and a
     /// failure is never recorded. The query is caller input, so logs carry the
@@ -1502,7 +1502,7 @@ impl Pipeline {
         })
     }
 
-    /// `sitemap`: discovery-only fetch and streaming parse (IMP-DEC-030).
+    /// `sitemap`: discovery-only fetch and streaming parse.
     ///
     /// Nothing is stored: no page, extraction, blob, job or fetch-event row is
     /// written. An index is followed up to `[sitemap].max_children`; each child
@@ -1637,7 +1637,7 @@ impl Pipeline {
         })
     }
 
-    /// `pdf_extract`: text-layer PDF → `## Page N` markdown (IMP-DEC-041).
+    /// `pdf_extract`: text-layer PDF → `## Page N` markdown.
     ///
     /// The engine is ensured **before** the request, so a broken deployment
     /// spends no fetch. The body then comes through the shared adapter
@@ -1646,7 +1646,7 @@ impl Pipeline {
     /// is applied here because the shared media scope deliberately excludes
     /// PDFs. Parsing runs on a blocking thread behind the engine mutex and
     /// `catch_unwind` (Rust panics only; a native PDFium crash is not catchable,
-    /// RISK-046). `fetch_page`/`extract` keep refusing PDFs.
+    //). `fetch_page`/`extract` keep refusing PDFs.
     pub async fn pdf_extract(&self, input: PdfExtractInput) -> Result<PdfExtractPayload> {
         let started = Instant::now();
         let limits = self.config.pdf.limits();
@@ -2199,7 +2199,7 @@ impl Pipeline {
         // after the presentation caps, so a hit never quotes text the tool
         // refused to return as a field. `fill_empty` because records project a
         // page: they may give a page its first indexed text, never replace the
-        // page text a `fetch_page`/crawl/monitor already indexed (M05 B01b).
+        // page text a `fetch_page`/crawl/monitor already indexed (v0.5).
         record.index_text = Some(IndexText::fill_empty(self.index_text(
             &crate::store::fts::index_text_from_records(&payload.records),
         )));
@@ -2238,7 +2238,7 @@ impl Pipeline {
         Ok(payload)
     }
 
-    /// `extract_rows` (IMP-DEC-033): fetch one URL through the shared raw path
+    /// `extract_rows`: fetch one URL through the shared raw path
     /// with a content scope that adds CSV/TSV, then parse it as delimited text,
     /// JSON or an HTML table. Numbers/booleans/nulls from JSON keep their type;
     /// delimited and table cells are strings by nature.
@@ -2506,7 +2506,7 @@ impl Pipeline {
         record.mode = label.to_string();
         record.bytes = Some(source.response.bytes);
         // A row set is a projection of a page: it may give a page its first
-        // indexed text, never replace delivered page text (M05 B01b).
+        // indexed text, never replace delivered page text (v0.5).
         record.index_text = Some(IndexText::fill_empty(self.index_text(
             &crate::store::fts::index_text_from_records(&payload.records),
         )));
@@ -2547,7 +2547,7 @@ impl Pipeline {
         Ok(payload)
     }
 
-    /// Store a named, versioned recipe (IMP-DEC-034). The spec is validated by
+    /// Store a named, versioned recipe. The spec is validated by
     /// the same `extract` validator and stored in `profiles`; the recipe tables
     /// hold only the name/version pointer.
     pub async fn recipe_save(&self, input: RecipeSaveInput) -> Result<RecipeSavePayload> {
@@ -2583,7 +2583,7 @@ impl Pipeline {
         })
     }
 
-    /// List recipes by name with an optional literal prefix (IMP-DEC-034).
+    /// List recipes by name with an optional literal prefix.
     /// Read-only: no fetch, no job, nothing stored.
     pub async fn recipe_list(&self, input: RecipeListInput) -> Result<RecipeListPayload> {
         // A prefix is a query, not an identity: any string is accepted and a
@@ -2683,7 +2683,7 @@ impl Pipeline {
         })
     }
 
-    /// `corpus_export` (IMP-DEC-035): a JSONL file or a markdown directory under
+    /// `corpus_export`: a JSONL file or a markdown directory under
     /// `<data_dir>/exports/`. Streamed, bounded and inline; the response is the
     /// path and counts, never the corpus.
     pub async fn corpus_export(&self, input: CorpusExportInput) -> Result<CorpusExportPayload> {
@@ -2691,7 +2691,7 @@ impl Pipeline {
         export::write(&self.store, self.store.paths(), &plan).await
     }
 
-    /// `snapshot_compare` (IMP-DEC-035): an explicit pair of monitor snapshots
+    /// `snapshot_compare`: an explicit pair of monitor snapshots
     /// or page fetch versions. Read-only: it never writes a row.
     pub async fn snapshot_compare(
         &self,
@@ -2963,7 +2963,7 @@ impl Pipeline {
     /// optional schema evaluated against the same parsed tree.
     ///
     /// Deliberately **not** `crawl_page`: a crawl fetches unconditionally by
-    /// design, and B5-1 requires the conditional path.
+    /// design, and requires the conditional path.
     ///
     /// A 304 only means "unchanged for this monitor" when **both** hold: the
     /// previous check was static (a rendered check leaves the origin's static
@@ -3081,7 +3081,7 @@ impl Pipeline {
         };
 
         // A monitor uses `auto`: render only when the static result is thin, so
-        // a script-driven page is monitored on its rendered content (B5-10).
+        // a script-driven page is monitored on its rendered content.
         if source.render_mode == RenderMode::Static
             && self.auto_wants_render(&page, &source, extraction.main.word_count)
         {
@@ -3311,7 +3311,7 @@ const INTERSTITIAL_SEGMENTS: &[&str] = &[
 /// interstitial (the BUYALFA sample was 28 words).
 const INTERSTITIAL_MAX_WORDS: usize = 50;
 
-/// `interstitial_suspect` only for the whole conjunction (IMP-DEC-025):
+/// `interstitial_suspect` only for the whole conjunction:
 /// status 200, the final URL drifted from the request in host or path, the
 /// final path has a verification/login segment, and the page is very short.
 /// A direct login page (no drift) and a short article (no segment) never warn.
@@ -3362,7 +3362,7 @@ fn render_quality_for(mode: RenderMode, word_count: usize) -> Option<String> {
     }
 }
 
-/// Extract's thin signal (ISS-005): the rendered page's visible-word count, not
+/// Extract's thin signal: the rendered page's visible-word count, not
 /// the record text. An approximation, as documented.
 fn extract_render_quality(mode: RenderMode, html: &str) -> Option<String> {
     match mode {
@@ -3462,7 +3462,7 @@ fn apply_extract_caps(payload: &mut ExtractPayload, max_field_chars: usize, max_
     .map(str::to_string);
 }
 
-/// Pre-M02 cached payloads stored `"links": null`; a list that is always a list
+/// Pre-v0.2 cached payloads stored `"links": null`; a list that is always a list
 /// must still deserialize them.
 fn deserialize_nullable_links<'de, D>(deserializer: D) -> std::result::Result<Vec<Link>, D::Error>
 where

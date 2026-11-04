@@ -5,19 +5,44 @@ Short, stable repository instructions. This file is not a second plan.
 ## Toolchain
 
 - Rust **1.99.1**, pinned by `rust-toolchain.toml` (components: rustfmt, clippy).
-- Chrome/Chromium is needed only for the `render` feature. The verified test
-  binary is Chrome for Testing 156.0.8078.4; set `WEB_WIDOW_CHROME` to its path
-  for tests. Without it, render tests print `SKIP` and return.
+- Chrome/Chromium is needed only for the `render` feature (Chrome for Testing
+  156.0.8078.4 is the verified test binary). Without it, render tests print
+  `SKIP` and return.
 - PDFium 8125 (`libpdfium.so`, from pdfium-binaries) is needed only for
-  `pdf_extract`, loaded at runtime (`libloading`, never link-time). Set
-  `WEB_WIDOW_PDFIUM_PATH` to its path for tests; without it, PDF tests print
-  `SKIP` and return. The binary's `ldd` does not list it.
+  `pdf_extract`, loaded at runtime (`libloading`, never link-time). The binary's
+  `ldd` does not list it.
 - ONNX Runtime 1.31.0 (`libonnxruntime.so`, from
   `onnxruntime-linux-x64-1.31.0.tgz`) and the pinned `minilm-l6-v2-q` model files
   are needed only for `search_semantic`/the embedding backfill, loaded at runtime
-  with `ort` `load-dynamic` (never link-time). Set `WEB_WIDOW_ORT_PATH` and
-  `WEB_WIDOW_MODEL_DIR` for tests; without them, semantic tests print `SKIP` and
-  return. Per-file SHA-256 is recorded in `docs/operations.md`.
+  with `ort` `load-dynamic` (never link-time). Per-file SHA-256 and the upstream
+  model source are recorded in `docs/operations.md`.
+
+## Environment variables
+
+Variables the **server** reads at runtime:
+
+| Variable | Effect |
+|---|---|
+| `WEB_WIDOW_CONFIG` | config file when `--config` is absent |
+| `WEB_WIDOW_DATA` | data directory when `storage.data_dir` is unset |
+| `WEB_WIDOW_CONTACT` | contact for the User-Agent, overriding `[fetch].contact` |
+| `WEB_WIDOW_HTTP_TOKEN` | MCP bearer token for `--http`; wins over `--http-token-file` |
+| `WEB_WIDOW_FEED_TOKEN` | feed capability token (≥32 chars) when `<data>/feed-token` is absent |
+| `WEB_WIDOW_PDFIUM_PATH` | PDFium discovery fallback; a strict `[pdf].pdfium_path` wins |
+| `WEB_WIDOW_ORT_PATH` | ONNX Runtime discovery fallback, before `ORT_DYLIB_PATH` |
+
+Variables the **test suite** reads (never needed to run the server):
+
+| Variable | Effect |
+|---|---|
+| `WEB_WIDOW_CHROME` | Chrome/Chromium binary for the render tests |
+| `WEB_WIDOW_MODEL_DIR` | model directory for the semantic tests |
+| `WEB_WIDOW_STRESS_RENDERS` | render count for the render stress test |
+| `WEB_WIDOW_TEST_DISABLE_POPUP_GUARD` | debug-build only: disable the popup guard for its discriminator probe |
+| `WEB_WIDOW_TEST_DISABLE_INTEGRITY` | debug-build only: disable the integrity backstop for its discriminator probe |
+
+The two `…TEST_DISABLE…` hooks are compiled out of release builds
+(`#[cfg(debug_assertions)]`): a release binary always installs both guards.
 
 ## Build
 

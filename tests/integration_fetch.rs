@@ -1,4 +1,4 @@
-//! Integration behaviour against a local scripted HTTP server (IMP-B01 A4–A9).
+//! Integration behaviour against a local scripted HTTP server (A4–A9).
 //!
 //! Every test asserts a server-visible fact (request log, stored rows, blob
 //! count) rather than only the tool output, so a check cannot pass by accident

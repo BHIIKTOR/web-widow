@@ -1,4 +1,4 @@
-//! M06 A1 — `extract_rows`: CSV/TSV, JSON and HTML-table extraction.
+//! v0.6 — `extract_rows`: CSV/TSV, JSON and HTML-table extraction.
 //!
 //! Lane-local by rule: the fixture server and every helper live here, and
 //! `tests/common/mod.rs` is not edited. The server controls the `Content-Type`

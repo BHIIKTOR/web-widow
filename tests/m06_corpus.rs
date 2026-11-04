@@ -1,9 +1,8 @@
-//! M06 A3 — `corpus_export` (JSONL + markdown) and `snapshot_compare`
+//! `corpus_export` (JSONL + markdown) and `snapshot_compare`
 //! (monitor snapshots and page fetch versions).
 //!
 //! Lane-local fixture server and helpers; `tests/common/mod.rs` is untouched.
-//! The live store is never opened here: the A3-8 live check is the copy drill in
-//! `plan/artifacts/M06-discovery-interaction/A3/`.
+//! The live store is never opened here: the live check is the copy drill.
 
 mod common;
 

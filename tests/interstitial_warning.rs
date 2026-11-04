@@ -1,4 +1,4 @@
-//! M05 A01 — `content_warning: "interstitial_suspect"` (IMP-DEC-025).
+//! v0.5 — `content_warning: "interstitial_suspect"`.
 //!
 //! The positive fixture is the BUYALFA verbatim shape: a product path that
 //! redirects to `/gz/account-verification` and delivers 28 words. The two

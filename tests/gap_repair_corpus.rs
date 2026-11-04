@@ -1,18 +1,18 @@
-//! M04 B02 — structural-gap repair neutrality harness (IMP-DEC-022 §3).
+//! v0.4 — structural-gap repair neutrality harness (§3).
 //!
-//! The corpus is fixed here: the M01 committed fixtures, the M01 real-site
-//! sources, the chainalysis capture from B01, and a synthetic boilerplate page.
+//! The corpus is fixed here: the v0.1 committed fixtures, the v0.1 real-site
+//! sources, the chainalysis capture from, and a synthetic boilerplate page.
 //! `tests/fixtures/m04/corpus-baseline/` holds the **pre-repair** Markdown for
-//! every page, produced by the B01 candidate on the same bytes; this test diffs
+//! every page, produced by the candidate on the same bytes; this test diffs
 //! the current output against that retained baseline.
 //!
 //! Rules asserted:
-//! - every no-gap page is **byte-identical**;
-//! - every diff has **zero removed lines** (additions only);
-//! - only the sqlite.org page (and pages with a demonstrable gap) changes;
-//! - the sqlite section 2 is restored in position within the 25 % bound;
-//! - the boilerplate page adds nothing;
-//! - monitor `normalized_hash` is unchanged for every no-gap page.
+//! Every no-gap page is **byte-identical**;
+//! Every diff has **zero removed lines** (additions only);
+//! Only the sqlite.org page (and pages with a demonstrable gap) changes;
+//! The sqlite section 2 is restored in position within the 25 % bound;
+//! The boilerplate page adds nothing;
+//! Monitor `normalized_hash` is unchanged for every no-gap page.
 
 use std::path::PathBuf;
 

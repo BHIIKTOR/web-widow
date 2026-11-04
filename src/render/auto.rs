@@ -1,11 +1,11 @@
-//! The `render = auto` heuristic (IMP-DEC-002).
+//! The `render = auto` heuristic.
 //!
 //! Pure and testable: the pipeline supplies the main-content word count and the
 //! raw HTML, and this module returns the decision plus the rule name that goes
 //! into the log. Keeping the thresholds here means the decision cannot drift
 //! between `fetch_page` and `extract`.
 
-/// Thresholds from IMP-DEC-002. They are deliberately small and explainable;
+/// Thresholds from. They are deliberately small and explainable;
 /// any site-specific tuning is a later decision, not a hidden constant.
 pub const THIN_CONTENT_WORDS: usize = 200;
 pub const NOSCRIPT_CONTENT_WORDS: usize = 100;

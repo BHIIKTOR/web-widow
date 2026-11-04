@@ -1,4 +1,4 @@
-//! Content scope (IMP-GRANT-006 / ITEM-006): what we agree to turn into text.
+//! Content scope: what we agree to turn into text.
 //!
 //! A type outside this closed set is refused with `unsupported_content_type`
 //! before the body is read, so a PDF is never downloaded "just to check".
@@ -9,7 +9,7 @@ pub const PROCESSED_TYPES: &str =
     "text/html, application/xhtml+xml, text/plain, application/json, application/xml, text/xml";
 
 /// Media types the tabular family adds on top of [`PROCESSED_TYPES`]
-/// (IMP-DEC-033). Only `extract_rows` fetches with this wider scope; every page
+///. Only `extract_rows` fetches with this wider scope; every page
 /// path keeps [`classify`] and still refuses them.
 pub const TABULAR_TYPES: &str = "text/csv, text/tab-separated-values";
 
@@ -102,7 +102,7 @@ pub fn require(content_type: Option<&str>) -> Result<MediaKind, WidowError> {
 }
 
 /// Which media allowlist one acquisition applies. `Page` is every page tool;
-/// `Tabular` adds CSV/TSV for `extract_rows` and nothing else (IMP-DEC-033). The
+/// `Tabular` adds CSV/TSV for `extract_rows` and nothing else. The
 /// scope never changes the SSRF, robots, host-gate or body-cap path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentScope {

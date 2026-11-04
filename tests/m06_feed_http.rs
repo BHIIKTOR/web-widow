@@ -1,6 +1,6 @@
 #![cfg(feature = "http")]
 
-//! M06 C3 — the loopback feed route (C3-5, C3-6, C3-7).
+//! v0.6 — the loopback feed route (C3-5, C3-6, C3-7).
 //!
 //! Spawns the real binary (`--features http`) over 127.0.0.1 with a seeded
 //! database and the capability token from the environment or the `0600`

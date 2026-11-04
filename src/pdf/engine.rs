@@ -1,4 +1,4 @@
-//! PDFium engine loading (IMP-DEC-041, C2-9).
+//! PDFium engine loading (C2-9).
 //!
 //! `pdfium-render` binds the native `libpdfium.so` through `libloading` at
 //! runtime; the bindings are a process-wide singleton, so the library is loaded

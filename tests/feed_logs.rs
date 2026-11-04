@@ -1,4 +1,4 @@
-//! B03 feed log privacy. A separate test binary so the global tracing
+//! feed log privacy. A separate test binary so the global tracing
 //! subscriber is not raced by other tests in the same process.
 //!
 //! The feed URL can carry a token in its query; `fetch_feed` must log the
