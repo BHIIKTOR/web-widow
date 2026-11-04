@@ -187,6 +187,60 @@ a missing blob is a dangling reference. For a cold backup, stop the server first
 and copy the whole data directory. To restore: stop the server, restore the
 database and blob tree, ensure the data directory is `0700`, start the binary.
 
+### Upgrade v8 → v9 (`auth_audit`, additive)
+
+Schema v9 is additive: one `auth_audit` table and its two indexes
+(`auth_audit_at`, `auth_audit_site_at`). No existing table, column or row is
+touched. The table is empty on migration and stays empty until an authenticated
+fetch writes one value-free row per attempt; the release also adds the inert
+`[auth]` config contract, and `[auth].audit_days` (default 90, 1..=3650) prunes
+rows in the startup GC. There is no backfill.
+
+A failed migration rolls back inside its transaction; a v8 binary refuses a v9
+database (`database schema v9 is newer than this binary (v8)`), so a binary
+rollback means restoring the pre-migration database.
+
+1. Preserve the v8 binary and `VACUUM INTO` each database; record
+   `PRAGMA user_version` and the counts (`pages`, `pages_fts`, `blobs`,
+   `fetch_events`, `extractions`, `snapshots`, `changes`, `monitors`, `jobs`).
+2. Stop the unit, install the v9 binary, start. The migration runs before
+   serving; there is no backfill.
+3. Verify: `PRAGMA user_version` = 9; `auth_audit` exists and is empty; the
+   `auth_audit_at` and `auth_audit_site_at` indexes exist; every existing count
+   is unchanged; `PRAGMA foreign_key_check` returns no rows.
+4. Rollback: stop, restore the pre-migration database and blob tree, restore the
+   v8 binary, start.
+
+### Upgrade v9 → v10 (authenticated page labels, additive)
+
+Schema v10 is additive: two page labels and one index —
+`pages.authenticated INTEGER NOT NULL DEFAULT 0`, `pages.auth_site TEXT` and
+`pages_authenticated (authenticated, id)`. No existing column, row or value is
+rewritten; every pre-v10 page is unauthenticated by construction
+(`authenticated = 0`, `auth_site = NULL`), and the upgrade never changes a count.
+There is no backfill and no background task; the labels are written only by an
+authenticated acquisition when `[auth].persist = true`.
+
+Persistence stays opt-in and default-safe: `[auth].persist` remains false, so
+return-only behavior is unchanged after the upgrade; `index_authenticated`,
+`events_authenticated` and `page_retention_days` (default 7, 1..=3650) keep
+their defaults. A failed migration rolls back inside its transaction; a v9
+binary refuses a v10 database (`database schema v10 is newer than this binary
+(v9)`), so a binary rollback means restoring the pre-migration database.
+
+1. Preserve the v9 binary and `VACUUM INTO` each database; record
+   `PRAGMA user_version` and the counts (`pages`, `pages_fts`, `blobs`,
+   `fetch_events`, `extractions`, `snapshots`, `changes`, `monitors`,
+   `auth_audit`).
+2. Stop the unit, install the v10 binary, start. The migration runs before
+   serving; there is no backfill.
+3. Verify: `PRAGMA user_version` = 10; `pages` has `authenticated` and
+   `auth_site`; `SELECT COUNT(*) FROM pages WHERE authenticated <> 0 OR auth_site IS NOT NULL`
+   returns 0; the `pages_authenticated` index exists; every existing count is
+   unchanged; `PRAGMA foreign_key_check` returns no rows.
+4. Rollback: stop, restore the pre-migration database and blob tree, restore the
+   v9 binary, start.
+
 ### Upgrade v4 → v5 (`monitors.label`)
 
 Schema v5 is one additive, nullable column (`ALTER TABLE monitors ADD COLUMN
@@ -593,8 +647,9 @@ WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
   a request without the streamable `Accept` header gets `406` (MCP clients send
   it automatically).
 - A non-loopback bind is refused unless `--allow-non-loopback` is passed.
-  Remote exposure, TLS and multi-user auth are out of scope; terminate TLS
-  in a local reverse proxy if a network deployment is ever required.
+  Local HTTPS is available on the same loopback listener with
+  `[http].tls = true` (see "Local HTTPS" below); multi-user auth remains
+  out of scope. Remote exposure still needs a deliberate review.
 - **Stateless streamable HTTP.** Every POST is served
   directly; `Mcp-Session-Id` is neither required nor issued, and stale, unknown
   or absent ids are ignored rather than answered with `404`. `initialize`
@@ -611,6 +666,86 @@ WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
 - The server negotiates `2026-07-28` / `2025-11-25` through rmcp; both are
   served statelessly.
 - All logs stay on stderr; HTTP mode writes nothing to stdout.
+
+### Local HTTPS
+
+Set `[http].tls = true` to make the `--http` listener HTTPS-only on the same
+`/mcp` and `/feeds` routes. TLS is strict either-or: that port is HTTPS only, no
+plaintext and no downgrade. `tls = true` without `--http` is a typed
+`tls_requires_http` startup error. The bearer and feed capability tokens, the
+loopback policy and the access log are unchanged; only the transport changes.
+
+```toml
+[http]
+tls = true
+# Optional operator override; both or neither. When both are set, generated
+# material under <data>/tls/ is neither created nor read.
+# tls_cert_file = "/abs/path/cert.pem"   # PEM chain, leaf first
+# tls_key_file  = "/abs/path/key.pem"    # PEM private key, mode 0600
+```
+
+With no override, first start generates a local CA and leaf under `<data>/tls/`
+(directory `0700`):
+
+| File | Mode | Content |
+|---|---|---|
+| `ca.pem` | 0644 | local CA, CN `web-widow local CA`, `CA:TRUE`, ~10 years |
+| `ca-key.pem` | **0600** | CA private key, PKCS#8 ECDSA P-256 |
+| `server.pem` | 0644 | leaf, SANs `localhost`/`127.0.0.1`/`::1`, ~397 days |
+| `server-key.pem` | **0600** | leaf private key, PKCS#8 ECDSA P-256 |
+| `meta.json` | 0644 | format, expiry timestamps, SAN list and renewal timestamps |
+
+Generation runs under the data-directory lock and only when the set is absent.
+A valid set is reused byte-identically (no churn). The leaf is re-minted by the
+**same CA** at startup when it expires within 30 days, is already expired (a
+clock jump forward or a long stop), is not yet valid, is missing a required SAN,
+or when `server.pem`/`server-key.pem`/`meta.json` are missing. Renewal never
+requires the stored leaf to still verify, and the CA bytes are preserved, so
+clients do not re-import. An expired CA is a typed `tls_ca_expired` error: delete
+`<data>/tls/` to re-mint, then re-import the new CA. The CA is never rotated
+automatically. Unparseable, foreign or mismatched leaf material and a corrupt or
+mode-widened CA are typed `tls_material_invalid` / `tls_material_incomplete`
+errors and are never overwritten. `meta.json` is diagnostics only: losing it
+rebuilds the leaf record instead of blocking startup. Generated material covers
+loopback only; a non-loopback bind without an override is
+`tls_bind_not_loopback`.
+
+The server logs `tls="generated"` or `tls="override"` at startup; generated mode
+also logs the CA path. Keys are never logged. Generated material is not encrypted
+at rest: the data-directory `0700` and the key `0600` modes are the boundary. The
+CA key is the sensitive file; trust the CA only in the client that connects, not
+system-wide, where possible.
+
+**Verify and trust the generated CA** (replace `<data>` with the data directory):
+
+```sh
+openssl x509 -in <data>/tls/ca.pem -noout -subject -dates -fingerprint -sha256
+openssl verify -CAfile <data>/tls/ca.pem <data>/tls/server.pem
+curl --cacert <data>/tls/ca.pem https://127.0.0.1:8765/feeds/changes.xml
+export NODE_EXTRA_CA_CERTS=<data>/tls/ca.pem   # Node-based MCP clients
+```
+
+- **Firefox:** Settings → Privacy & Security → Certificates → View Certificates
+  → Authorities → Import → `<data>/tls/ca.pem`, then tick “Trust this CA to
+  identify websites”.
+- **Chrome/Chromium (Linux, NSS):**
+  `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "web-widow local CA" -i <data>/tls/ca.pem`
+  (needs `nss-tools`), or import through `chrome://settings/certificates`.
+- **System store (Debian/Ubuntu):** copy `ca.pem` to
+  `/usr/local/share/ca-certificates/web-widow-local-ca.crt` and run
+  `sudo update-ca-certificates`. On macOS, add it to the login keychain and
+  mark it trusted.
+- **SAN rule:** connect to `127.0.0.1`, `::1` or `localhost`; those are the only
+  generated SANs. A client that cannot trust a private CA needs an operator
+  override with a certificate from an already-trusted local/corporate CA.
+  Do not disable certificate verification; that defeats the transport.
+
+The advertised `feed_url` in `events` and webhook payloads is
+`https://<bind>/feeds/changes.xml` while TLS is active. ALPN is HTTP/1.1 only in
+v1; there is no mTLS/client-certificate authentication, no ACME, no HSM and no
+background renewal timer (renewal is evaluated at startup). A process that runs
+longer than the leaf lifetime must be restarted. Rollback: set `tls = false` and
+restart with the previous binary/config; generated files may remain unused.
 
 ## 9. Monitoring operations
 
@@ -947,7 +1082,11 @@ sees zero requests.
 
 **Intended use.** Internal agent tooling over publicly accessible
 pages (docs, news, reference sites); robots.txt respected; ≤1 request/s per host;
-no login-gated, authenticated, or paywalled content.
+no login-gated or paywalled content. Authenticated fetching exists only as an
+**operator-configured, per-site opt-in** path (§12): the operator holds the
+reference and the provider credential, the agent names a profile on `fetch_page`
+only, and the body is returned without being stored. It does not bypass access
+controls, and SSO/session-gated sites remain unsupported.
 
 **Readability omission.** `mode=main` can omit whole sibling content
 blocks (readability limitation). v0.4 repairs the **section-shaped** class (the
@@ -971,7 +1110,468 @@ schema scoping.
 the top-level navigation only. Rendered pages execute untrusted JavaScript and
 may load subresources outside that gate; iframes/popups are not traversed.
 
-## 12. Troubleshooting
+## 12. Authenticated fetching
+
+Credentials are **operator configuration**, never tool input. A reference
+(`op://…`, `bw://…`, `pass://…`) lives only in the 0600 config file; the agent
+names a **configured profile**, and only through `fetch_page.profile`. No other
+tool accepts a credential-bearing argument: `profile`, `auth_profile`,
+`reference`, `username_reference`, `password_reference`, `header`, `credential`,
+`authorization` and `cookie` are refused with `schema_invalid` before dispatch,
+with no fetch and no side effect.
+
+### 12.1 Configuration
+
+```toml
+[auth]
+audit_days = 90                  # auth_audit pruning, 1..=3650 (default 90)
+manager_timeout_ms = 5000        # hard per-resolution timeout, 100..=60000
+allow_loopback_http = false      # plain HTTP for literal loopback addresses only
+persist = false                  # store authenticated bodies (return-only when false)
+index_authenticated = false      # include stored ones in FTS + embeddings
+events_authenticated = false     # include events derived from them in the feed
+page_retention_days = 7          # retention for stored authenticated pages, 1..=3650
+
+[auth.managers.op]               # one entry per provider you reference
+path = "/usr/bin/op"             # absolute; PATH is never searched
+env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"]   # names only, read from the service env
+
+[auth.managers.bw]
+path = "/usr/bin/bw"
+env_allow = ["BW_SESSION"]
+
+[auth.managers.pass]
+path = "/usr/bin/pass"
+env_allow = []
+
+[auth.profiles.github]           # bearer (default) | basic | header
+kind = "bearer"
+host = "github.com"              # lowercase bare host; no scheme, port or path
+port = 443                       # exact credential origin port, 1..=65535 (default 443)
+reference = "op://Private/github/token"
+allow_subdomains = false         # subdomains are reachable; credentials stay exact-origin
+
+[auth.profiles.legacy]
+kind = "basic"
+host = "legacy.example.com"
+username_reference = "op://Private/legacy/username"
+password_reference = "op://Private/legacy/password"
+
+[auth.profiles.internal]
+kind = "header"
+host = "internal.example.com"
+header = "X-Api-Key"
+reference = "op://Private/internal/key"
+```
+
+- **Kinds.** `bearer` sends `Authorization: Bearer <value>`; `basic` sends
+  `Authorization: Basic base64(user:password)` built in memory from **two
+  references** (a literal username is a config error); `header` sends the exact
+  operator-written header name with the value. `Host`, `Cookie`,
+  `Content-Length`, `Transfer-Encoding`, `Connection`, `Proxy-*` and any name
+  containing CR, LF, NUL, space or a colon are refused at load.
+- **References.** `op://<vault>/<item>/<field>` (exactly three segments),
+  `bw://<item>[/<field>]` (one or two), `pass://<store>/<relative/path>` (two or
+  more). Segments are `[A-Za-z0-9._-]{1,64}` with no leading `-`, no `.`/`..`,
+  no absolute path, no whitespace or control character; the whole reference is
+  at most 256 bytes. The scheme selects the provider binary and cannot cross
+  providers, so a referenced provider must have an `[auth.managers.<name>]`
+  entry.
+- **Managers.** Every declared manager is validated at load: the path must be
+  absolute, an existing regular file and executable. `env_allow` names the only
+  variables the child sees in addition to `HOME` (passed when the service sets it); their **values** are read from
+  the service environment at invocation. `PATH` is refused (the child runs with a
+  cleared environment; a POSIX shell may install its own default), and so is any
+  `WEB_WIDOW_*` name, so the server's own tokens can never reach a provider.
+  The child gets `stdin` = null, its stderr is captured and never logged, stdout
+  is capped at 8 KiB, and one resolution is attempted per fetch under
+  `manager_timeout_ms`.
+- **HTTPS only.** An authenticated fetch must be `https`. `allow_loopback_http =
+  true` re-admits plain HTTP for the **literal** addresses `127.0.0.1` and `::1`
+  only; every name, including `localhost` and anything that merely resolves to
+  loopback, stays refused (`auth_insecure_url`). It never widens a non-loopback
+  destination. This is for local probes, not a production posture.
+- **Exact origin.** A credential attaches only to the configured
+  `host:port` pair. `port` defaults to `443` and must be `1..=65535`; a URL to
+  the bound host on any other port is `egress_blocked` with reason
+  `credential`, decided before the secret is resolved. `allow_subdomains`
+  widens **reachability** for the authenticated browser egress policy only — it
+  never widens credential delivery, and a credential-bearing request to a
+  subdomain is `egress_blocked`, not `auth_host_not_allowed`. A site that
+  serves a subdomain from its own credentials needs its own profile.
+- **Error channel.** Configuration is validated at startup; a malformed entry is
+  a load error naming the profile and field, surfaced under the config
+  validation channel (`invalid url: …`), before any listener or tool exists.
+
+### 12.2 What an authenticated fetch does
+
+`fetch_page` with `profile` is **return-only by default**: the authenticated body
+is delivered to the caller and nothing is cached, indexed or stored. There is no
+`pages`/`extractions` row, no blob/CAS write, no FTS or embedding, no
+`corpus_export` trace, no event, no webhook. `cached` is always `false`, the
+payload carries `authenticated: true` and the profile name, and a requested
+freshness window is ignored.
+
+`[auth].persist = true` opts in to storing the body: the page is written with
+`authenticated = 1` and `auth_site` (the profile name) and the extraction under
+`auth:<site>`. The stored authenticated page is **extraction-only** — it has no
+`blobs` row and `raw_hash` is `NULL`, so the body deliberately lives in the
+extraction JSON and the store invariant "a `blobs` row implies its CAS file"
+holds. Stored pages are excluded from `corpus_export`, the served feed and
+webhooks unconditionally, and from FTS/embeddings and events unless the
+corresponding `[auth]` flag is set (§12.8).
+
+**Header/bearer/basic/header profiles** stay static: `render = always` with such
+a profile is `auth_render_unsupported`, and `render = auto` is served statically
+with `render_skipped: "auth_static_only"`. **`kind = "session"` profiles** render
+through the authenticated browser (`render = always` included) — §12.8.
+
+Robots is fetched **without** credentials and the SSRF/private-address gate still
+applies; the profile's host binding narrows where the credential may be attached,
+and does not widen the global `fetch.allow_hosts`. A redirect that resolves to a
+host outside the binding is refused — `auth_redirect_blocked` for header
+profiles, `egress_blocked` (reason `credential`) for a session cookie — with no
+credential on the hop and no unauthenticated follow. Header-profile SSO/login
+redirects are therefore unsupported in v1; a session profile is how an SSO site
+is used.
+
+### 12.3 The audit row and its retention
+
+Every `fetch_page` call that names a valid profile writes **one value-free row**
+to `auth_audit` (success or failure). A malformed profile name (not
+`^[A-Za-z0-9._-]{1,64}$`) is `schema_invalid` before any work and writes no row.
+The columns are:
+
+| Column | Meaning |
+|---|---|
+| `id` | row id |
+| `at` | RFC3339 UTC timestamp |
+| `site` | the configured profile name |
+| `auth_id` | the binding id (the canonical bound host); empty when the profile is unknown |
+| `method` | `GET` (both the static and the authenticated-browser paths; the browser refuses a non-GET/HEAD request as `auth_method_refused` before it reaches the origin, and the audit row records `egress_blocked`) |
+| `host` | the canonical host(s) that received the credential on this attempt, comma-separated in hop order (deduplicated); the requested host when the attempt was refused before any credential-bearing request. No path, no port, no query |
+| `status` | HTTP status when a response existed, else `NULL` |
+| `bytes` | response body bytes observed when known, else `NULL` |
+| `outcome` | the vocabulary below |
+| `resolution_ms` | time spent resolving the credential (0 when none ran) |
+
+No reference, header value, cookie, URL path, query, body or client identifier
+is recorded. Rows are pruned by the normal retention pass once they are older
+than `[auth].audit_days` (default 90; bounds 1..=3650); the pass is idempotent
+and reports `auth_audit_pruned`.
+
+`outcome` is a closed vocabulary:
+
+`ok` · `auth_rejected` (401/403 on the authenticated response) ·
+`auth_redirect_blocked` · `auth_secret_unavailable` · `auth_manager_timeout` ·
+`auth_insecure_url` · `auth_host_not_allowed` · `auth_profile_unknown` ·
+`robots_blocked` (robots refused the destination before any credential was
+resolved — distinct from a transport failure) · `egress_blocked` (the egress
+policy refused a request; also the row for a non-GET/HEAD attempt) ·
+`transport_error`.
+
+The session additions are value-free too: `session_expired` (the jar was
+expired, or the origin answered 401/403, or it redirected to the site's login
+page — the jar is destroyed), `session_missing` (no sealed jar for the profile),
+`challenge_refused` (the origin asked for an HTTP credential and the browser
+answered with a failure), and `auth_store_invalid` (the sidecar's host does
+not match the configured binding host; nothing is fetched).
+
+Two tool-error codes deliberately fold into `auth_secret_unavailable` because the
+audit vocabulary is closed: `auth_manager_failed` (the provider could not be
+started, or its stdout was over the cap) and `auth_header_rejected` (the resolved
+value cannot be put in a header — refused before the request, never repaired
+into an empty header). The tool error keeps the precise code; only the audit row
+is coarser.
+
+A `render = always` call with a **header/bearer/basic/header** profile is refused
+**before** any credential or binding work, so it writes no audit row: no
+credential could have been selected. With a **session** profile, `render =
+always` is supported and writes its normal row (§12.8). An audit write that fails
+is a **warning**, never a failed fetch: the body is still returned and the
+failure appears on stderr (`could not record the auth audit row`).
+
+### 12.4 Operator runbook
+
+Inspect the trail with any SQLite client against `<data>/web-widow.db` (read-only
+is enough; the server may be running):
+
+```sql
+-- what has been used in the last week, and how it ended
+SELECT at, site, host, status, bytes, outcome, resolution_ms
+FROM auth_audit
+WHERE at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')
+ORDER BY at DESC
+LIMIT 100;
+
+-- refusals only (no credential was sent)
+SELECT outcome, site, host, count(*) AS attempts
+FROM auth_audit
+WHERE outcome NOT IN ('ok', 'auth_rejected', 'transport_error')
+GROUP BY outcome, site, host
+ORDER BY attempts DESC;
+
+-- provider health: resolution latency and timeouts
+SELECT site, count(*) AS attempts,
+       sum(outcome = 'auth_manager_timeout') AS timeouts,
+       max(resolution_ms) AS slowest_ms
+FROM auth_audit
+GROUP BY site;
+```
+
+`GROUP BY host` is deliberately coarse: `host` is the comma-separated hop list, so
+a redirect chain is one group. For a per-hop count, split the list in SQL (for
+example with a recursive CTE over `instr`); for the operator's usual question —
+which profile reached which destination — the list itself is the answer.
+
+A profile that never appears when the agent uses it means the argument was
+refused before dispatch (`schema_invalid`); a profile with only
+`auth_profile_unknown` rows means the agent used a name the config does not
+define. Errors carry the code and never the value: `auth_secret_unavailable`
+means the provider failed (locked vault, missing binary at runtime, empty or
+non-UTF-8 output), `auth_manager_timeout` means it exceeded
+`manager_timeout_ms`, `auth_rejected` means the origin answered 401/403 with the
+configured credential.
+
+### 12.5 Disclosure
+
+Authenticated fetching is **per-site opt-in** and the operator's responsibility:
+the operator supplies the reference, the provider credentials and the binding
+host, and must have the right to use that credential against that site. Respect
+each site's terms of service and robots policy (robots is still fetched and
+enforced for the requested document, and per hop on the static path; a rendered
+page's own subresources are outside robots — §12.8), do not use it to bypass
+access controls, and prefer a
+dedicated read-only token with the narrowest scope. By default an authenticated
+body is returned to the calling agent only and is **not** persisted; with
+`[auth].persist = true` it is stored **labelled** and excluded from
+`corpus_export`, the served feed and webhooks (and, by default, from
+FTS/embeddings/events) per §12.8. The agent's own handling of that content is
+outside this server's control.
+
+### 12.6 Sealed session store
+
+The store seals one **per-site jar** — cookies under a 32-byte key held in the
+OS keyring, the site name as AEAD associated data — and is consumed by the
+assisted login, which writes it after a verified capture (§12.7), and by
+authenticated reuse, which unseals it per fetch (§12.8). It holds no plaintext:
+a jar exists only after a successful capture, and `logout` removes both files
+and the key.
+
+**Layout.** `<data>/auth/` is `0700` and is created on the first seal.
+
+| Path | Mode | Content |
+|---|---|---|
+| `<data>/auth/<site>.sess` | `0600` | `WWS1` · 24-byte nonce · XChaCha20-Poly1305 ciphertext (tag appended) |
+| `<data>/auth/<site>.meta` | `0600` | value-free JSON: `captured_at`, `expires_at_min`, `cookie_count`, `hosts`, `verify_url` |
+
+`<site>` is the profile name. The AEAD **associated data is the site name**, so a
+jar copied to another site name does not authenticate; a tampered byte, a wrong
+key or a missing key is a typed refusal, never a plaintext fallback.
+
+**Key.** The 32-byte per-site data key lives only in the OS keyring — Secret
+Service on Linux — with service `web-widow` and account `session/<site>` (hex).
+Nothing that can decrypt a jar is written under the data directory. A new seal
+**rotates** the key and replaces both files atomically (temp file `0600`, fsync,
+rename); a reader sees the old jar or the new one, never a partial file. The key
+is stored *before* any file is created, so an unavailable or locked keyring
+leaves nothing behind.
+
+**Fail closed.**
+
+| Code | Meaning | Remedy |
+|---|---|---|
+| `auth_store_unavailable` | no reachable credential store (no session bus, no Secret Service provider, a jar without its key, a jar that does not authenticate) | start a session bus with an unlocked collection; `auth logout <site>` then re-capture |
+| `auth_store_locked` | the collection exists but is locked | unlock the keyring, then retry |
+
+The service units inherit `DBUS_SESSION_BUS_ADDRESS` from the user manager; a
+host without a session bus is a typed refusal, recorded as such (the recorded
+transcript shows both the healthy path and the refusal).
+
+**CLI (takes no data-dir lock).** `auth` branches before the data directory is
+opened, so it runs while a `serve` process owns `<data>`:
+
+```sh
+# presence, cookie count and expiry for every sealed site (no values)
+web-widow --config config.toml --data-dir /srv/web-widow auth status
+# {"sites":[{"site":"github","present":true,"key_present":true,"cookie_count":12,
+#            "captured_at":1800000000,"expires_at_min":1800003600,"expired":false,
+#            "hosts":["github.com"],"verify_url":"https://github.com/settings"}]}
+
+# one site, or a site that is not sealed yet
+web-widow --data-dir /srv/web-widow auth status github
+
+# delete the jar, its sidecar and its keyring key (the file is removed first,
+# so a keyring failure still leaves no usable session)
+web-widow --data-dir /srv/web-widow auth logout github
+# {"site":"github","removed":true}
+```
+
+`stdout` is one JSON object (like `run-due`) and carries no cookie, key or
+reference. A failure exits non-zero with `code: message` on stderr. `status`
+consults the keyring only for a site that has a jar, so it works on a host with
+no session bus as long as nothing is sealed.
+
+### 12.7 Assisted login and capture
+
+`kind = "session"` is a profile whose credential is a **cookie jar the operator
+captures by logging in themselves**. It is an operator command, never a tool:
+`auth login` refuses without a terminal, and no MCP tool name can reach it.
+
+```toml
+[auth.profiles.github]
+kind = "session"
+host = "github.com"                         # the binding host (bare, lowercase)
+port = 443                                  # exact credential origin port
+login_url = "https://github.com/login"      # https only
+login_origins = ["github.com", "accounts.google.com"]   # exact hosts the window may visit
+verify_url = "https://github.com/"          # https, on the binding host
+assets = ["github.githubassets.com"]        # exact egress hosts for the later browser path
+session_max_age_days = 30                   # 1..=365 (default 30)
+```
+
+Validation refuses: a session profile with `reference`/`username_reference`/
+`password_reference`/`header`; a non-session profile with any session field; a
+non-https `login_url`/`verify_url`; userinfo or a fragment in either URL; a
+`verify_url` off the binding host; an empty `login_origins`; an origin that is
+not a bare exact host (no wildcard, port or path); and a lifetime outside
+`1..=365`. `login_origins` must contain the binding host, because capture is
+refused unless the window ends there.
+
+**What `auth login <profile>` does**
+
+1. Refuses without a TTY (`auth_login_not_terminal`), before anything else.
+2. Probes the keyring **before** opening a window (`auth_store_unavailable` /
+   `auth_store_locked`, and no profile directory is created).
+3. Launches a **dedicated, headed** Chrome with `--remote-debugging-pipe` — no
+   `--remote-debugging-port`, no `DevToolsActivePort`, no TCP DevTools listener —
+   and a temp profile `<data>/auth/login/<site>/` at `0700`.
+4. Gates **documents**: a navigation to a host outside `login_origins` is
+   refused at the request stage, recorded, and the window is closed
+   (`auth_login_origin_refused`). HTTP auth challenges are answered with a
+   failure, never a credential.
+5. The operator logs in (including 2FA). web-widow never types, clicks or fills.
+   On Enter it prints the **final origin** only (never a path or query) and
+   refuses capture unless that origin is the binding host.
+6. Captures only cookies whose domain is the **binding host exactly** — no IdP,
+   no parent domain, no subdomain widening — with `Secure`/`HttpOnly`/`SameSite`/
+   expiry/path preserved.
+7. Verifies **before sealing**: a plain `GET` of `verify_url` carrying the
+   captured cookies must return 2xx (redirects not followed). Otherwise it
+   refuses with `auth_verify_failed` and seals nothing.
+8. Seals through the store (`§12.6`), wipes the profile even on refusal, and
+   prints a value-free JSON summary (site, host, cookie count, expiry, verify
+   status, browser isolation facts).
+
+```sh
+web-widow --config config.toml --data-dir /srv/web-widow auth login github
+# {"site":"github","host":"github.com","cookie_count":14,"expires_at_min":1800003600,
+#  "verify_status":200,"refused_navigations":[],"profile_wiped":true,
+#  "browser":{"pid":1234,"pids":[...],"tcp_listeners":[],"devtools_active_port_absent":true}}
+```
+
+The login path takes **no data-dir lock** and writes **no `auth_audit` row**;
+session use and expiry are audited by the authenticated fetch path (§12.8). A
+profile that survives capture is a hard error, not a warning.
+
+`kind = "session"` is refused by the request-header resolver
+(`auth_session_unsupported`), so a session profile can never leak a header; the
+sealed jar is used only by the authenticated fetch path (§12.8).
+
+### 12.8 Authenticated reuse
+
+A `kind = "session"` profile pairs the sealed jar from §12.7 with an
+**authenticated browser** and a **static cookie path**. The credential is used,
+never re-captured: expiry, a 401/403, or a redirect to the site's own login page
+means `auth_session_expired` and the jar is destroyed — there is no fallback to
+an unauthenticated fetch.
+
+**The authenticated browser** is a dedicated headless process launched over the
+DevTools pipe (no TCP DevTools endpoint, no `DevToolsActivePort`), with:
+
+- an **ephemeral browser context per fetch**, disposed afterwards, and a temp
+  profile wiped at exit — nothing about the session survives a fetch;
+- cookies injected **host-only for the binding host only** (captured attributes
+  preserved); a jar entry for any other domain is refused at injection;
+- the **egress policy on every request** — document and subresource, in every
+  attached target — before the request continues, plus the credential predicate
+  for any request that carries a cookie or `Authorization`;
+- a **loopback filtering proxy** below the renderer (`--proxy-server` with
+  `--proxy-bypass-list=<-loopback>`) applying the same policy to every request
+  and `CONNECT` tunnel. The proxy is the enforcement layer for the channels the
+  Fetch domain cannot see (a `ws://` handshake is refused at `CONNECT`);
+- `Fetch.handleAuthRequests(true)`: any HTTP auth challenge is answered with a
+  failure and the fetch returns `auth_challenge_refused`. A credential is
+  never supplied to a challenge.
+
+**Read-only scope.** The authenticated browser allows **GET and HEAD only**;
+any other method is refused as `auth_method_refused` before the request reaches
+the origin (the audit row records `egress_blocked`), and the static paths issue
+`GET` only. No authenticated tool exposes a method, a body or any other mutation
+authority; adding one would be a separate, explicitly commissioned grant, not a
+configuration change.
+
+**Document vetting and its honest edge.** Before the browser is launched,
+the session render runs the same top-level vet as an unauthenticated render —
+SSRF address vetting, then robots.txt, then the per-host politeness lease — so a
+robots-disallowed or private-address target is refused with no browser and no
+profile created. That gate covers the **requested document**; a rendered page's
+own subresources are outside robots (they are still subject to the egress policy
+above). This is the same disclosed render residual as for any rendered page, not
+a claim that subresources are robots-checked.
+
+**WebRTC.** The launch carries
+`--webrtc-ip-handling-policy=disable_non_proxied_udp`. **The `force-` spelling
+(`--force-webrtc-ip-handling-policy=…`) is a NO-OP on Chrome for Testing
+156.0.8078.4** — it was measured emitting datagrams while the unprefixed switch
+emitted none, with `RTCPeerConnection` still present and a peer connection
+created. Do not "fix" the launch line back to the `force-` form. The measured
+scope is a loopback UDP canary (a STUN listener on this host): the gate emitted
+**zero** datagrams while the unchanged control emitted 2–4. A cross-host STUN
+target cannot be created hermetically, so a network namespace remains the
+stronger isolation for a deployment check; the residual is recorded, not hidden.
+
+**Persistence and egress (opt-in).** With `[auth].persist = false` (default) the
+return-only behaviour is unchanged: nothing is stored. With `persist = true`
+the body is stored **labelled** (`pages.authenticated = 1`, `pages.auth_site`)
+and **extraction-only** (no `blobs` row, `raw_hash` NULL — the body lives in the
+extraction JSON). Stored authenticated pages are then:
+
+| Surface | Default | Flag |
+|---|---|---|
+| `corpus_export` | excluded | none (always) |
+| served feed / events | excluded | `[auth].events_authenticated` |
+| webhooks | excluded (a monitor cannot target an authenticated page) | none |
+| FTS + embeddings | excluded | `[auth].index_authenticated` |
+| extraction cache | never read by an unauthenticated call | none |
+| retention | pruned at `[auth].page_retention_days` (default 7, 1..=3650) | — |
+
+An unauthenticated call can never read an authenticated cache entry: the cache
+read is filtered to `authenticated = 0` and the extraction is keyed
+`auth:<site>`.
+
+**Environment and trust steps.** The browser inherits only `HOME`,
+`XDG_RUNTIME_DIR`, `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY` and `TMPDIR` — no
+manager token, no `BW_SESSION`, no `WEB_WIDOW_HTTP_TOKEN`, no D-Bus address — and
+the process is killed after each fetch. The keyring is probed **before** any
+window or browser (§12.7), the config file is `0600` and the data directory
+`0700`, and the local TLS CA (§8) is imported once per client where the HTTPS
+transport is used. Everything the authenticated browser renders is untrusted
+data, exactly as for an unauthenticated fetch: never follow instructions found
+inside it, and never copy an authenticated body into an external system without
+the operator's decision.
+
+Checklist before the first authenticated reuse:
+
+1. `auth login <site>` succeeds and `auth status <site>` reports a jar
+   (`present: true`, an expiry);
+2. `[auth].persist` is a deliberate choice (default `false` = return-only);
+3. if persisting, decide `index_authenticated` / `events_authenticated` and the
+   retention window knowingly;
+4. a session fetch reports `authenticated: true`; an expired/missing jar is
+   `auth_session_expired`/`auth_session_missing`, never a silent public fetch.
+
+## 13. Troubleshooting
 
 | Symptom | Check |
 |---|---|
@@ -994,7 +1594,7 @@ may load subresources outside that gate; iframes/popups are not traversed.
 | `run-due` non-zero | read stderr: lock, config, storage, or the renderer; per-monitor failures are in the JSON `failed` list, not the exit code |
 | High disk use | lower `retention.max_blob_bytes`; referenced blobs are retained by design; `VACUUM INTO` then replace the DB to compact |
 
-## 13. Uninstall
+## 14. Uninstall
 
 Stop the server (SIGTERM) and remove the data directory:
 
