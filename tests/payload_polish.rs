@@ -1,4 +1,4 @@
-//! Payload-polish tests.
+//! payload-polish tests.
 //!
 //! The rendered cases use a stub renderer: no browser is needed to prove the
 //! `render_quality` boundary or that the field is absent on static results.
@@ -29,6 +29,7 @@ fn fetch_input(
         max_chars: None,
         include_links,
         include_content: None,
+        profile: None,
     }
 }
 
@@ -82,7 +83,7 @@ fn word_page(words: usize) -> String {
     )
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn links_are_an_empty_list_when_not_requested() {
     let fixture = start_fixture().await;
@@ -181,6 +182,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
             max_chars: None,
             include_links: Some(true),
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();
@@ -196,7 +198,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
     );
     assert!(
         cached.payload.render_quality.is_none(),
-        "a pre-M02 payload does not gain render_quality"
+        "a pre-v0.2 payload does not gain render_quality"
     );
 
     // The false profile also loads, with links_requested false.
@@ -212,6 +214,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();
@@ -219,7 +222,7 @@ async fn a_pre_m02_cached_payload_loads_without_inventing_links() {
     assert!(!cached.payload.links_requested);
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn render_quality_is_thin_for_a_rendered_shell() {
     let fixture = start_fixture().await;

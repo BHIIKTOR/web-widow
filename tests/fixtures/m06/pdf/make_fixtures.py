@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the M06 C2 PDF fixtures deterministically.
+"""Generate the v0.6 PDF fixtures deterministically.
 
 The four plain fixtures are built here as minimal PDF 1.4 files with an
 uncompressed content stream and the built-in Helvetica font. The two encrypted
@@ -76,14 +76,14 @@ def build(path, pages, info=None):
 def text_page(marker, label=None):
     label = label or marker
     return (
-        "BT /F1 24 Tf 72 720 Td (M06 C2 FIXTURE) Tj ET\n"
+        "BT /F1 24 Tf 72 720 Td (v0.6 FIXTURE) Tj ET\n"
         f"BT /F1 18 Tf 72 680 Td ({marker}) Tj ET\n"
         f"BT /F1 12 Tf 72 640 Td ({label}) Tj ET"
     )
 
 
 INFO = {
-    "Title": "M06 C2 simple fixture",
+    "Title": "v0.6 simple fixture",
     "Author": "Fixture Author",
     "Subject": "Two-page text-layer PDF",
     "Creator": "make_fixtures.py",

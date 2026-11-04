@@ -77,35 +77,35 @@ pub const SERP_LITE_AD: &str = include_str!("../fixtures/serp/lite-ad.html");
 
 /// v0.4 feed fixtures (RSS 2.0, Atom, JSON Feed, duplicate ids, many items
 /// with long summaries, malformed XML and an entity bomb).
-pub const M04_FEED_RSS: &str = include_str!("../fixtures/m04/feed/rss.xml");
-pub const M04_FEED_ATOM: &str = include_str!("../fixtures/m04/feed/atom.xml");
-pub const M04_FEED_JSON: &str = include_str!("../fixtures/m04/feed/json-feed.json");
-pub const M04_FEED_DUPES: &str = include_str!("../fixtures/m04/feed/dupes.xml");
-pub const M04_FEED_MANY: &str = include_str!("../fixtures/m04/feed/many.xml");
-pub const M04_FEED_MALFORMED: &str = include_str!("../fixtures/m04/feed/malformed.xml");
-pub const M04_FEED_BOMB: &str = include_str!("../fixtures/m04/feed/bomb.xml");
+pub const FEED_RSS: &str = include_str!("../fixtures/m04/feed/rss.xml");
+pub const FEED_ATOM: &str = include_str!("../fixtures/m04/feed/atom.xml");
+pub const FEED_JSON: &str = include_str!("../fixtures/m04/feed/json-feed.json");
+pub const FEED_DUPES: &str = include_str!("../fixtures/m04/feed/dupes.xml");
+pub const FEED_MANY: &str = include_str!("../fixtures/m04/feed/many.xml");
+pub const FEED_MALFORMED: &str = include_str!("../fixtures/m04/feed/malformed.xml");
+pub const FEED_BOMB: &str = include_str!("../fixtures/m04/feed/bomb.xml");
 
 /// v0.4 fixture: nav/aside/footer decoys around one article, for the shared
 /// `:main` source and `selector:"*"` record-scope semantics.
-pub const M04_SCOPE: &str = include_str!("../fixtures/m04/article-scope.html");
+pub const ARTICLE_SCOPE: &str = include_str!("../fixtures/m04/article-scope.html");
 
 /// v0.5 fixtures: the BUYALFA verbatim shape (redirect to
 /// `/gz/account-verification`, 28 words), a direct login page (no drift) and a
 /// short article (no verification segment), plus the feed identity fixtures.
-pub const M05_INTERSTITIAL_VERIFICATION: &str =
+pub const INTERSTITIAL_VERIFICATION: &str =
     include_str!("../fixtures/m05/interstitial-verification.html");
-pub const M05_SHORT_ARTICLE: &str = include_str!("../fixtures/m05/interstitial-short-article.html");
-pub const M05_FEED_CANONICAL: &str = include_str!("../fixtures/m05/feed-canonical.xml");
+pub const SHORT_ARTICLE: &str = include_str!("../fixtures/m05/interstitial-short-article.html");
+pub const FEED_CANONICAL: &str = include_str!("../fixtures/m05/feed-canonical.xml");
 
 /// v0.3 fixtures: visible text, caps, `:main`, and a rendered thin shell.
-pub const M03_INLINE_SCRIPT: &str = include_str!("../fixtures/m03/article-with-inline-script.html");
-pub const M03_CNBC_BODY: &str = include_str!("../fixtures/m03/cnbc-class-body.html");
-pub const M03_NAV: &str = include_str!("../fixtures/m03/article-with-nav.html");
-pub const M03_THIN_SHELL: &str = include_str!("../fixtures/m03/thin-rendered-shell.html");
-pub const M03_LONG_FIELD: &str = include_str!("../fixtures/m03/long-field.html");
-pub const M03_NO_ARTICLE: &str = include_str!("../fixtures/m03/no-article.html");
+pub const INLINE_SCRIPT: &str = include_str!("../fixtures/m03/article-with-inline-script.html");
+pub const CNBC_BODY: &str = include_str!("../fixtures/m03/cnbc-class-body.html");
+pub const NAV: &str = include_str!("../fixtures/m03/article-with-nav.html");
+pub const THIN_SHELL: &str = include_str!("../fixtures/m03/thin-rendered-shell.html");
+pub const LONG_FIELD: &str = include_str!("../fixtures/m03/long-field.html");
+pub const NO_ARTICLE: &str = include_str!("../fixtures/m03/no-article.html");
 
-/// : `noscript`-only shell; the static DOM carries under 50 words while the
+///: `noscript`-only shell; the static DOM carries under 50 words while the
 /// script injects a 60-word article.
 pub const NOSCRIPT_APP_HTML: &str = r#"<!doctype html>
 <html><head><meta charset="utf-8"><title>JS App</title></head>
@@ -119,7 +119,7 @@ pub const NOSCRIPT_APP_HTML: &str = r#"<!doctype html>
   </script>
 </body></html>"#;
 
-/// : the final marker is only written after four sequential fetches, so a
+///: the final marker is only written after four sequential fetches, so a
 /// fixed 500 ms sleep after `load` would stop before it.
 pub const ASYNC_APP_HTML: &str = r#"<!doctype html>
 <html><head><meta charset="utf-8"><title>Async App</title></head>
@@ -394,7 +394,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .body(Body::from(ARTICLE_HTML))
                 .unwrap()
         }
- // v0.5: the BUYALFA verbatim shape — a product path redirecting to
+        // v0.5: the BUYALFA verbatim shape — a product path redirecting to
         // the whole verification segment, a direct login page (no drift), and a
         // short article with no verification path.
         "/p/MLM26030984" => Response::builder()
@@ -404,15 +404,15 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .unwrap(),
         "/gz/account-verification" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M05_INTERSTITIAL_VERIFICATION))
+            .body(Body::from(INTERSTITIAL_VERIFICATION))
             .unwrap(),
         "/login" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M05_INTERSTITIAL_VERIFICATION))
+            .body(Body::from(INTERSTITIAL_VERIFICATION))
             .unwrap(),
         "/short-article" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M05_SHORT_ARTICLE))
+            .body(Body::from(SHORT_ARTICLE))
             .unwrap(),
         "/plain" => Response::builder()
             .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
@@ -447,7 +447,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .unwrap()
         }
         "/medium" => {
- // ~200 KiB rendered page for the RSS check.
+            // ~200 KiB rendered page for the RSS check.
             let mut body = String::with_capacity(210_000);
             body.push_str("<html><head><title>Medium Page</title></head><body><h1>Medium</h1>");
             for index in 0..1_700 {
@@ -494,7 +494,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 .body(Body::from("<html><body>ok</body></html>"))
                 .unwrap()
         }
- // : a small linked site, duplicate variants, redirect chains, a
+        //: a small linked site, duplicate variants, redirect chains, a
         // 404, a 500-once page, a robots-disallowed subtree and a calendar trap.
         "/site/" => {
             let mut body = String::from(
@@ -646,9 +646,9 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
                 ))
                 .unwrap()
         }
- // : a page whose links are relative, reached through a redirect, so
+        //: a page whose links are relative, reached through a redirect, so
         // absolute-URL resolution must use the final URL.
- // ---- rendering fixtures -------------------------------------
+        // ---- rendering fixtures -------------------------------------
         "/js/noscript" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(NOSCRIPT_APP_HTML))
@@ -779,7 +779,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .header(header::LOCATION, "file:///etc/passwd")
             .body(Body::empty())
             .unwrap(),
- // ---- search (SERP) fixtures -----------------------------------
+        // ---- search (SERP) fixtures -----------------------------------
         "/serp/html" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(SERP_HTML_RESULTS))
@@ -809,40 +809,40 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .header(header::LOCATION, "http://10.0.0.1/")
             .body(Body::empty())
             .unwrap(),
- // ---- v0.3 fixtures ----------------------------------------------
+        // ---- v0.3 fixtures ----------------------------------------------
         "/fixtures/inline-script" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_INLINE_SCRIPT))
+            .body(Body::from(INLINE_SCRIPT))
             .unwrap(),
         "/fixtures/cnbc" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_CNBC_BODY))
+            .body(Body::from(CNBC_BODY))
             .unwrap(),
         "/fixtures/nav" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_NAV))
+            .body(Body::from(NAV))
             .unwrap(),
         "/fixtures/thin-shell" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_THIN_SHELL))
+            .body(Body::from(THIN_SHELL))
             .unwrap(),
         "/fixtures/long-field" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_LONG_FIELD))
+            .body(Body::from(LONG_FIELD))
             .unwrap(),
         "/fixtures/no-article" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M03_NO_ARTICLE))
+            .body(Body::from(NO_ARTICLE))
             .unwrap(),
- // ---- v0.4 feed fixtures ----------------------------------------
-        "/feed/rss" => feed_response(M04_FEED_RSS, "application/rss+xml"),
-        "/feed/atom" => feed_response(M04_FEED_ATOM, "application/atom+xml"),
-        "/feed/json" => feed_response(M04_FEED_JSON, "application/feed+json"),
-        "/feed/dupes" => feed_response(M04_FEED_DUPES, "application/rss+xml"),
-        "/feed/many" => feed_response(M04_FEED_MANY, "application/rss+xml"),
-        "/feed/malformed" => feed_response(M04_FEED_MALFORMED, "application/rss+xml"),
-        "/feed/bomb" => feed_response(M04_FEED_BOMB, "application/rss+xml"),
-        "/feed/canonical" => feed_response(M05_FEED_CANONICAL, "application/rss+xml"),
+        // ---- v0.4 feed fixtures ----------------------------------------
+        "/feed/rss" => feed_response(FEED_RSS, "application/rss+xml"),
+        "/feed/atom" => feed_response(FEED_ATOM, "application/atom+xml"),
+        "/feed/json" => feed_response(FEED_JSON, "application/feed+json"),
+        "/feed/dupes" => feed_response(FEED_DUPES, "application/rss+xml"),
+        "/feed/many" => feed_response(FEED_MANY, "application/rss+xml"),
+        "/feed/malformed" => feed_response(FEED_MALFORMED, "application/rss+xml"),
+        "/feed/bomb" => feed_response(FEED_BOMB, "application/rss+xml"),
+        "/feed/canonical" => feed_response(FEED_CANONICAL, "application/rss+xml"),
         "/feed/html" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .body(Body::from(ARTICLE_HTML))
@@ -853,7 +853,7 @@ async fn handle(State(state): State<FixtureState>, request: Request<Body>) -> Re
             .unwrap(),
         "/fixtures/m04-scope" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .body(Body::from(M04_SCOPE))
+            .body(Body::from(ARTICLE_SCOPE))
             .unwrap(),
         "/chain/0" => Response::builder()
             .header(header::CONTENT_TYPE, "text/html")
@@ -1018,7 +1018,8 @@ impl TestEnv {
         let paths = Paths::new(dir.path().to_path_buf());
         std::fs::create_dir_all(paths.blobs()).unwrap();
         let config = Arc::new(config);
-        let store = Arc::new(Store::open(&paths, &config.fts).unwrap());
+        let store =
+            Arc::new(Store::open(&paths, &config.fts, config.auth.index_authenticated).unwrap());
         let allow = AllowList::parse(&config.fetch.allow_hosts).unwrap();
         let ssrf = Arc::new(SsrfGate::new(allow));
         let gate = Arc::new(HostGate::new(PolitenessConfig {
@@ -1113,6 +1114,7 @@ impl TestEnv {
                 max_chars: None,
                 include_links: None,
                 include_content: None,
+                profile: None,
             })
             .await
     }
@@ -1277,8 +1279,40 @@ pub struct McpChild {
 
 impl McpChild {
     pub async fn spawn(config: &std::path::Path, data_dir: &std::path::Path) -> Self {
+        Self::spawn_with_env(config, data_dir, &[]).await
+    }
+
+    /// Spawn with extra environment variables on the *server* process (used to
+    /// prove what the manager child does and does not inherit).
+    pub async fn spawn_with_env(
+        config: &std::path::Path,
+        data_dir: &std::path::Path,
+        env: &[(&str, &str)],
+    ) -> Self {
+        Self::spawn_with_env_and_stderr(config, data_dir, env, None).await
+    }
+
+    /// Spawn with an optional stderr log file. The v0.8 log-scan tests need
+    /// the server's own stderr to assert that no credential or provider output
+    /// reaches it; every other test keeps stderr null.
+    pub async fn spawn_with_env_and_stderr(
+        config: &std::path::Path,
+        data_dir: &std::path::Path,
+        env: &[(&str, &str)],
+        stderr_path: Option<&std::path::Path>,
+    ) -> Self {
         use std::process::Stdio;
-        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_web-widow"))
+        let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_web-widow"));
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        let stderr = match stderr_path {
+            Some(path) => {
+                Stdio::from(std::fs::File::create(path).expect("the stderr log is writable"))
+            }
+            None => Stdio::null(),
+        };
+        let mut child = command
             .arg("--config")
             .arg(config)
             .arg("--data-dir")
@@ -1286,7 +1320,7 @@ impl McpChild {
             .arg("serve")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(stderr)
             .kill_on_drop(true)
             .spawn()
             .expect("binary starts");

@@ -5,6 +5,7 @@
 //! Only `core` is pure; only `fetch` touches the network; only `store` touches
 //! the data directory.
 
+pub mod auth;
 pub mod cli_http;
 pub mod compare;
 pub mod config;
@@ -29,6 +30,8 @@ pub mod rows;
 pub mod search;
 pub mod sitemap;
 pub mod store;
+#[cfg(feature = "http")]
+pub mod tls;
 pub mod webhooks;
 
 pub use crate::core::error::{ErrorCode, ToolError, WidowError};

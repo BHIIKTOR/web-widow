@@ -39,6 +39,8 @@ pub struct Config {
     pub embeddings: EmbeddingsConfig,
     pub webhooks: WebhooksConfig,
     pub scheduler: SchedulerConfig,
+    pub http: HttpConfig,
+    pub auth: AuthConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -113,7 +115,7 @@ pub struct ExtractConfig {
     /// Safety ceiling for returned Markdown; a per-call `max_chars` cannot raise it.
     pub max_chars: usize,
     pub max_links: usize,
-    /// Safety ceiling for records returned by `extract` (5 000).
+    /// Safety ceiling for records returned by `extract` (: 5 000).
     pub max_records: usize,
     /// Per-string-value cap for `extract`. A per-call value can
     /// lower it, never raise it.
@@ -141,7 +143,7 @@ impl Default for ExtractConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CrawlConfig {
-    /// Hard page ceiling per job (5 000).
+    /// Hard page ceiling per job (: 5 000).
     pub max_pages: usize,
     /// Hard depth ceiling per job.
     pub max_depth: u8,
@@ -224,7 +226,7 @@ impl Default for MonitorConfig {
     }
 }
 
-/// Discovery endpoints (§1.2). Endpoints are server
+/// Discovery endpoints (/ §1.2). Endpoints are server
 /// config, never tool arguments: an agent cannot repoint the parser at another
 /// site. Both URLs are `Url`-validated at config load.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -337,7 +339,8 @@ impl PdfConfig {
     }
 }
 
-/// `[events]` — the change feed (`events` tool + the loopback GET route).
+/// `[events]` — the change feed (`events` tool + the loopback GET route,
+/// /).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EventsConfig {
@@ -356,7 +359,7 @@ impl Default for EventsConfig {
     }
 }
 
-/// `[fts]` — the local full-text index and `search_content`.
+/// `[fts]` — the local full-text index and `search_content` (/029).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FtsConfig {
@@ -455,7 +458,7 @@ impl Default for RetentionConfig {
     }
 }
 
-/// Browser interaction (`interact_*`). One held page per
+/// Browser interaction (`interact_*`, /040). One held page per
 /// process; the idle TTL is configurable, the hard lifetime and the action
 /// ceiling are server constants.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -477,8 +480,8 @@ impl Default for InteractionConfig {
 }
 
 /// `[embeddings]` — the local semantic index contract.
-/// P0 adds the section and its validation only; E1 reads it for behaviour and no
-/// process in P0 loads a model or a native library.
+/// The section and its validation only; the semantic path reads it for behaviour
+/// and nothing loads a model or a native library before then.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EmbeddingsConfig {
@@ -488,7 +491,7 @@ pub struct EmbeddingsConfig {
     pub model: String,
     /// Optional override; defaults to `<data_dir>/models/<model>`.
     pub model_dir: Option<PathBuf>,
-    /// Optional strict path to `libonnxruntime.so`; unset means discovery (E1).
+    /// Optional strict path to `libonnxruntime.so`; unset means discovery.
     pub ort_dylib_path: Option<PathBuf>,
     /// Target chunk size in characters (200..=2000).
     pub chunk_chars: usize,
@@ -526,7 +529,7 @@ impl Default for EmbeddingsConfig {
 
 /// `[webhooks]` — deliberate egress contract.
 /// Targets exist only in the operator's config file; a tool or a monitor can
-/// attach only a configured name. P0 validates the shape; W1 delivers.
+/// attach only a configured name. This release validates the shape only.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct WebhooksConfig {
@@ -571,7 +574,7 @@ pub struct WebhookTargetConfig {
     pub include_diff: bool,
 }
 
-/// Closed payload shape set (W1). Unknown values are refused at config parse.
+/// Closed payload shape set. Unknown values are refused at config parse.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WebhookKind {
@@ -582,7 +585,7 @@ pub enum WebhookKind {
 }
 
 /// `[scheduler]` — the opt-in in-process timer.
-/// Default off; S1 reads it. `run-due` semantics are unchanged.
+/// Default off; the scheduler reads it. `run-due` semantics are unchanged.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SchedulerConfig {
@@ -601,6 +604,17 @@ impl Default for SchedulerConfig {
             max_checks_per_tick: 25,
         }
     }
+}
+
+/// `[http]` — the loopback listener's transport policy (v0.8).
+/// `tls = false` is the historical plain-HTTP behavior. An operator PEM pair
+/// is the override; generated material is used only when both paths are absent.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HttpConfig {
+    pub tls: bool,
+    pub tls_cert_file: Option<PathBuf>,
+    pub tls_key_file: Option<PathBuf>,
 }
 
 /// `^[a-z0-9][a-z0-9_-]{0,31}$` without a regex compile per validation.
@@ -1149,7 +1163,31 @@ impl Config {
                 "scheduler.max_checks_per_tick must be 1..=500".to_string(),
             ));
         }
+        match (&self.http.tls_cert_file, &self.http.tls_key_file) {
+            (None, None) => {}
+            (Some(_), Some(_)) if self.http.tls => {}
+            (Some(_), Some(_)) => {
+                return Err(WidowError::SchemaInvalid {
+                    pointer: "/http/tls".to_string(),
+                    message: "tls_cert_file/tls_key_file require [http].tls = true".to_string(),
+                });
+            }
+            _ => {
+                return Err(WidowError::SchemaInvalid {
+                    pointer: "/http/tls_cert_file".to_string(),
+                    message: "tls_cert_file and tls_key_file must be set together".to_string(),
+                });
+            }
+        }
+        self.validate_auth()?;
         Ok(())
+    }
+
+    /// Validate the `[auth]` contract (v0.8). Inert at runtime: the fetch path
+    /// consumes these values; validation only refuses a config that could not be
+    /// honoured.
+    fn validate_auth(&self) -> Result<()> {
+        validate_auth(&self.auth)
     }
 
     /// `web-widow/<version> (+<contact>)`, or without the comment when absent.
@@ -1175,7 +1213,606 @@ impl Config {
     }
 }
 
-/// Resolved paths inside the data directory.
+// ---------------------------------------------------------------------------
+// [auth] — config-named credentials (v0.8)
+// ---------------------------------------------------------------------------
+
+/// Closed credential-shape set. Unknown values are refused at parse.
+/// `session` (v0.9) is the assisted-login kind: no reference or
+/// header field, a login boundary and a sealed cookie jar instead.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthKind {
+    #[default]
+    Bearer,
+    Basic,
+    Header,
+    Session,
+}
+
+/// `[auth]` — the config-only credential contract. References live in this
+/// 0600 file; the agent names a configured profile and never a reference or a
+/// value. The contract is validated and otherwise **inert**: no manager is
+/// spawned, no header is attached, and no tool accepts a `profile` argument
+/// until the first authenticated fetch.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AuthConfig {
+    /// `auth_audit` pruning window in days (1..=3650, default 90).
+    pub audit_days: u32,
+    /// Hard per-resolution manager timeout in milliseconds (100..=60000).
+    pub manager_timeout_ms: u64,
+    /// Permit plain HTTP only for the literal loopback addresses `127.0.0.1`
+    /// and `::1`; never widens a non-loopback binding, and never a host name
+    /// that merely resolves to loopback.
+    pub allow_loopback_http: bool,
+    /// Provider binaries keyed by reference scheme. Each entry must be an
+    /// absolute, existing, executable path (no `PATH` lookup, D4).
+    pub managers: BTreeMap<String, AuthManagerConfig>,
+    /// Operator-named credentials. Empty is valid: nothing is authenticated.
+    pub profiles: BTreeMap<String, AuthProfileConfig>,
+    /// v0.9: store an authenticated body (v0.8 stays return-only by default).
+    pub persist: bool,
+    /// Include authenticated pages in the local full-text index and the
+    /// embedding candidates (default: excluded,).
+    pub index_authenticated: bool,
+    /// Include events derived from authenticated pages in the feed (default:
+    /// excluded,).
+    pub events_authenticated: bool,
+    /// Retention for stored authenticated pages, 1..=3650 days (default 7).
+    pub page_retention_days: u32,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            audit_days: 90,
+            manager_timeout_ms: 5_000,
+            allow_loopback_http: false,
+            managers: BTreeMap::new(),
+            profiles: BTreeMap::new(),
+            persist: false,
+            index_authenticated: false,
+            events_authenticated: false,
+            page_retention_days: 7,
+        }
+    }
+}
+
+/// One provider CLI (`op`, `bw`, `pass`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AuthManagerConfig {
+    /// Absolute path to the provider binary; the server never searches `PATH`.
+    pub path: String,
+    /// The only variable names passed to the child, in addition to `HOME`.
+    /// Values are read from the service environment at invocation and are
+    /// never logged. `PATH` and the server's own `WEB_WIDOW_*` names are
+    /// refused: the child must not inherit either.
+    pub env_allow: Vec<String>,
+}
+
+/// One operator-named binding. The kind decides which reference fields exist.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AuthProfileConfig {
+    pub kind: AuthKind,
+    /// Bound host: lowercase, no scheme, port, path or userinfo. Trailing dot
+    /// allowed; compared exact. `allow_subdomains` widens **reachability** only
+    /// (v0.9): credential delivery stays exact-origin.
+    pub host: String,
+    /// `op://`/`bw://`/`pass://` secret reference (bearer and header kinds).
+    pub reference: Option<String>,
+    /// `basic` username reference; also a reference, never a literal.
+    pub username_reference: Option<String>,
+    /// `basic` password reference; also a reference, never a literal.
+    pub password_reference: Option<String>,
+    /// Exact header name for `kind = "header"` (allowlist).
+    pub header: Option<String>,
+    pub allow_subdomains: bool,
+    /// Exact origin port for credential delivery (default 443). The credential
+    /// origin is `host:port`; a redirect to another port is `egress_blocked`.
+    pub port: u16,
+    // ---- v0.9 session profiles. Refused on every other kind. ----
+    /// SSO entry point; `https` only. The login window opens here.
+    pub login_url: Option<String>,
+    /// Exact hosts the login window's **documents** may navigate to. Must
+    /// contain the binding host; SSO hops must be declared.
+    pub login_origins: Vec<String>,
+    /// `https` URL on the binding host. A 2xx answer through the captured
+    /// cookies verifies the session before it is sealed.
+    pub verify_url: Option<String>,
+    /// Exact egress hosts for the authenticated browser (never the login
+    /// window's boundary).
+    pub assets: Vec<String>,
+    /// Sealed-jar lifetime bound, 1..=365 days (default 30).
+    pub session_max_age_days: Option<u32>,
+}
+
+impl Default for AuthProfileConfig {
+    fn default() -> Self {
+        Self {
+            kind: AuthKind::default(),
+            host: String::new(),
+            reference: None,
+            username_reference: None,
+            password_reference: None,
+            header: None,
+            allow_subdomains: false,
+            port: 443,
+            login_url: None,
+            login_origins: Vec::new(),
+            verify_url: None,
+            assets: Vec::new(),
+            session_max_age_days: None,
+        }
+    }
+}
+
+const AUTH_PROVIDERS: [&str; 3] = ["op", "bw", "pass"];
+const AUTH_REFERENCE_MAX: usize = 256;
+const AUTH_SEGMENT_MAX: usize = 64;
+/// Transport-managed request headers a profile may never set.
+const AUTH_FORBIDDEN_HEADERS: [&str; 5] = [
+    "host",
+    "cookie",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+];
+
+fn validate_auth(auth: &AuthConfig) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if !(1..=3650).contains(&auth.audit_days) {
+        return Err(WidowError::InvalidUrl(
+            "auth.audit_days must be 1..=3650".to_string(),
+        ));
+    }
+    if !(1..=3650).contains(&auth.page_retention_days) {
+        return Err(WidowError::InvalidUrl(
+            "auth.page_retention_days must be 1..=3650".to_string(),
+        ));
+    }
+    if !(100..=60_000).contains(&auth.manager_timeout_ms) {
+        return Err(WidowError::InvalidUrl(
+            "auth.manager_timeout_ms must be 100..=60000".to_string(),
+        ));
+    }
+
+    for (name, manager) in &auth.managers {
+        let key = format!("auth.managers.{name}");
+        if !AUTH_PROVIDERS.contains(&name.as_str()) {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}: unknown provider (expected one of op, bw, pass)"
+            )));
+        }
+        let path = Path::new(&manager.path);
+        if manager.path.is_empty() || !path.is_absolute() {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}.path must be an absolute path to the provider binary (PATH is not searched)"
+            )));
+        }
+        let metadata = std::fs::metadata(path).map_err(|error| {
+            WidowError::InvalidUrl(format!(
+                "{key}.path {} is not usable: {error}",
+                path.display()
+            ))
+        })?;
+        if !metadata.is_file() {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}.path {} is not a regular file",
+                path.display()
+            )));
+        }
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}.path {} is not executable",
+                path.display()
+            )));
+        }
+        let mut seen: Vec<&str> = Vec::new();
+        for variable in &manager.env_allow {
+            if !valid_env_name(variable) {
+                return Err(WidowError::InvalidUrl(format!(
+                    "{key}.env_allow: `{variable}` is not an environment variable name"
+                )));
+            }
+            if variable == "PATH" {
+                return Err(WidowError::InvalidUrl(format!(
+                    "{key}.env_allow must not name PATH: the child runs with a cleared environment"
+                )));
+            }
+            if variable.starts_with("WEB_WIDOW_") {
+                return Err(WidowError::InvalidUrl(format!(
+                    "{key}.env_allow must not name the server's own variables (`{variable}`)"
+                )));
+            }
+            if seen.contains(&variable.as_str()) {
+                return Err(WidowError::InvalidUrl(format!(
+                    "{key}.env_allow names `{variable}` twice"
+                )));
+            }
+            seen.push(variable);
+        }
+    }
+
+    for (name, profile) in &auth.profiles {
+        let key = format!("auth.profiles.{name}");
+        if !valid_profile_name(name) {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}: profile name must match ^[A-Za-z0-9._-]{{1,64}}$ and must not start with '-' or be '.'/'..'"
+            )));
+        }
+        if profile.port == 0 {
+            return Err(WidowError::InvalidUrl(format!(
+                "{key}.port must be 1..=65535"
+            )));
+        }
+        let host = profile.host.strip_suffix('.').unwrap_or(&profile.host);
+        canonical_auth_host(host)
+            .map_err(|detail| WidowError::InvalidUrl(format!("{key}.host: {detail}")))?;
+        match profile.kind {
+            AuthKind::Bearer => {
+                require_reference(profile.reference.as_deref(), &key, "reference")?;
+                forbid_field(
+                    profile.username_reference.as_deref(),
+                    &key,
+                    "username_reference",
+                )?;
+                forbid_field(
+                    profile.password_reference.as_deref(),
+                    &key,
+                    "password_reference",
+                )?;
+                forbid_field(profile.header.as_deref(), &key, "header")?;
+            }
+            AuthKind::Basic => {
+                forbid_field(profile.reference.as_deref(), &key, "reference")?;
+                require_reference(
+                    profile.username_reference.as_deref(),
+                    &key,
+                    "username_reference",
+                )?;
+                require_reference(
+                    profile.password_reference.as_deref(),
+                    &key,
+                    "password_reference",
+                )?;
+                forbid_field(profile.header.as_deref(), &key, "header")?;
+            }
+            AuthKind::Header => {
+                require_reference(profile.reference.as_deref(), &key, "reference")?;
+                let header = match profile.header.as_deref() {
+                    Some(header) if !header.is_empty() => header,
+                    _ => {
+                        return Err(WidowError::InvalidUrl(format!(
+                            "{key}.header is required for kind = \"header\""
+                        )));
+                    }
+                };
+                valid_auth_header(header)
+                    .map_err(|detail| WidowError::InvalidUrl(format!("{key}.header: {detail}")))?;
+                forbid_field(
+                    profile.username_reference.as_deref(),
+                    &key,
+                    "username_reference",
+                )?;
+                forbid_field(
+                    profile.password_reference.as_deref(),
+                    &key,
+                    "password_reference",
+                )?;
+            }
+            AuthKind::Session => {
+                // The credential is a captured jar, never a reference or header.
+                forbid_field(profile.reference.as_deref(), &key, "reference")?;
+                forbid_field(
+                    profile.username_reference.as_deref(),
+                    &key,
+                    "username_reference",
+                )?;
+                forbid_field(
+                    profile.password_reference.as_deref(),
+                    &key,
+                    "password_reference",
+                )?;
+                forbid_field(profile.header.as_deref(), &key, "header")?;
+                validate_session_profile(profile, &key, host)?;
+            }
+        }
+        for reference in [
+            profile.reference.as_deref(),
+            profile.username_reference.as_deref(),
+            profile.password_reference.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let provider = parse_auth_reference(reference)
+                .map_err(|detail| WidowError::InvalidUrl(format!("{key}: {detail}")))?;
+            if !auth.managers.contains_key(provider) {
+                return Err(WidowError::InvalidUrl(format!(
+                    "{key}: reference provider `{provider}` has no auth.managers.{provider} entry"
+                )));
+            }
+        }
+        if profile.kind != AuthKind::Session {
+            for (field, present) in [
+                ("login_url", profile.login_url.is_some()),
+                ("login_origins", !profile.login_origins.is_empty()),
+                ("verify_url", profile.verify_url.is_some()),
+                ("assets", !profile.assets.is_empty()),
+                (
+                    "session_max_age_days",
+                    profile.session_max_age_days.is_some(),
+                ),
+            ] {
+                if present {
+                    return Err(WidowError::InvalidUrl(format!(
+                        "{key}.{field} is only valid for kind = \"session\""
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The session-only shape: an https login boundary, an https verify URL on the
+/// binding host, exact asset hosts and a bounded jar lifetime.
+fn validate_session_profile(profile: &AuthProfileConfig, key: &str, host: &str) -> Result<()> {
+    let login_url = profile
+        .login_url
+        .as_deref()
+        .ok_or_else(|| WidowError::InvalidUrl(format!("{key}.login_url is required")))?;
+    https_url(login_url, key, "login_url")?;
+
+    if profile.login_origins.is_empty() {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.login_origins must declare the hosts the login window may visit"
+        )));
+    }
+    for origin in &profile.login_origins {
+        canonical_auth_host(origin)
+            .map_err(|detail| WidowError::InvalidUrl(format!("{key}.login_origins: {detail}")))?;
+    }
+    // The final origin must be the binding host, so the binding host must be a
+    // declared login origin; otherwise the flow could never reach a capturable
+    // state.
+    if !profile.login_origins.iter().any(|origin| origin == host) {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.login_origins must contain the binding host `{host}` (the final origin)"
+        )));
+    }
+
+    let verify_url = profile
+        .verify_url
+        .as_deref()
+        .ok_or_else(|| WidowError::InvalidUrl(format!("{key}.verify_url is required")))?;
+    let verify = https_url(verify_url, key, "verify_url")?;
+    let verify_host = verify
+        .host_str()
+        .map(|value| value.trim_end_matches('.').to_ascii_lowercase())
+        .unwrap_or_default();
+    if verify_host != host {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.verify_url must be on the binding host `{host}` (found `{verify_host}`)"
+        )));
+    }
+
+    for asset in &profile.assets {
+        canonical_auth_host(asset)
+            .map_err(|detail| WidowError::InvalidUrl(format!("{key}.assets: {detail}")))?;
+    }
+
+    let days = profile.session_max_age_days.unwrap_or(30);
+    if !(1..=365).contains(&days) {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.session_max_age_days must be 1..=365"
+        )));
+    }
+    Ok(())
+}
+
+/// Parse a config URL that must be `https`, host-bearing, without userinfo, and
+/// without a fragment. The URL is returned for the caller's host check.
+fn https_url(raw: &str, key: &str, field: &str) -> Result<url::Url> {
+    let parsed = url::Url::parse(raw)
+        .map_err(|error| WidowError::InvalidUrl(format!("{key}.{field}: {error}")))?;
+    if parsed.scheme() != "https" {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} must be https"
+        )));
+    }
+    if parsed.host_str().is_none() {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} must name a host"
+        )));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} must not carry userinfo"
+        )));
+    }
+    if parsed.fragment().is_some() {
+        return Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} must not carry a fragment"
+        )));
+    }
+    Ok(parsed)
+}
+
+pub(crate) fn valid_profile_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && !name.starts_with('-')
+        && name != "."
+        && name != ".."
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn valid_env_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    matches!(bytes.next(), Some(first) if first.is_ascii_alphabetic() || first == b'_')
+        && name.len() <= 128
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+/// Canonical form of a binding host, or the reason it is not one.
+fn canonical_auth_host(host: &str) -> std::result::Result<(), String> {
+    if host.is_empty() {
+        return Err("must not be empty".to_string());
+    }
+    if host.contains('*') || host.contains('_') || host.starts_with('.') || host.contains("..") {
+        return Err(format!(
+            "`{host}` must be a bare exact host (no wildcard, leading dot, empty label or underscore)"
+        ));
+    }
+    if host.contains('/') || host.contains('@') || host.contains('?') || host.contains('#') {
+        return Err(format!(
+            "`{host}` must be a bare host (no scheme, path or userinfo)"
+        ));
+    }
+    if !host.is_ascii() {
+        return Err("must be ASCII (use the punycode form)".to_string());
+    }
+    if host != host.to_ascii_lowercase() {
+        return Err("must be lowercase (host comparison is case-insensitive)".to_string());
+    }
+    let candidate = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    let parsed =
+        url::Host::parse(&candidate).map_err(|error| format!("`{host}` is not a host: {error}"))?;
+    let rendered = match &parsed {
+        url::Host::Domain(domain) => domain.clone(),
+        url::Host::Ipv4(address) => address.to_string(),
+        url::Host::Ipv6(address) => address.to_string(),
+    };
+    if rendered != host {
+        return Err("must be a bare host (no scheme, port, path or userinfo)".to_string());
+    }
+    Ok(())
+}
+
+/// Validate the grammar and return the provider the scheme selects.
+fn parse_auth_reference(reference: &str) -> std::result::Result<&'static str, String> {
+    if reference.len() > AUTH_REFERENCE_MAX {
+        return Err(format!(
+            "reference is longer than {AUTH_REFERENCE_MAX} bytes"
+        ));
+    }
+    let (provider, rest) = AUTH_PROVIDERS
+        .iter()
+        .find_map(|provider| {
+            reference
+                .strip_prefix(&format!("{provider}://"))
+                .map(|rest| (*provider, rest))
+        })
+        .ok_or_else(|| {
+            "reference must start with op://, bw:// or pass:// (never an inline value)".to_string()
+        })?;
+    if rest.is_empty() {
+        return Err(format!("{provider}:// reference is missing its path"));
+    }
+    if rest
+        .chars()
+        .any(|character| character.is_whitespace() || character.is_control())
+    {
+        return Err("reference must not contain whitespace or control characters".to_string());
+    }
+    let segments: Vec<&str> = rest.split('/').collect();
+    for segment in &segments {
+        if segment.is_empty() {
+            return Err("reference must not carry an absolute or empty path segment".to_string());
+        }
+        if segment.len() > AUTH_SEGMENT_MAX {
+            return Err(format!(
+                "reference segment `{segment}` is longer than {AUTH_SEGMENT_MAX} bytes"
+            ));
+        }
+        if segment.starts_with('-') {
+            return Err(format!(
+                "reference segment `{segment}` must not start with '-'"
+            ));
+        }
+        if matches!(*segment, "." | "..") {
+            return Err("reference must not contain `.` or `..` segments".to_string());
+        }
+        if !segment
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        {
+            return Err(format!(
+                "reference segment `{segment}` must match [A-Za-z0-9._-]"
+            ));
+        }
+    }
+    match provider {
+        "op" if segments.len() != 3 => Err(format!(
+            "op:// needs <vault>/<item>/<field> (got {} segments)",
+            segments.len()
+        )),
+        "bw" if !(1..=2).contains(&segments.len()) => Err(format!(
+            "bw:// needs <item> or <item>/<field> (got {} segments)",
+            segments.len()
+        )),
+        "pass" if segments.len() < 2 => Err(format!(
+            "pass:// needs <store>/<relative/path> (got {} segments)",
+            segments.len()
+        )),
+        _ => Ok(provider),
+    }
+}
+
+fn valid_auth_header(name: &str) -> std::result::Result<(), String> {
+    if name.is_empty() {
+        return Err("must not be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("is longer than 64 bytes".to_string());
+    }
+    let token = name
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte));
+    if !token {
+        return Err("must be an HTTP token (no space, colon, CR, LF or NUL)".to_string());
+    }
+    let lower = name.to_ascii_lowercase();
+    if AUTH_FORBIDDEN_HEADERS.contains(&lower.as_str()) || lower.starts_with("proxy-") {
+        return Err(format!(
+            "`{name}` is transport-managed and cannot be set by a profile"
+        ));
+    }
+    Ok(())
+}
+
+fn require_reference(value: Option<&str>, key: &str, field: &str) -> Result<()> {
+    if value.is_some_and(|value| !value.is_empty()) {
+        Ok(())
+    } else {
+        Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} is required for this kind"
+        )))
+    }
+}
+
+fn forbid_field(value: Option<&str>, key: &str, field: &str) -> Result<()> {
+    if value.is_some() {
+        Err(WidowError::InvalidUrl(format!(
+            "{key}.{field} is not used by this kind"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Resolved paths inside the data directory (layout).
 #[derive(Debug, Clone)]
 pub struct Paths {
     root: PathBuf,
@@ -1215,6 +1852,12 @@ impl Paths {
     /// The feed capability token (0600; created on first start when absent).
     pub fn feed_token(&self) -> PathBuf {
         self.root.join("feed-token")
+    }
+
+    /// The sealed browser-session store (`<site>.sess`, `<site>.meta`): 0700,
+    /// created on the first seal (v0.9).
+    pub fn auth_dir(&self) -> PathBuf {
+        self.root.join("auth")
     }
 }
 
@@ -1726,5 +2369,519 @@ max_checks_per_tick = 10
         let mut config = Config::default();
         config.extract.max_chars = 0;
         assert!(config.validate().is_err());
+    }
+}
+
+#[cfg(test)]
+mod http_tls_config_tests {
+    use super::*;
+
+    #[test]
+    fn tls_paths_are_both_or_neither_and_require_tls() {
+        let mut config = Config::default();
+        config.http.tls = true;
+        assert!(config.validate().is_ok(), "generated mode needs no paths");
+
+        config.http.tls_cert_file = Some(PathBuf::from("/tmp/cert.pem"));
+        config.http.tls_key_file = None;
+        let error = config.validate().unwrap_err();
+        assert!(
+            matches!(error, WidowError::SchemaInvalid { ref pointer, .. } if pointer == "/http/tls_cert_file"),
+            "{error:?}"
+        );
+
+        config.http.tls_key_file = Some(PathBuf::from("/tmp/key.pem"));
+        config.http.tls = false;
+        let error = config.validate().unwrap_err();
+        assert!(
+            matches!(error, WidowError::SchemaInvalid { ref pointer, .. } if pointer == "/http/tls"),
+            "{error:?}"
+        );
+
+        config.http.tls = true;
+        assert!(config.validate().is_ok(), "a complete override is valid");
+    }
+}
+/// v0.8 — the `[auth]` contract is validated at load and inert at runtime
+/// (§1 of the authenticated-fetch notes).
+#[cfg(test)]
+mod auth_config_tests {
+    use super::*;
+
+    fn config_with(body: &str) -> Result<Config> {
+        let text = format!("[auth]\n{body}");
+        let config: Config = toml::from_str(&text).expect("the TOML itself parses");
+        config.validate()?;
+        Ok(config)
+    }
+
+    fn assert_refused(body: &str, field: &str) {
+        let error = match config_with(body) {
+            Ok(_) => panic!("`{body}` must be refused"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains(field), "expected `{field}` in `{error}`");
+    }
+
+    const MANAGERS: &str = r#"
+[auth.managers.op]
+path = "/bin/sh"
+env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"]
+
+[auth.managers.bw]
+path = "/bin/sh"
+env_allow = ["BW_SESSION"]
+
+[auth.managers.pass]
+path = "/bin/sh"
+env_allow = []
+"#;
+
+    #[test]
+    fn the_default_auth_contract_is_empty_valid_and_inert() {
+        let config = Config::default();
+        config.validate().unwrap();
+        assert_eq!(config.auth.audit_days, 90);
+        assert_eq!(config.auth.manager_timeout_ms, 5_000);
+        assert!(!config.auth.allow_loopback_http);
+        assert!(config.auth.managers.is_empty());
+        assert!(config.auth.profiles.is_empty());
+    }
+
+    #[test]
+    fn the_documented_contract_validates() {
+        let body = format!(
+            r#"
+audit_days = 30
+manager_timeout_ms = 2500
+allow_loopback_http = true
+{MANAGERS}
+[auth.profiles.github]
+kind = "bearer"
+host = "github.com"
+reference = "op://Private/github/token"
+allow_subdomains = true
+
+[auth.profiles.legacy]
+kind = "basic"
+host = "legacy.example.com"
+username_reference = "op://Private/legacy/username"
+password_reference = "op://Private/legacy/password"
+
+[auth.profiles.internal]
+kind = "header"
+host = "internal.example.com"
+header = "X-Api-Key"
+reference = "op://Private/internal/key"
+
+[auth.profiles.loopback]
+kind = "bearer"
+host = "::1"
+reference = "pass://store/service/token"
+"#
+        );
+        let config = config_with(&body).expect("the documented contract validates");
+        assert_eq!(config.auth.audit_days, 30);
+        assert_eq!(config.auth.manager_timeout_ms, 2_500);
+        assert!(config.auth.allow_loopback_http);
+        assert_eq!(config.auth.profiles.len(), 4);
+        assert_eq!(config.auth.profiles["github"].kind, AuthKind::Bearer);
+        assert!(config.auth.profiles["github"].allow_subdomains);
+        assert_eq!(config.auth.profiles["legacy"].kind, AuthKind::Basic);
+        assert_eq!(config.auth.profiles["internal"].kind, AuthKind::Header);
+    }
+
+    #[test]
+    fn auth_bounds_are_enforced() {
+        for days in [0_u32, 3_651] {
+            assert_refused(&format!("audit_days = {days}"), "auth.audit_days");
+        }
+        for timeout in [0_u64, 99, 60_001] {
+            assert_refused(
+                &format!("manager_timeout_ms = {timeout}"),
+                "auth.manager_timeout_ms",
+            );
+        }
+    }
+
+    #[test]
+    fn manager_entries_must_name_a_real_absolute_binary() {
+        assert_refused(
+            "[auth.managers.vault]\npath = \"/bin/sh\"",
+            "auth.managers.vault: unknown provider",
+        );
+        assert_refused(
+            "[auth.managers.op]\npath = \"op\"",
+            "auth.managers.op.path must be an absolute path",
+        );
+        assert_refused(
+            "[auth.managers.op]\npath = \"/nonexistent/op\"",
+            "auth.managers.op.path",
+        );
+
+        let temp = tempfile::tempdir().unwrap();
+        let plain = temp.path().join("op");
+        std::fs::write(&plain, b"#!/bin/sh\n").unwrap();
+        assert_refused(
+            &format!("[auth.managers.op]\npath = \"{}\"", plain.display()),
+            "is not executable",
+        );
+    }
+
+    #[test]
+    fn env_allow_is_the_only_environment_the_child_gets() {
+        assert_refused(
+            "[auth.managers.op]\npath = \"/bin/sh\"\nenv_allow = [\"PATH\"]",
+            "must not name PATH",
+        );
+        assert_refused(
+            "[auth.managers.op]\npath = \"/bin/sh\"\nenv_allow = [\"WEB_WIDOW_HTTP_TOKEN\"]",
+            "server's own variables",
+        );
+        assert_refused(
+            "[auth.managers.op]\npath = \"/bin/sh\"\nenv_allow = [\"1BAD\"]",
+            "auth.managers.op.env_allow",
+        );
+        assert_refused(
+            "[auth.managers.op]\npath = \"/bin/sh\"\nenv_allow = [\"OP_TOKEN\", \"OP_TOKEN\"]",
+            "names `OP_TOKEN` twice",
+        );
+    }
+
+    #[test]
+    fn profile_names_and_hosts_are_canonical() {
+        for name in ["\"..\"", "\".\"", "\"-x\"", "\"bad name\""] {
+            let body = format!(
+                "[auth.managers.op]\npath = \"/bin/sh\"\n[auth.profiles.{name}]\nhost = \"example.com\"\nreference = \"op://V/i/f\""
+            );
+            assert_refused(&body, "profile name must match");
+        }
+        for host in [
+            "Example.com",
+            "https://example.com",
+            "example.com:443",
+            "example.com/path",
+            "",
+        ] {
+            let body = format!(
+                "[auth.managers.op]\npath = \"/bin/sh\"\n[auth.profiles.site]\nhost = \"{host}\"\nreference = \"op://V/i/f\""
+            );
+            assert_refused(&body, "auth.profiles.site.host");
+        }
+    }
+
+    #[test]
+    fn the_profile_origin_port_defaults_to_443_and_is_bounded() {
+        let body = |extra: &str| {
+            format!(
+                "[auth.managers.op]\npath = \"/bin/sh\"\n[auth.profiles.site]\nhost = \"example.com\"\nreference = \"op://V/i/f\"\n{extra}"
+            )
+        };
+
+        let config = config_with(&body("")).expect("the port is optional");
+        assert_eq!(
+            config.auth.profiles["site"].port, 443,
+            "default origin port"
+        );
+
+        let config = config_with(&body("port = 8443\n")).expect("a non-default port is valid");
+        assert_eq!(config.auth.profiles["site"].port, 8443);
+
+        assert_refused(&body("port = 0\n"), "auth.profiles.site.port");
+    }
+
+    #[test]
+    fn reference_grammar_is_enforced() {
+        let cases = [
+            ("op://vault/item", "op:// needs"),
+            ("op://vault/item/field/extra", "op:// needs"),
+            ("bw://item/field/extra", "bw:// needs"),
+            ("pass://store", "pass:// needs"),
+            ("pass:///absolute/path", "absolute or empty path segment"),
+            ("op://vault/../item/field", "`.` or `..`"),
+            ("op://-vault/item/field", "must not start with '-'"),
+            ("op://vault/it em/field", "whitespace or control"),
+            (
+                "https://vault/item/field",
+                "must start with op://, bw:// or pass://",
+            ),
+            ("ghp_inlinevalue", "must start with op://, bw:// or pass://"),
+        ];
+        for (reference, expected) in cases {
+            let body = format!(
+                "[auth.managers.op]\npath = \"/bin/sh\"\n[auth.managers.bw]\npath = \"/bin/sh\"\n[auth.managers.pass]\npath = \"/bin/sh\"\n[auth.profiles.site]\nhost = \"example.com\"\nreference = \"{reference}\""
+            );
+            assert_refused(&body, expected);
+        }
+        // A reference may not silently cross providers.
+        let body = "[auth.managers.op]\npath = \"/bin/sh\"\n[auth.profiles.site]\nhost = \"example.com\"\nreference = \"bw://item\"";
+        assert_refused(body, "auth.managers.bw");
+    }
+
+    #[test]
+    fn kind_decides_which_reference_fields_exist() {
+        let managers = "[auth.managers.op]\npath = \"/bin/sh\"\n";
+        for (body, field) in [
+            (
+                "kind = \"bearer\"\nhost = \"e.com\"",
+                "auth.profiles.site.reference is required",
+            ),
+            (
+                "kind = \"bearer\"\nhost = \"e.com\"\nreference = \"op://V/i/f\"\nusername_reference = \"op://V/i/u\"",
+                "username_reference is not used",
+            ),
+            (
+                "kind = \"basic\"\nhost = \"e.com\"\nreference = \"op://V/i/f\"\nusername_reference = \"op://V/i/u\"",
+                "reference is not used",
+            ),
+            (
+                "kind = \"basic\"\nhost = \"e.com\"\nusername_reference = \"op://V/i/u\"",
+                "password_reference is required",
+            ),
+            (
+                "kind = \"header\"\nhost = \"e.com\"\nreference = \"op://V/i/f\"",
+                "header is required",
+            ),
+        ] {
+            assert_refused(&format!("{managers}[auth.profiles.site]\n{body}"), field);
+        }
+    }
+
+    #[test]
+    fn transport_headers_cannot_be_set_by_a_profile() {
+        let managers = "[auth.managers.op]\npath = \"/bin/sh\"\n";
+        for header in [
+            "Host",
+            "cookie",
+            "Content-Length",
+            "Transfer-Encoding",
+            "Connection",
+            "Proxy-Authorization",
+            "X Bad",
+            "X-Bad\\r\\nInjected",
+        ] {
+            let body = format!(
+                "{managers}[auth.profiles.site]\nkind = \"header\"\nhost = \"e.com\"\nheader = \"{header}\"\nreference = \"op://V/i/f\""
+            );
+            assert_refused(&body, "auth.profiles.site.header");
+        }
+        let body = format!(
+            "{managers}[auth.profiles.site]\nkind = \"header\"\nhost = \"e.com\"\nheader = \"Authorization\"\nreference = \"op://V/i/f\""
+        );
+        assert!(config_with(&body).is_ok(), "Authorization stays available");
+    }
+
+    #[test]
+    fn malformed_auth_toml_is_refused_at_parse() {
+        for (body, expected) in [
+            (
+                "[auth.profiles.site]\nkind = \"oauth\"\nhost = \"e.com\"",
+                "unknown variant",
+            ),
+            (
+                "[auth.profiles.site]\nallow_subdomains = \"yes\"",
+                "invalid type",
+            ),
+            ("bogus = 1", "unknown field"),
+            (
+                "[auth.profiles.site]\nhost = \"e.com\"\nreference = 7",
+                "invalid type",
+            ),
+        ] {
+            let text = format!("[auth]\n{body}");
+            let error = toml::from_str::<Config>(&text).expect_err("must not parse");
+            assert!(
+                error.to_string().contains(expected),
+                "expected `{expected}` in `{error}`"
+            );
+        }
+    }
+}
+
+/// v0.9 — the `kind = "session"` contract.
+#[cfg(test)]
+mod session_config_tests {
+    use super::*;
+
+    fn config_with(profile: &str) -> Result<Config> {
+        let text = format!("[auth.profiles.site]\n{profile}");
+        let config: Config = toml::from_str(&text).expect("the TOML itself parses");
+        config.validate()?;
+        Ok(config)
+    }
+
+    const VALID: &str = r#"
+kind = "session"
+host = "login.example.test"
+login_url = "https://login.example.test/login"
+login_origins = ["login.example.test", "idp.test"]
+verify_url = "https://login.example.test/verify"
+assets = ["cdn.example.test"]
+session_max_age_days = 30
+"#;
+
+    #[test]
+    fn a_session_profile_parses_and_round_trips() {
+        let config = config_with(VALID).expect("a valid session profile");
+        let profile = &config.auth.profiles["site"];
+        assert_eq!(profile.kind, AuthKind::Session);
+        assert_eq!(profile.login_origins.len(), 2);
+        assert_eq!(profile.session_max_age_days, Some(30));
+        let reparsed: Config =
+            toml::from_str(&toml::to_string(&config).unwrap()).expect("re-parse");
+        assert_eq!(
+            toml::to_string(&config).unwrap(),
+            toml::to_string(&reparsed).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_session_profile_defaults_its_lifetime_bound() {
+        let without = VALID.replace("session_max_age_days = 30", "");
+        let config = config_with(&without).expect("the default lifetime is valid");
+        assert_eq!(config.auth.profiles["site"].session_max_age_days, None);
+    }
+
+    #[test]
+    fn a_session_profile_forbids_reference_and_header_fields() {
+        for (field, line) in [
+            ("reference", "reference = \"op://vault/item/token\""),
+            (
+                "username_reference",
+                "username_reference = \"op://vault/item/user\"",
+            ),
+            (
+                "password_reference",
+                "password_reference = \"op://vault/item/pass\"",
+            ),
+            ("header", "header = \"X-Api-Key\""),
+        ] {
+            let body = format!("{VALID}\n{line}");
+            let error = config_with(&body).expect_err("must be refused").to_string();
+            assert!(error.contains(field), "expected `{field}` in `{error}`");
+        }
+    }
+
+    #[test]
+    fn a_non_session_profile_forbids_session_fields() {
+        for field in [
+            "login_url = \"https://github.com/login\"",
+            "login_origins = [\"github.com\"]",
+            "verify_url = \"https://github.com/\"",
+            "assets = [\"cdn.github.com\"]",
+            "session_max_age_days = 7",
+        ] {
+            let text = format!(
+                "[auth.managers.op]\npath = \"/bin/true\"\nenv_allow = []\n\n\
+                 [auth.profiles.site]\nkind = \"bearer\"\nhost = \"github.com\"\n\
+                 reference = \"op://vault/item/token\"\n{field}\n"
+            );
+            let config: Config = toml::from_str(&text).expect("the TOML itself parses");
+            let error = config.validate().expect_err("must be refused").to_string();
+            assert!(
+                error.contains("only valid for kind = \"session\""),
+                "expected a session-only refusal for `{field}`, got `{error}`"
+            );
+        }
+    }
+
+    #[test]
+    fn a_session_login_and_verify_url_must_be_https() {
+        let body = VALID.replace(
+            "login_url = \"https://login.example.test/login\"",
+            "login_url = \"http://login.example.test/login\"",
+        );
+        let error = config_with(&body).expect_err("http login_url").to_string();
+        assert!(error.contains("login_url must be https"), "{error}");
+
+        let body = VALID.replace(
+            "verify_url = \"https://login.example.test/verify\"",
+            "verify_url = \"http://login.example.test/verify\"",
+        );
+        let error = config_with(&body).expect_err("http verify_url").to_string();
+        assert!(error.contains("verify_url must be https"), "{error}");
+    }
+
+    #[test]
+    fn a_session_verify_url_must_be_on_the_binding_host() {
+        let body = VALID.replace(
+            "verify_url = \"https://login.example.test/verify\"",
+            "verify_url = \"https://other.example.test/verify\"",
+        );
+        let error = config_with(&body).expect_err("off-host verify").to_string();
+        assert!(
+            error.contains("verify_url must be on the binding host"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_session_requires_declared_origins_including_the_binding_host() {
+        let body = VALID.replace(
+            "login_origins = [\"login.example.test\", \"idp.test\"]",
+            "login_origins = []",
+        );
+        let error = config_with(&body).expect_err("empty origins").to_string();
+        assert!(error.contains("login_origins must declare"), "{error}");
+
+        let body = VALID.replace(
+            "login_origins = [\"login.example.test\", \"idp.test\"]",
+            "login_origins = [\"idp.test\"]",
+        );
+        let error = config_with(&body)
+            .expect_err("binding host absent")
+            .to_string();
+        assert!(error.contains("must contain the binding host"), "{error}");
+    }
+
+    #[test]
+    fn a_session_origin_and_asset_must_be_a_bare_host() {
+        for bad in ["*.example.test", "https://example.test", "example.test:443"] {
+            let body = VALID.replace(
+                "login_origins = [\"login.example.test\", \"idp.test\"]",
+                &format!("login_origins = [\"login.example.test\", \"{bad}\"]"),
+            );
+            let error = config_with(&body).expect_err("bad origin").to_string();
+            assert!(error.contains("login_origins"), "{bad}: {error}");
+
+            let body = VALID.replace(
+                "assets = [\"cdn.example.test\"]",
+                &format!("assets = [\"{bad}\"]"),
+            );
+            let error = config_with(&body).expect_err("bad asset").to_string();
+            assert!(error.contains("assets"), "{bad}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_session_lifetime_is_bounded() {
+        for days in ["0", "366"] {
+            let body = VALID.replace(
+                "session_max_age_days = 30",
+                &format!("session_max_age_days = {days}"),
+            );
+            let error = config_with(&body).expect_err("out of bounds").to_string();
+            assert!(
+                error.contains("session_max_age_days must be 1..=365"),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_session_login_url_must_not_carry_userinfo_or_a_fragment() {
+        let body = VALID.replace(
+            "login_url = \"https://login.example.test/login\"",
+            "login_url = \"https://user:pass@login.example.test/login\"",
+        );
+        let error = config_with(&body).expect_err("userinfo").to_string();
+        assert!(error.contains("userinfo"), "{error}");
+
+        let body = VALID.replace(
+            "login_url = \"https://login.example.test/login\"",
+            "login_url = \"https://login.example.test/login#x\"",
+        );
+        let error = config_with(&body).expect_err("fragment").to_string();
+        assert!(error.contains("fragment"), "{error}");
     }
 }

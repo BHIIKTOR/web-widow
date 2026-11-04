@@ -1,4 +1,4 @@
-//! v0.6 safety probes — popup and child-target egress (F1/F2).
+//! v0.6 safety probes — popup and child-target egress.
 //!
 //! Private listeners sit on loopback addresses **outside** the test SSRF
 //! allowlist. Both TCP connections and HTTP request lines are counted, so a
@@ -964,9 +964,9 @@ async fn f1_a_popup_target_never_reaches_the_private_listener() {
         .counters(&opened.session_id)
         .await
         .expect("counters");
-    println!("F1 guard_log={:?}", fixture.log.entries());
+    println!(" guard_log={:?}", fixture.log.entries());
     println!(
-        "F1 popup_link connections={} requests={} counters={counters:?}",
+        " popup_link connections={} requests={} counters={counters:?}",
         fixture.worker_probe.connections(),
         fixture.worker_probe.requests()
     );
@@ -981,7 +981,7 @@ async fn f1_a_popup_target_never_reaches_the_private_listener() {
     click(&manager, &opened.session_id, "#base-linked").await;
     tokio::time::sleep(Duration::from_millis(2_500)).await;
     println!(
-        "F1 base_target connections={} requests={}",
+        " base_target connections={} requests={}",
         fixture.worker_probe.connections(),
         fixture.worker_probe.requests()
     );
@@ -998,7 +998,7 @@ async fn f1_a_popup_target_never_reaches_the_private_listener() {
         .await
         .expect("counters");
     println!(
-        "F1 window_open connections={} requests={} counters={counters:?}",
+        " window_open connections={} requests={} counters={counters:?}",
         fixture.worker_probe.connections(),
         fixture.worker_probe.requests()
     );
@@ -1562,7 +1562,7 @@ async fn f2_a_dedicated_worker_request_is_gated_and_vet_observed() {
         .await
         .expect("counters");
     println!(
-        "F2 worker connections={} requests={} counters={counters:?}",
+        " worker connections={} requests={} counters={counters:?}",
         fixture.worker_probe.connections(),
         fixture.worker_probe.requests()
     );
@@ -1594,7 +1594,7 @@ async fn f2_a_service_worker_request_is_gated_and_vet_observed() {
         .await
         .expect("counters");
     println!(
-        "F2 sw connections={} requests={} counters={counters:?}",
+        " sw connections={} requests={} counters={counters:?}",
         fixture.worker_probe.connections(),
         fixture.worker_probe.requests()
     );
@@ -1626,7 +1626,7 @@ async fn f2_a_cross_site_iframe_request_is_gated_and_vet_observed() {
         .await
         .expect("counters");
     println!(
-        "F2 iframe connections={} requests={} counters={counters:?}",
+        " iframe connections={} requests={} counters={counters:?}",
         fixture.iframe_probe.connections(),
         fixture.iframe_probe.requests()
     );
@@ -1684,7 +1684,7 @@ async fn f5_subresource_requests_take_the_per_host_lease() {
         );
     }
     println!(
-        "F5 image_gaps={:?}",
+        " image_gaps={:?}",
         stamps
             .windows(2)
             .map(|p| p[1].duration_since(p[0]))
@@ -1719,7 +1719,7 @@ async fn f6_refused_requests_are_capped_before_the_vet() {
         .counters(&opened.session_id)
         .await
         .expect("counters");
-    println!("F6 counters={counters:?}");
+    println!(" counters={counters:?}");
     assert!(
         counters.paused > 500,
         "the flood did not reach the cap: {counters:?}"
@@ -2707,10 +2707,10 @@ async fn g24_page_selection_override_cannot_choose_the_click_target() {
         .expect("close");
 }
 
-/// F4: with the isolated integrity world disabled, a page that forges the
+///: with the isolated integrity world disabled, a page that forges the
 /// heartbeat text (it can read the main-world nonce) must not satisfy it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "F4 heartbeat-forge probe; run with WEB_WIDOW_TEST_DISABLE_INTEGRITY=1"]
+#[ignore = " heartbeat-forge probe; run with WEB_WIDOW_TEST_DISABLE_INTEGRITY=1"]
 async fn g25_forged_heartbeat_still_fails_closed() {
     let Some(chrome) = common::skip_without_chrome("g25_forged_heartbeat_still_fails_closed")
     else {
@@ -2744,7 +2744,7 @@ async fn g25_forged_heartbeat_still_fails_closed() {
     }
 }
 
-/// F4: the internal console prefix must not hide page output.
+///: the internal console prefix must not hide page output.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn g26_internal_console_prefix_does_not_hide_page_lines() {
     let Some(chrome) =
@@ -2938,7 +2938,7 @@ async fn g28_submitter_formtarget_self_is_not_over_blocked() {
 /// table; a newline is not a key name, so the action fails instead of pressing
 /// Enter. Removing that accidental safety would make the guard's submit
 /// listener the only control for an implicit `_blank` submission (review
-/// B2h low #2), so the behaviour is pinned here.
+/// low #2), so the behaviour is pinned here.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn g29_typed_newline_cannot_submit_a_blank_form() {
     let Some(chrome) = common::skip_without_chrome("g29_typed_newline_cannot_submit_a_blank_form")

@@ -1,4 +1,4 @@
-//! The packaged release — a real MCP SDK client over stdio: initialize, list every tool
+//!   — a real MCP SDK client over stdio: initialize, list every tool
 //! and exercise the four capability families against the loopback fixture.
 //!
 //! This is deliberately a different implementation from the hand-rolled
@@ -160,6 +160,92 @@ async fn an_mcp_sdk_client_uses_every_tool_family_over_stdio() {
     assert!(!interact_schema.contains("\"script\""), "{interact_schema}");
     assert!(!interact_schema.contains("\"eval\""), "{interact_schema}");
 
+    // v0.8 — `profile` is declared once, on `fetch_page` only (the agent
+    // names a configured profile; it never supplies a reference or a value).
+    for tool in &tools {
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object);
+        let has_profile = properties.is_some_and(|properties| properties.contains_key("profile"));
+        assert_eq!(
+            has_profile,
+            tool.name == "fetch_page",
+            "{} must not advertise a profile argument",
+            tool.name
+        );
+    }
+
+    // F-5 — the guard's declared map must match the advertised surface. A schema
+    // that adds a credential-bearing property without a guard declaration fails
+    // here; the reviewed allowlist covers the two legitimate exceptions.
+    let sensitive = |name: &str| {
+        let lower = name.to_ascii_lowercase();
+        [
+            "profile",
+            "auth",
+            "token",
+            "secret",
+            "password",
+            "credential",
+            "header",
+            "cookie",
+            "api_key",
+            "api-key",
+            "apikey",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle))
+    };
+    let mut guarded_properties = 0usize;
+    for tool in &tools {
+        let Some(properties) = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        for name in properties.keys() {
+            if !sensitive(name) {
+                continue;
+            }
+            let declared = web_widow::mcp::declared_credential_keys(&tool.name);
+            let allowlisted = matches!(
+                (tool.name.as_ref(), name.as_str()),
+                // A CSV/TSV first-row flag, not a credential.
+                ("extract_rows", "header_row")
+            );
+            assert!(
+                declared.contains(&name.as_str()) || allowlisted,
+                "{} advertises `{name}` with no guard declaration",
+                tool.name
+            );
+            if declared.contains(&name.as_str()) {
+                guarded_properties += 1;
+            }
+        }
+    }
+    // The scan demonstrably covered the declared credential property, and the
+    // declared map is exactly the pinned one.
+    assert_eq!(guarded_properties, 1, "profile on fetch_page was seen");
+    assert_eq!(
+        web_widow::mcp::declared_credential_keys("fetch_page"),
+        ["profile"]
+    );
+    assert!(web_widow::mcp::declared_credential_keys("fetch_feed").is_empty());
+    // F-3 — the advertised bound on the one credential-bearing argument.
+    let fetch_schema = &tools
+        .iter()
+        .find(|tool| tool.name == "fetch_page")
+        .expect("fetch_page")
+        .input_schema;
+    assert_eq!(
+        fetch_schema["properties"]["profile"]["maxLength"],
+        json!(64),
+        "{fetch_schema:?}"
+    );
+
     let read_only = tools
         .iter()
         .find(|tool| tool.name == "search_content")
@@ -276,7 +362,7 @@ async fn an_mcp_sdk_client_uses_every_tool_family_over_stdio() {
     .await;
     assert_eq!(history["changes"], json!([]), "{history}");
 
-    // : a bulk check through the real SDK client is honest about pending.
+    //: a bulk check through the real SDK client is honest about pending.
     let bulk = call(
         &client,
         "monitor_check",
@@ -286,6 +372,52 @@ async fn an_mcp_sdk_client_uses_every_tool_family_over_stdio() {
     assert_eq!(bulk["pending"], json!(true), "{bulk}");
     assert!(bulk["job_id"].is_string(), "{bulk}");
     assert_eq!(bulk["checked"], json!(0), "{bulk}");
+
+    // v0.8 / — a credential-bearing argument on any tool that does not
+    // declare it is refused before dispatch, with no fetch and no side effect.
+    for key in [
+        "profile",
+        "auth_profile",
+        "reference",
+        "username_reference",
+        "password_reference",
+        "header",
+        "credential",
+        "authorization",
+        "cookie",
+    ] {
+        let refused = client
+            .peer()
+            .call_tool(
+                CallToolRequestParams::new("search_content".to_string())
+                    .with_arguments(args(json!({ "query": "lighthouse", key: "x" }))),
+            )
+            .await
+            .expect("in-band error transport");
+        assert_eq!(refused.is_error, Some(true), "`{key}` must be refused");
+        let structured = refused.structured_content.unwrap_or(Value::Null);
+        assert_eq!(
+            structured["error"]["code"],
+            json!("schema_invalid"),
+            "`{key}`: {structured}"
+        );
+        assert!(
+            structured["error"]["detail"]
+                .as_str()
+                .unwrap_or_default()
+                .contains(&format!("/{key}")),
+            "`{key}`: {structured}"
+        );
+    }
+    // And the unauthenticated fetches in this session wrote no audit row.
+    let audit_rows: i64 = rusqlite::Connection::open_with_flags(
+        data.join("web-widow.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .expect("read-only audit probe")
+    .query_row("SELECT COUNT(*) FROM auth_audit", [], |row| row.get(0))
+    .expect("schema v9 carries auth_audit");
+    assert_eq!(audit_rows, 0, "unauthenticated fetches write no audit row");
 
     client.cancel().await.expect("client shutdown");
 }

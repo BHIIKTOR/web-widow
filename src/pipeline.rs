@@ -13,10 +13,12 @@ use scraper::Html;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use crate::auth::{AuditOutcome, AuthHosts, CredentialPlan};
 use crate::compare::{self, ComparePlan, SnapshotCompareInput, SnapshotComparePayload};
 use crate::config::Config;
 use crate::core::error::{Result, WidowError};
 use crate::core::truncate::truncate_chars;
+use crate::store::AuthAuditRow;
 
 use crate::core::url::{PageUrl, content_hash};
 use crate::export::{self, CorpusExportInput, CorpusExportPayload, ExportPlan};
@@ -91,6 +93,19 @@ pub struct FetchPageInput {
     /// `false` returns metadata only on both channels.
     #[serde(default)]
     pub include_content: Option<bool>,
+    /// Operator-configured auth profile name (v0.8). The only
+    /// credential selection any tool accepts; the value is a name from the 0600
+    /// config, never a reference or a secret. An authenticated fetch is
+    /// **return-only by default**: nothing is cached, indexed, stored or
+    /// emitted as an event. With `[auth].persist` the body is stored labelled
+    /// and excluded from export/feed/webhooks and, by default, from
+    /// FTS/embeddings/events.
+    #[serde(default)]
+    #[schemars(
+        description = "Configured auth profile name (operator-defined). Return-only by default: no cache, no persistence, no events. With [auth].persist the body is stored labelled and excluded from export/feed/webhooks and by default from FTS/embeddings/events.",
+        length(max = 64)
+    )]
+    pub profile: Option<String>,
 }
 
 /// `fetch_page` machine payload (output).
@@ -141,7 +156,22 @@ pub struct FetchPagePayload {
     ///. A warning, never an error; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_warning: Option<String>,
+    /// `true` only for an authenticated `fetch_page` (v0.8). The authenticated
+    /// branch is return-only, so this can never appear in a cached payload.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub authenticated: bool,
+    /// The configured profile name used for this call; absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// Why rendering did not run: `auth_static_only` for an authenticated fetch
+    /// under `render = auto` (the browser path is never used with a profile).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub render_skipped: Option<String>,
     pub word_count: usize,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// What the MCP layer needs: the payload plus the Markdown that goes in the text
@@ -402,10 +432,6 @@ pub struct ExtractRowsPayload {
     pub duration_ms: u64,
 }
 
-fn is_false(value: &bool) -> bool {
-    !*value
-}
-
 /// A stored recipe version as the wire `u32`; the column is `i64` with a
 /// `>= 1` CHECK, so anything else is a corrupt row, not caller input.
 fn recipe_version(value: i64) -> Result<u32> {
@@ -530,6 +556,25 @@ pub struct Pipeline {
     renderer: Arc<dyn Renderer>,
 }
 
+/// The profile-name grammar applied to `auth_audit.site` (F-3): keep only the
+/// allowed characters, cap at 64, and never store an empty string.
+fn sanitize_site(site: &str) -> String {
+    let mut clean = String::with_capacity(site.len().min(64));
+    for character in site.chars() {
+        if clean.len() >= 64 {
+            break;
+        }
+        if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
+            clean.push(character);
+        }
+    }
+    if clean.is_empty() {
+        "unknown".to_string()
+    } else {
+        clean
+    }
+}
+
 impl Pipeline {
     pub fn new(
         config: Arc<Config>,
@@ -590,6 +635,9 @@ impl Pipeline {
                 hop_guard: Some(Arc::clone(&self.hop_guard)),
                 min_interval,
                 scope,
+                auth: None,
+                auth_hosts: None,
+                session: None,
             })
             .await
         {
@@ -758,6 +806,26 @@ impl Pipeline {
         self.ssrf.vet(page.url()).await?;
         // Fail before a robots.txt request when the browser is absent.
         self.renderer.preflight()?;
+        let delay = self.hop_guard.check(page.url()).await?;
+        let delay = match (delay, min_interval) {
+            (Some(robots), Some(policy)) => Some(robots.max(policy)),
+            (delay, policy) => delay.or(policy),
+        };
+        let host = page.url().host_str().unwrap_or_default().to_string();
+        Ok(self.gate.acquire(&host, delay).await)
+    }
+
+    /// The authenticated render's own top-level vet. Same SSRF, robots and
+    /// lease rules as [`Self::vet_render_target`], but the browser precondition
+    /// is the auth gate's Chrome rather than the renderer's.
+    async fn vet_session_target(
+        &self,
+        page: &PageUrl,
+        min_interval: Option<Duration>,
+    ) -> Result<HostLease> {
+        self.ssrf.vet(page.url()).await?;
+        // Fail before a robots.txt request when the browser is absent.
+        let _ = self.auth_chrome()?;
         let delay = self.hop_guard.check(page.url()).await?;
         let delay = match (delay, min_interval) {
             (Some(robots), Some(policy)) => Some(robots.max(policy)),
@@ -1095,6 +1163,9 @@ impl Pipeline {
     }
 
     pub async fn fetch_page(&self, input: FetchPageInput) -> Result<FetchPageResult> {
+        if let Some(profile) = input.profile.clone() {
+            return self.fetch_page_authenticated(input, profile).await;
+        }
         let started = Instant::now();
         let mode = match input.mode {
             Some(mode) => mode,
@@ -1301,6 +1372,9 @@ impl Pipeline {
                 extraction.word_count,
             )
             .map(str::to_string),
+            authenticated: false,
+            profile: None,
+            render_skipped: None,
             word_count: extraction.word_count,
         };
         let body = extraction.markdown;
@@ -1327,7 +1401,7 @@ impl Pipeline {
         record.fetched_at = fetched_at;
         record.status = Some(result.payload.status);
         record.content_type = Some(result.payload.content_type.clone());
-        record.charset = Some(source.decoded.charset);
+        record.charset = Some(source.decoded.charset.clone());
         record.etag = source.response.etag.clone();
         record.last_modified = source.response.last_modified.clone();
         record.raw_hash = Some(source.raw_hash.clone());
@@ -1368,6 +1442,806 @@ impl Pipeline {
         Ok(result)
     }
 
+    /// v0.8 — the authenticated branch persists no authenticated content and
+    /// no credential.
+    ///
+    /// It has no content-store call: no cache read or write, no `record_fetch`,
+    /// no blob/CAS, no FTS, no embedding, no event, no webhook. The only durable
+    /// writes are the single value-free `auth_audit` row and the unauthenticated
+    /// robots `hosts` row the hop guard maintains (robots runs before the
+    /// binding check and carries no credential). Rendering is never used: the
+    /// browser path cannot carry a credential.
+    async fn fetch_page_authenticated(
+        &self,
+        input: FetchPageInput,
+        profile: String,
+    ) -> Result<FetchPageResult> {
+        let started = Instant::now();
+        let mode = match input.mode {
+            Some(mode) => mode,
+            None => Mode::parse(&self.config.extract.default_mode)
+                .map_err(|_| WidowError::internal("invalid extract.default_mode"))?,
+        };
+        // F-3: the caller-supplied name is bounded and grammar-checked before
+        // it can reach the audit trail (the schema advertises maxLength too).
+        if !crate::config::valid_profile_name(&profile) {
+            return Err(WidowError::SchemaInvalid {
+                pointer: "/profile".to_string(),
+                message: "a profile name matches ^[A-Za-z0-9._-]{1,64}$".to_string(),
+            });
+        }
+        let policy = input.render.unwrap_or(RenderPolicy::Auto);
+        let max_chars = input
+            .max_chars
+            .unwrap_or(self.config.extract.max_chars)
+            .min(self.config.extract.max_chars);
+        let include_links = input.include_links.unwrap_or(false);
+        let include_content = input.include_content.unwrap_or(true);
+        let page = PageUrl::parse(&input.url)?;
+
+        // v0.9: a `kind = "session"` profile has a sealed jar, not a header.
+        let profile_kind = self
+            .config
+            .auth
+            .profiles
+            .get(&profile)
+            .map(|entry| entry.kind);
+        if profile_kind == Some(crate::config::AuthKind::Session) {
+            return self
+                .fetch_page_session(
+                    input,
+                    profile,
+                    mode,
+                    max_chars,
+                    include_links,
+                    include_content,
+                    policy,
+                    page,
+                    started,
+                )
+                .await;
+        }
+        // `render = always` asks for a guarantee the header path cannot give;
+        // refuse before any credential work rather than downgrade silently.
+        if policy == RenderPolicy::Always {
+            return Err(WidowError::AuthRenderUnsupported);
+        }
+
+        let plan = match CredentialPlan::from_config(&self.config.auth, &profile) {
+            Ok(plan) => Arc::new(plan),
+            Err(error) => {
+                self.record_auth_audit(
+                    &profile,
+                    "",
+                    "GET",
+                    &crate::auth::canonical_url_host(page.url()),
+                    None,
+                    None,
+                    AuditOutcome::from_error(&error),
+                    0,
+                )
+                .await;
+                return Err(error);
+            }
+        };
+        let site = profile.clone();
+        let auth_hosts = Arc::new(AuthHosts::default());
+        let result = self
+            .authenticated_fetch(
+                &page,
+                Arc::clone(&plan),
+                mode,
+                max_chars,
+                include_links,
+                include_content,
+                policy,
+                started,
+                Arc::clone(&auth_hosts),
+            )
+            .await;
+        let (status, bytes, outcome) = match &result {
+            Ok((result, bytes)) => (Some(result.payload.status), Some(*bytes), AuditOutcome::Ok),
+            Err(error) => (error.http_status(), None, AuditOutcome::from_error(error)),
+        };
+        // F-2: the row names every hop that received the credential; a refusal
+        // before any credential-bearing request names the requested host.
+        let host = auth_hosts
+            .joined()
+            .unwrap_or_else(|| crate::auth::canonical_url_host(page.url()));
+        self.record_auth_audit(
+            &site,
+            plan.audit_id(),
+            "GET",
+            &host,
+            status,
+            bytes,
+            outcome,
+            plan.resolution_ms(),
+        )
+        .await;
+        result.map(|(result, _)| result)
+    }
+
+    /// v0.9 — the sealed-session path. Static (default) attaches the exact-host
+    /// `Cookie` from the sealed jar; `render = always` renders in the dedicated
+    /// authenticated browser (ephemeral context, exact-host injection, the
+    /// egress policy on every request). Nothing is persisted in either path.
+    #[allow(clippy::too_many_arguments)]
+    async fn fetch_page_session(
+        &self,
+        _input: FetchPageInput,
+        profile: String,
+        mode: Mode,
+        max_chars: usize,
+        include_links: bool,
+        include_content: bool,
+        policy: RenderPolicy,
+        page: PageUrl,
+        started: Instant,
+    ) -> Result<FetchPageResult> {
+        let site = profile.clone();
+        let host = self
+            .config
+            .auth
+            .profiles
+            .get(&site)
+            .map(|entry| entry.host.trim_end_matches('.').to_ascii_lowercase())
+            .unwrap_or_default();
+        let port = self
+            .config
+            .auth
+            .profiles
+            .get(&site)
+            .map(|entry| entry.port)
+            .unwrap_or(443);
+        let store = crate::auth::store::SessionStore::new(self.store.paths().auth_dir());
+        let jar = match store.unseal(&site) {
+            Ok(Some(jar)) => jar,
+            Ok(None) => {
+                self.record_auth_audit(
+                    &site,
+                    &host,
+                    "GET",
+                    &host,
+                    None,
+                    None,
+                    AuditOutcome::SessionMissing,
+                    0,
+                )
+                .await;
+                return Err(WidowError::AuthSessionMissing { site });
+            }
+            Err(error) => {
+                self.record_auth_audit(
+                    &site,
+                    &host,
+                    "GET",
+                    &host,
+                    None,
+                    None,
+                    AuditOutcome::from_error(&error),
+                    0,
+                )
+                .await;
+                return Err(error);
+            }
+        };
+        // Expiry is checked before any request; an expired jar is destroyed and
+        // the caller is told to log in again (no silent unauthenticated fetch).
+        if jar.meta.expired_at(chrono::Utc::now().timestamp()) {
+            let _ = store.logout(&site);
+            self.record_auth_audit(
+                &site,
+                &host,
+                "GET",
+                &host,
+                None,
+                None,
+                AuditOutcome::SessionExpired,
+                0,
+            )
+            .await;
+            return Err(WidowError::AuthSessionExpired { site });
+        }
+        let cookies: Vec<crate::auth::login::CapturedCookie> = serde_json::from_slice(&jar.payload)
+            .map_err(|error| WidowError::AuthStoreUnavailable {
+                detail: format!("the sealed session payload is not readable: {error}"),
+            })?;
+        // The credential destination is the operator's configured host. The
+        // sidecar is never authoritative: a mismatch is a tampered jar and the
+        // fetch stops before any request (no cookie leaves).
+        if jar.meta.hosts.first() != Some(&host) {
+            self.record_auth_audit(
+                &site,
+                &host,
+                "GET",
+                &host,
+                None,
+                None,
+                AuditOutcome::AuthStoreInvalid,
+                0,
+            )
+            .await;
+            return Err(WidowError::AuthStoreInvalid { site });
+        }
+        let bound_host = host.clone();
+        let outcome = if policy == RenderPolicy::Always {
+            self.session_render(
+                &site,
+                &bound_host,
+                port,
+                cookies,
+                &page,
+                mode,
+                max_chars,
+                include_links,
+                include_content,
+                started,
+            )
+            .await
+        } else {
+            self.session_static(
+                &site,
+                &bound_host,
+                port,
+                cookies,
+                &page,
+                mode,
+                max_chars,
+                include_links,
+                include_content,
+                started,
+            )
+            .await
+        };
+        let (status, bytes, audit) = match &outcome {
+            Ok((result, bytes)) => (Some(result.payload.status), Some(*bytes), AuditOutcome::Ok),
+            Err(error) => (error.http_status(), None, AuditOutcome::from_error(error)),
+        };
+        // A 401 through the static path invalidates the jar: the session is dead.
+        if matches!(&outcome, Err(WidowError::AuthSessionExpired { .. })) {
+            let _ = store.logout(&site);
+        }
+        self.record_auth_audit(
+            &site,
+            &bound_host,
+            "GET",
+            &bound_host,
+            status,
+            bytes,
+            audit,
+            0,
+        )
+        .await;
+        outcome.map(|(result, _)| result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn session_static(
+        &self,
+        site: &str,
+        host: &str,
+        port: u16,
+        cookies: Vec<crate::auth::login::CapturedCookie>,
+        page: &PageUrl,
+        mode: Mode,
+        max_chars: usize,
+        include_links: bool,
+        include_content: bool,
+        started: Instant,
+    ) -> Result<(FetchPageResult, u64)> {
+        let cookie = cookies
+            .iter()
+            .map(|cookie| format!("{}={}", cookie.name, cookie.value.as_str()))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let login = self
+            .config
+            .auth
+            .profiles
+            .get(site)
+            .and_then(|entry| entry.login_url.as_deref())
+            .and_then(|raw| url::Url::parse(raw).ok())
+            .map(|login| {
+                (
+                    crate::auth::canonical_url_host(&login),
+                    login.path().to_string(),
+                )
+            });
+        let login_check = login.clone();
+        let credential = std::sync::Arc::new(crate::fetch::http::SessionCredential {
+            site: site.to_string(),
+            host: host.to_string(),
+            port,
+            cookie,
+            login,
+        });
+        let auth_hosts = std::sync::Arc::new(AuthHosts::default());
+        let response = self
+            .http
+            .fetch(FetchRequest {
+                url: page.url().clone(),
+                conditional: Conditional::default(),
+                accept: ACCEPT_PAGE,
+                max_body_bytes: self.config.fetch.max_body_bytes,
+                hop_guard: Some(std::sync::Arc::clone(&self.hop_guard)),
+                min_interval: None,
+                scope: ContentScope::Page,
+                auth: None,
+                auth_hosts: Some(auth_hosts),
+                session: Some(credential),
+            })
+            .await?;
+        // Static twin: a 200 page that *is* the login page is a dead
+        // session, never an authenticated body.
+        if let Some((login_host, login_path)) = &login_check
+            && crate::auth::canonical_url_host(&response.final_url) == *login_host
+            && response.final_url.path().starts_with(login_path.as_str())
+        {
+            return Err(WidowError::AuthSessionExpired {
+                site: site.to_string(),
+            });
+        }
+        let media = ContentScope::Page
+            .classify(response.content_type.as_deref())
+            .ok_or_else(|| WidowError::UnsupportedContentType {
+                content_type: response
+                    .content_type
+                    .clone()
+                    .unwrap_or_else(|| "(none)".to_string()),
+                processed: content::processed_hint(response.content_type.as_deref()).to_string(),
+            })?;
+        let decoded = charset::decode(&response.body, response.content_type.as_deref());
+        let raw_hash = content_hash(&response.body);
+        let bytes = response.bytes;
+        let source = FetchedDocument {
+            response,
+            media,
+            decoded,
+            raw_hash,
+            render_mode: RenderMode::Static,
+            render_warning: None,
+        };
+        let options = ExtractOptions {
+            mode,
+            max_chars,
+            max_links: self.config.extract.max_links,
+            include_links,
+            ignore_selectors: Vec::new(),
+        };
+        let extraction = extraction_for(&source, &options)?;
+        Ok((
+            self.session_payload(
+                page,
+                site,
+                source,
+                extraction,
+                mode,
+                include_content,
+                started,
+                "session_static",
+            )
+            .await,
+            bytes,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn session_render(
+        &self,
+        site: &str,
+        host: &str,
+        port: u16,
+        cookies: Vec<crate::auth::login::CapturedCookie>,
+        page: &PageUrl,
+        mode: Mode,
+        max_chars: usize,
+        include_links: bool,
+        include_content: bool,
+        started: Instant,
+    ) -> Result<(FetchPageResult, u64)> {
+        // SSRF + robots + the politeness lease for the top-level target run
+        // **before** any browser or profile is created, exactly like the
+        // unauthenticated render path.
+        let _lease = self.vet_session_target(page, None).await?;
+        let chrome = self.auth_chrome()?;
+        let gate =
+            crate::auth::gate::AuthGate::from_config(&self.config, site, host, port, cookies)?
+                .with_browser(chrome, self.store.paths().root().to_path_buf());
+        let rendered = gate.render(page.url())?;
+        if !(200..300).contains(&rendered.page.status) {
+            return Err(WidowError::Http {
+                status: Some(rendered.page.status),
+                detail: format!(
+                    "origin returned HTTP {} for the authenticated navigation",
+                    rendered.page.status
+                ),
+            });
+        }
+        let body = rendered.page.html.clone().into_bytes();
+        let bytes = body.len() as u64;
+        let response = RawResponse {
+            requested_url: page.url().clone(),
+            final_url: rendered.page.final_url.clone(),
+            status: rendered.page.status,
+            content_type: Some("text/html".to_string()),
+            etag: None,
+            last_modified: None,
+            cache_control_max_age: None,
+            body,
+            bytes,
+            redirects: 0,
+            duration: rendered.page.duration,
+        };
+        let media = content::classify(Some("text/html")).unwrap_or(content::MediaKind::Text);
+        let decoded = charset::decode(&response.body, Some("text/html"));
+        let raw_hash = content_hash(&response.body);
+        let source = FetchedDocument {
+            response,
+            media,
+            decoded,
+            raw_hash,
+            render_mode: if rendered.page.partial {
+                RenderMode::RenderedPartial
+            } else {
+                RenderMode::Rendered
+            },
+            render_warning: None,
+        };
+        let options = ExtractOptions {
+            mode,
+            max_chars,
+            max_links: self.config.extract.max_links,
+            include_links,
+            ignore_selectors: Vec::new(),
+        };
+        let extraction = extraction_for(&source, &options)?;
+        tracing::debug!(
+            site = %site,
+            denied = rendered.denials.len(),
+            injected = rendered.injected_cookies,
+            dropped = rendered.dropped_cookies.len(),
+            "authenticated render completed"
+        );
+        Ok((
+            self.session_payload(
+                page,
+                site,
+                source,
+                extraction,
+                mode,
+                include_content,
+                started,
+                "session_render",
+            )
+            .await,
+            bytes,
+        ))
+    }
+
+    /// The value-free payload shared by both session paths (return-only by default).
+    #[allow(clippy::too_many_arguments)]
+    async fn session_payload(
+        &self,
+        page: &PageUrl,
+        site: &str,
+        source: FetchedDocument,
+        extraction: extract::Extraction,
+        mode: Mode,
+        include_content: bool,
+        started: Instant,
+        note: &str,
+    ) -> FetchPageResult {
+        let body = extraction.markdown;
+        let payload = FetchPagePayload {
+            url: source.response.requested_url.to_string(),
+            final_url: source.response.final_url.to_string(),
+            status: source.response.status,
+            content_type: source
+                .response
+                .content_type
+                .as_deref()
+                .map(content::base_media_type)
+                .unwrap_or_else(|| source.media.as_str().to_string()),
+            title: extraction.title,
+            byline: extraction.byline,
+            site_name: extraction.site_name,
+            published: extraction.published,
+            lang: extraction.lang,
+            markdown_chars: extraction.markdown_chars,
+            markdown: include_content.then(|| body.clone()),
+            truncated: extraction.truncated,
+            limit_hit: extraction.limit_hit,
+            render_mode: source.render_mode.as_str().to_string(),
+            render_warning: None,
+            cached: false,
+            fetched_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            duration_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            links: extraction.links.unwrap_or_default(),
+            links_requested: false,
+            links_truncated: extraction.links_truncated,
+            render_quality: None,
+            content_warning: None,
+            authenticated: true,
+            profile: None,
+            render_skipped: Some(note.to_string()),
+            word_count: extraction.word_count,
+        };
+        self.persist_authenticated(
+            page,
+            site,
+            &source,
+            &body,
+            &payload,
+            mode,
+            payload.duration_ms,
+        )
+        .await;
+        FetchPageResult {
+            payload,
+            markdown: body,
+        }
+    }
+
+    /// The Chrome binary for the authenticated browser: `render.chrome_path`,
+    /// then `WEB_WIDOW_CHROME`, then discovery.
+    fn auth_chrome(&self) -> Result<std::path::PathBuf> {
+        if let Some(configured) = self
+            .config
+            .render
+            .chrome_path
+            .as_ref()
+            .filter(|path| !path.as_os_str().is_empty())
+        {
+            return Ok(configured.clone());
+        }
+        if let Some(from_env) = std::env::var_os("WEB_WIDOW_CHROME")
+            .map(std::path::PathBuf::from)
+            .filter(|path| !path.as_os_str().is_empty())
+        {
+            return Ok(from_env);
+        }
+        use crate::render::ChromeResolver;
+        crate::render::SystemChromeResolver::new(None, self.config.render.discovery).resolve()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn authenticated_fetch(
+        &self,
+        page: &PageUrl,
+        plan: Arc<CredentialPlan>,
+        mode: Mode,
+        max_chars: usize,
+        include_links: bool,
+        include_content: bool,
+        policy: RenderPolicy,
+        started: Instant,
+        auth_hosts: Arc<AuthHosts>,
+    ) -> Result<(FetchPageResult, u64)> {
+        let response = self
+            .http
+            .fetch(FetchRequest {
+                url: page.url().clone(),
+                conditional: Conditional::default(),
+                accept: ACCEPT_PAGE,
+                max_body_bytes: self.config.fetch.max_body_bytes,
+                hop_guard: Some(Arc::clone(&self.hop_guard)),
+                min_interval: None,
+                scope: ContentScope::Page,
+                auth: Some(Arc::clone(&plan)),
+                auth_hosts: Some(Arc::clone(&auth_hosts)),
+                session: None,
+            })
+            .await?;
+        let media = ContentScope::Page
+            .classify(response.content_type.as_deref())
+            .ok_or_else(|| WidowError::UnsupportedContentType {
+                content_type: response
+                    .content_type
+                    .clone()
+                    .unwrap_or_else(|| "(none)".to_string()),
+                processed: content::processed_hint(response.content_type.as_deref()).to_string(),
+            })?;
+        let decoded = charset::decode(&response.body, response.content_type.as_deref());
+        // The body hash is computed in memory: nothing is written to the CAS.
+        let raw_hash = content_hash(&response.body);
+        let bytes = response.bytes;
+        let source = FetchedDocument {
+            response,
+            media,
+            decoded,
+            raw_hash,
+            render_mode: RenderMode::Static,
+            render_warning: None,
+        };
+        let options = ExtractOptions {
+            mode,
+            max_chars,
+            max_links: self.config.extract.max_links,
+            include_links,
+            ignore_selectors: Vec::new(),
+        };
+        let extraction = extraction_for(&source, &options)?;
+        let fetched_at = Utc::now();
+        let duration_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        let payload = FetchPagePayload {
+            url: page.raw().to_string(),
+            final_url: source.response.final_url.to_string(),
+            status: source.response.status,
+            content_type: source
+                .response
+                .content_type
+                .as_deref()
+                .map(content::base_media_type)
+                .unwrap_or_else(|| source.media.as_str().to_string()),
+            title: extraction.title,
+            byline: extraction.byline,
+            site_name: extraction.site_name,
+            published: extraction.published,
+            lang: extraction.lang,
+            markdown_chars: extraction.markdown_chars,
+            markdown: None,
+            truncated: extraction.truncated,
+            limit_hit: extraction.limit_hit,
+            render_mode: RenderMode::Static.as_str().to_string(),
+            render_warning: None,
+            cached: false,
+            fetched_at: fetched_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            duration_ms,
+            links: extraction.links.unwrap_or_default(),
+            links_requested: include_links,
+            links_truncated: extraction.links_truncated,
+            render_quality: None,
+            content_warning: interstitial_warning(
+                page.url(),
+                &source.response.final_url,
+                source.response.status,
+                extraction.word_count,
+            )
+            .map(str::to_string),
+            authenticated: true,
+            profile: Some(plan.profile.clone()),
+            render_skipped: (policy == RenderPolicy::Auto).then(|| "auth_static_only".to_string()),
+            word_count: extraction.word_count,
+        };
+        let body = extraction.markdown;
+        let mut payload = payload;
+        payload.markdown = if include_content {
+            Some(body.clone())
+        } else {
+            None
+        };
+        tracing::debug!(
+            url = %log_target(page, self.config.logging.redact_query),
+            status = payload.status,
+            bytes,
+            profile = %plan.profile,
+            "authenticated fetch_page completed"
+        );
+        // v0.9: opt-in persistence for the header path too (default off).
+        self.persist_authenticated(
+            page,
+            &plan.profile,
+            &source,
+            &body,
+            &payload,
+            mode,
+            payload.duration_ms,
+        )
+        .await;
+        Ok((
+            FetchPageResult {
+                payload,
+                markdown: body,
+            },
+            bytes,
+        ))
+    }
+
+    /// Exactly one value-free `auth_audit` row per attempt: no reference,
+    /// value, URL path or query ever reaches this call.
+    #[allow(clippy::too_many_arguments)]
+    async fn record_auth_audit(
+        &self,
+        site: &str,
+        auth_id: &str,
+        method: &str,
+        host: &str,
+        status: Option<u16>,
+        bytes: Option<u64>,
+        outcome: AuditOutcome,
+        resolution_ms: u64,
+    ) {
+        let row = AuthAuditRow {
+            at: Utc::now(),
+            // F-3 invariant: `site` is the configured profile name or a caller
+            // string that already passed the grammar; sanitize defensively so
+            // the column can never hold anything else.
+            site: sanitize_site(site),
+            auth_id: auth_id.to_string(),
+            method: method.to_string(),
+            host: host.to_string(),
+            status,
+            bytes,
+            outcome: outcome.as_str().to_string(),
+            resolution_ms,
+        };
+        if let Err(error) = self.store.db.record_auth_audit(row).await {
+            tracing::warn!(error = %error, "could not record the auth audit row");
+        }
+    }
+
+    /// v0.9: store an authenticated acquisition when `[auth].persist` is on.
+    /// The page is labelled (`authenticated = 1`, `auth_site` = the profile
+    /// name) and the local full-text row is written only when
+    /// `[auth].index_authenticated` is set; the default keeps authenticated
+    /// content out of FTS/embeddings/events/exports.
+    #[allow(clippy::too_many_arguments)]
+    async fn persist_authenticated(
+        &self,
+        page: &PageUrl,
+        site: &str,
+        source: &FetchedDocument,
+        markdown: &str,
+        payload: &FetchPagePayload,
+        mode: Mode,
+        duration_ms: u64,
+    ) {
+        if !self.config.auth.persist {
+            return;
+        }
+        let fetched_at = Utc::now();
+        let cache_result = FetchPageResult {
+            payload: payload.clone(),
+            markdown: markdown.to_string(),
+        };
+        let result_json = match serde_json::to_string(&cache_result) {
+            Ok(json) => json,
+            Err(error) => {
+                tracing::warn!(error = %error, "could not serialize the authenticated result");
+                return;
+            }
+        };
+        let mut record = FetchRecord::new(page.raw(), page.canonical(), page.hash());
+        record.site = page.site();
+        record.fetched_at = fetched_at;
+        record.status = Some(payload.status);
+        record.content_type = Some(payload.content_type.clone());
+        record.charset = Some(source.decoded.charset.clone());
+        record.etag = source.response.etag.clone();
+        record.last_modified = source.response.last_modified.clone();
+        //  rework: the authenticated body is deliberately **not** a CAS
+        // object. This path never calls `put_blob`, and `record_fetch` only
+        // inserts the `blobs` row, so setting either would leave a row (and a
+        // `pages.raw_hash`) pointing at a file that does not exist. The text
+        // lives in the extraction JSON instead; `text_hash` still identifies it.
+        record.raw_hash = None;
+        record.text_hash = Some(content_hash(markdown.as_bytes()));
+        record.title = payload.title.clone();
+        record.lang = payload.lang.clone();
+        record.render_mode = source.render_mode.as_str().to_string();
+        record.outcome = "ok".to_string();
+        record.duration_ms = duration_ms;
+        record.mode = mode.as_str().to_string();
+        record.bytes = Some(source.response.bytes);
+        record.authenticated = true;
+        record.auth_site = Some(site.to_string());
+        if self.config.auth.index_authenticated {
+            record.index_text = Some(IndexText::replace(self.index_text(markdown)));
+        }
+        // No `record.blob`: see the `raw_hash` note above (extraction-only).
+        record.extraction = Some(ExtractionRow {
+            profile_hash: format!("auth:{site}"),
+            result_hash: content_hash(result_json.as_bytes()),
+            result_json,
+            record_count: 1,
+            created_at: fetched_at,
+        });
+        if let Err(error) = self.store.db.record_fetch(record).await {
+            tracing::warn!(error = %error, "could not persist the authenticated fetch");
+        }
+    }
+
     /// `search`: one SERP page through the shared gate (§1.2).
     ///
     /// Stateless: no page/extraction/profile/blob/job row is written, and a
@@ -1402,6 +2276,9 @@ impl Pipeline {
                 hop_guard: Some(Arc::clone(&self.hop_guard)),
                 min_interval: None,
                 scope: ContentScope::Page,
+                auth: None,
+                auth_hosts: None,
+                session: None,
             })
             .await?;
         let content_type = response
@@ -1485,6 +2362,9 @@ impl Pipeline {
                 hop_guard: Some(Arc::clone(&self.hop_guard)),
                 min_interval: None,
                 scope: ContentScope::Page,
+                auth: None,
+                auth_hosts: None,
+                session: None,
             })
             .await?;
         if !(200..300).contains(&response.status) {
@@ -1646,7 +2526,7 @@ impl Pipeline {
     /// is applied here because the shared media scope deliberately excludes
     /// PDFs. Parsing runs on a blocking thread behind the engine mutex and
     /// `catch_unwind` (Rust panics only; a native PDFium crash is not catchable,
-    //). `fetch_page`/`extract` keep refusing PDFs.
+    ///). `fetch_page`/`extract` keep refusing PDFs.
     pub async fn pdf_extract(&self, input: PdfExtractInput) -> Result<PdfExtractPayload> {
         let started = Instant::now();
         let limits = self.config.pdf.limits();
@@ -1694,6 +2574,9 @@ impl Pipeline {
                 hop_guard: Some(Arc::clone(&self.hop_guard)),
                 min_interval: None,
                 scope: ContentScope::Page,
+                auth: None,
+                auth_hosts: None,
+                session: None,
             })
             .await?;
         if !(200..300).contains(&response.status) {
@@ -1954,6 +2837,9 @@ impl Pipeline {
                 hop_guard: Some(Arc::clone(&self.hop_guard)),
                 min_interval: None,
                 scope: ContentScope::Page,
+                auth: None,
+                auth_hosts: None,
+                session: None,
             })
             .await
     }
@@ -4052,6 +4938,9 @@ mod tests {
                 links_truncated: false,
                 render_quality: None,
                 content_warning: None,
+                authenticated: false,
+                profile: None,
+                render_skipped: None,
                 word_count: 1,
             },
             markdown: "# Hello".into(),

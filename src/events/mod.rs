@@ -126,14 +126,23 @@ pub struct EventsService {
     store: Arc<Store>,
     config: EventsConfig,
     runtime: Arc<FeedRuntime>,
+    /// v0.9 /: authenticated-page events are excluded unless
+    /// `[auth].events_authenticated` is set.
+    events_authenticated: bool,
 }
 
 impl EventsService {
-    pub fn new(store: Arc<Store>, config: EventsConfig, runtime: Arc<FeedRuntime>) -> Self {
+    pub fn new(
+        store: Arc<Store>,
+        config: EventsConfig,
+        runtime: Arc<FeedRuntime>,
+        events_authenticated: bool,
+    ) -> Self {
         Self {
             store,
             config,
             runtime,
+            events_authenticated,
         }
     }
 
@@ -179,7 +188,12 @@ impl EventsService {
         let rows = self
             .store
             .db
-            .events_page(input.monitor_id, since, effective.saturating_add(1))
+            .events_page(
+                input.monitor_id,
+                since,
+                effective.saturating_add(1),
+                self.events_authenticated,
+            )
             .await?;
         let truncated = rows.len() > effective;
         let rows: Vec<EventRow> = rows.into_iter().take(effective).collect();
@@ -206,7 +220,11 @@ impl EventsService {
     /// `[events].feed_items` and the RSS hard cap.
     pub async fn feed_xml(&self) -> Result<String> {
         let effective = self.config.feed_items.min(RSS_MAX_ITEMS);
-        let rows = self.store.db.events_page(None, None, effective).await?;
+        let rows = self
+            .store
+            .db
+            .events_page(None, None, effective, self.events_authenticated)
+            .await?;
         let items: Vec<EventItem> = rows.into_iter().map(|row| to_item(row, false)).collect();
         Ok(rss::render(&items, self.runtime.url().as_deref()))
     }

@@ -212,7 +212,7 @@ async fn rows(env: &common::TestEnv, mut request: ExtractRowsInput) -> ExtractRo
 }
 
 // ---------------------------------------------------------------------------
-// A1-1 — the deliberate content scope, and the tabular sibling that widens it
+// the deliberate content scope, and the tabular sibling that widens it
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -300,7 +300,7 @@ async fn the_tabular_fetch_names_csv_and_tsv_before_the_wildcard() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-2 — the CSV edge matrix
+// the CSV edge matrix
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -382,7 +382,7 @@ async fn an_explicit_delimiter_and_header_row_false_are_honoured() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-3 — JSON shapes and pointers
+// JSON shapes and pointers
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -431,7 +431,7 @@ async fn json_pointers_shapes_and_types() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-4 — HTML tables
+// HTML tables
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -477,7 +477,7 @@ async fn html_tables_use_thead_first_row_and_report_spans_and_misses() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-5 — auto-detection and charset
+// auto-detection and charset
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -513,7 +513,7 @@ async fn auto_detection_sniffs_a_lying_header_and_an_explicit_format_wins() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-6 — bounds
+// bounds
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -587,7 +587,7 @@ async fn a_cached_row_set_is_capped_to_the_call_and_refetched_when_it_is_short()
 }
 
 // ---------------------------------------------------------------------------
-// A1-7 — store and FTS (fill-empty)
+// store and FTS (fill-empty)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -666,7 +666,7 @@ async fn a_later_extraction_never_replaces_the_page_body_it_did_not_deliver() {
 }
 
 // ---------------------------------------------------------------------------
-// A1-8 — no regression on the neighbouring tools
+// no regression on the neighbouring tools
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

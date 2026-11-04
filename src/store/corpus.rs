@@ -59,6 +59,7 @@ impl Database {
                         (SELECT s.chunks FROM embedding_state s WHERE s.page_id = p.id)
                  FROM pages p
                  WHERE p.outcome IN ('ok', 'not_modified')
+                   AND p.authenticated = 0
                    AND p.id > ?1
                    AND (?2 IS NULL OR p.site = ?2)
                    AND (?3 IS NULL OR p.last_fetched >= ?3)

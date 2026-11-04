@@ -1,4 +1,4 @@
-# Synthetic SERP fixtures (B01)
+# Synthetic SERP fixtures
 
 - `html-ad.html`: no live sponsored block was captured on 2026-10-30 for the
   chosen query, so this block is synthetic, matching the observed DDG html

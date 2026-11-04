@@ -1,8 +1,8 @@
 //! Change monitoring.
 //!
 //! Hermetic: every monitor watches the loopback fixture server.
-//! Render-mode monitoring lives in `monitor_render.rs` because it needs Chrome.
-//! Runs the real `run-due` binary so the cron path is exercised, not
+//! (render-mode monitoring) lives in `monitor_render.rs` because it needs Chrome.
+//! runs the real `run-due` binary so the cron path is exercised, not
 //! simulated.
 
 mod common;
@@ -86,7 +86,7 @@ fn change_count(env: &TestEnv, monitor_id: i64) -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Unchanged page: second check is a 304, one snapshot, no blob
+//  — unchanged page: second check is a 304, one snapshot, no blob
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -162,7 +162,7 @@ async fn unchanged_check_is_a_304_with_no_new_blob_and_one_snapshot() {
 }
 
 // ---------------------------------------------------------------------------
-// Whitespace is cosmetic, a changed word is substantive
+//  — whitespace is cosmetic, a changed word is substantive
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -301,7 +301,7 @@ async fn whitespace_is_cosmetic_and_a_changed_word_is_substantive() {
 }
 
 // ---------------------------------------------------------------------------
-// Ignore selectors are effective and load-bearing
+//  — ignore selectors are effective and load-bearing
 // ---------------------------------------------------------------------------
 
 fn chrome_page(ad: &str, footer: &str) -> String {
@@ -337,7 +337,7 @@ async fn ignore_selectors_suppress_nav_churn_and_are_load_bearing() {
 }
 
 // ---------------------------------------------------------------------------
-// Markup churn with identical text is no change
+//  — markup churn with identical text is no change
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -388,7 +388,7 @@ async fn script_nonce_and_class_churn_are_not_content_changes() {
 }
 
 // ---------------------------------------------------------------------------
-// Field-level monitoring names the changed field
+//  — field-level monitoring names the changed field
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -483,7 +483,7 @@ async fn a_schema_monitor_names_the_changed_field_without_page_diff_noise() {
 }
 
 // ---------------------------------------------------------------------------
-// rules still hold through a monitor: `all: true` with no match is `[]`
+//  rules still hold through a monitor: `all: true` with no match is `[]`
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -521,7 +521,7 @@ async fn all_true_with_no_matches_is_an_empty_array_not_a_failure() {
 }
 
 // ---------------------------------------------------------------------------
-// Newest-first, capped diff with full stats
+//  — newest-first, capped diff with full stats
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -598,7 +598,7 @@ async fn a_large_change_is_capped_but_its_stats_are_complete() {
 }
 
 // ---------------------------------------------------------------------------
-// Retention keeps change points and their referenced snapshots
+//  — retention keeps change points and their referenced snapshots
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -633,7 +633,7 @@ async fn snapshot_retention_keeps_change_points_and_their_diffs() {
     assert_eq!(change_count(&env, monitor), 1);
 
     env.store
-        .gc(env.config.retention.clone())
+        .gc(env.config.retention.clone(), env.config.auth.audit_days, 7)
         .await
         .expect("retention pass");
 
@@ -678,7 +678,7 @@ async fn snapshot_retention_keeps_change_points_and_their_diffs() {
 }
 
 // ---------------------------------------------------------------------------
-// Bulk check is polite and returns a job id
+//  — bulk check is polite and returns a job id
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -750,7 +750,7 @@ async fn bulk_check_hits_each_host_at_the_configured_rate_and_returns_a_job() {
 }
 
 // ---------------------------------------------------------------------------
-// Delete is a tombstone
+//  — delete is a tombstone
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -816,7 +816,7 @@ async fn delete_deactivates_but_keeps_history_and_checks_skip_it() {
 }
 
 // ---------------------------------------------------------------------------
-// The real run-due binary checks only due monitors and exits
+//  — the real run-due binary checks only due monitors and exits
 // ---------------------------------------------------------------------------
 
 fn received(response: &serde_json::Value) -> &serde_json::Value {
@@ -1142,7 +1142,7 @@ async fn monitor_inputs_are_validated() {
 }
 
 // ---------------------------------------------------------------------------
-// Monitor_list, label and monitor_check(wait_ms)
+//  — monitor_list, label and monitor_check(wait_ms)
 // ---------------------------------------------------------------------------
 
 async fn create_labeled(

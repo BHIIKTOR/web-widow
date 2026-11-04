@@ -1,4 +1,4 @@
-//! Opt-in in-process monitor scheduler (since v0.7).
+//! Opt-in in-process monitor scheduler (v0.7).
 //!
 //! The v0.1 decision chose no scheduler; amends it with a resident
 //! timer that is **off by default**, runs only in `serve`, and drives the

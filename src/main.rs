@@ -6,7 +6,9 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
+use web_widow::auth::store::{SessionStatus, SessionStore};
 use web_widow::config::{Config, Paths};
+use web_widow::core::error::Result as WidowResult;
 use web_widow::fetch::gate::{HostGate, PolitenessConfig};
 use web_widow::fetch::http::HttpClient;
 use web_widow::fetch::robots::RobotsService;
@@ -62,6 +64,106 @@ enum Command {
         #[arg(long)]
         wait_ms: Option<u64>,
     },
+    /// Inspect or discard sealed browser sessions (never takes the data-dir lock).
+    Auth {
+        #[command(subcommand)]
+        action: AuthAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AuthAction {
+    /// Report sealed sessions: presence, cookie count and expiry, never a value.
+    Status {
+        /// One site (profile) name; omit for every sealed site.
+        profile: Option<String>,
+    },
+    /// Delete a sealed session: the jar, its metadata and its keyring key.
+    Logout {
+        /// The site (profile) name to discard.
+        profile: String,
+    },
+    /// Open a login window for a `kind = "session"` profile and seal what the
+    /// operator's login produced. Interactive only: needs a terminal, never a
+    /// tool, and never types or clicks on the operator's behalf.
+    Login {
+        /// The session (profile) name to log in to.
+        profile: String,
+    },
+}
+
+/// The Chrome/Chromium binary for the login window: `render.chrome_path`, then
+/// `WEB_WIDOW_CHROME` (the repository-wide test/deployment override), then the
+/// renderer's own discovery. A missing binary is a typed refusal before any
+/// window opens.
+fn login_chrome(config: &Config) -> anyhow::Result<std::path::PathBuf> {
+    if let Some(configured) = config
+        .render
+        .chrome_path
+        .as_ref()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        return Ok(configured.clone());
+    }
+    if let Some(from_env) = std::env::var_os("WEB_WIDOW_CHROME")
+        .map(std::path::PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        return Ok(from_env);
+    }
+    use web_widow::render::ChromeResolver;
+    let resolver = web_widow::render::SystemChromeResolver::new(None, config.render.discovery);
+    resolver
+        .resolve()
+        .map_err(|error| anyhow::anyhow!("{}: {error}", error.code().as_str()))
+}
+
+/// `auth status|logout` output: one JSON object on stdout, value-free.
+fn auth_summary(store: &SessionStore, action: &AuthAction) -> WidowResult<serde_json::Value> {
+    match action {
+        AuthAction::Status { profile } => {
+            let sites = match profile {
+                Some(site) => vec![site.clone()],
+                None => store.sites()?,
+            };
+            let mut rows = Vec::with_capacity(sites.len());
+            for site in sites {
+                let status = store.status(&site)?;
+                rows.push(status_row(&site, &status));
+            }
+            Ok(serde_json::json!({ "sites": rows }))
+        }
+        AuthAction::Logout { profile } => {
+            let removed = store.logout(profile)?;
+            Ok(serde_json::json!({ "site": profile, "removed": removed }))
+        }
+        // Interactive; dispatched before the store view is reached.
+        AuthAction::Login { .. } => Err(web_widow::core::error::WidowError::Internal(
+            "auth login is an interactive command and has no store summary".to_string(),
+        )),
+    }
+}
+
+fn status_row(site: &str, status: &SessionStatus) -> serde_json::Value {
+    let meta = status.meta.as_ref();
+    serde_json::json!({
+        "site": site,
+        "present": status.present,
+        "key_present": status.key_present,
+        "cookie_count": meta.map(|meta| meta.cookie_count),
+        "captured_at": meta.map(|meta| meta.captured_at),
+        "expires_at_min": meta.and_then(|meta| meta.expires_at_min),
+        "expired": status.expired_at(unix_now()),
+        "hosts": meta.map(|meta| meta.hosts.clone()),
+        "verify_url": meta.and_then(|meta| meta.verify_url.clone()),
+    })
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs() as i64)
+        .unwrap_or_default()
 }
 
 fn main() -> anyhow::Result<()> {
@@ -94,6 +196,18 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
+    if config.http.tls {
+        match cli.command.as_ref() {
+            Some(Command::Serve { http: Some(_), .. })
+            | Some(Command::RunDue { .. })
+            | Some(Command::Auth { .. }) => {}
+            _ => anyhow::bail!(
+                "tls_requires_http: [http].tls = true requires `serve --http <addr>`; \
+                 stdio has no listener"
+            ),
+        }
+    }
+
     // `run-due --http` is a client: it must not touch the data directory or its
     // lock (the running server owns them). Branch before Paths/DataDir/Store.
     if let Some(Command::RunDue {
@@ -123,6 +237,31 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // `auth status|logout` reads or deletes the sealed session store and takes
+    // no data-dir lock: a running server owns it (v0.9).
+    if let Some(Command::Auth { action }) = &cli.command {
+        if let AuthAction::Login { profile } = action {
+            // `auth login` is the operator's command: a terminal, a keyring
+            // preflight, then a dedicated pipe-only browser. It never takes the
+            // data-dir lock and never writes auth_audit (v0.9).
+            let chrome = login_chrome(&config)?;
+            let login = web_widow::auth::login::Login::from_config(&config, profile)
+                .map_err(|error| anyhow::anyhow!("{}: {error}", error.code().as_str()))?
+                .with_browser(chrome, config.data_dir()?);
+            let summary = login
+                .run_tty()
+                .map_err(|error| anyhow::anyhow!("{}: {error}", error.code().as_str()))?;
+            println!("{}", serde_json::to_string(&summary)?);
+            return Ok(());
+        }
+        let paths = Paths::new(config.data_dir()?);
+        let store = SessionStore::new(paths.auth_dir());
+        let summary = auth_summary(&store, action)
+            .map_err(|error| anyhow::anyhow!("{}: {error}", error.code().as_str()))?;
+        println!("{}", serde_json::to_string(&summary)?);
+        return Ok(());
+    }
+
     let paths = Paths::new(config.data_dir()?);
     let _data_dir = DataDir::open(paths.clone()).context("data directory is not usable")?;
     tracing::info!(data_dir = %paths.root().display(), "data directory ready");
@@ -134,14 +273,23 @@ fn main() -> anyhow::Result<()> {
 
     let outcome = runtime.block_on(async move {
         let store = Arc::new(
-            Store::open(&paths, &config.fts).context("storage could not be opened")?,
+            Store::open(&paths, &config.fts, config.auth.index_authenticated)
+                .context("storage could not be opened")?,
         );
-        match store.gc(config.retention.clone()).await {
+        match store
+            .gc(
+                config.retention.clone(),
+                config.auth.audit_days,
+                config.auth.page_retention_days,
+            )
+            .await
+        {
             Ok(report) => tracing::info!(
                 events_pruned = report.events_pruned,
                 extractions_pruned = report.extractions_pruned,
                 blobs_pruned = report.blobs_pruned,
                 webhook_deliveries_pruned = report.webhook_deliveries_pruned,
+                auth_audit_pruned = report.auth_audit_pruned,
                 "startup retention pass complete"
             ),
             Err(error) => tracing::warn!(error = %error, "startup retention pass failed"),
@@ -199,6 +347,7 @@ fn main() -> anyhow::Result<()> {
             Arc::clone(&store),
             config.events.clone(),
             Arc::clone(&feed_runtime),
+            config.auth.events_authenticated,
         ));
         let robots_cache = Arc::new(web_widow::robots_cache::RobotsCacheService::new(
             Arc::clone(&store),
@@ -249,9 +398,10 @@ fn main() -> anyhow::Result<()> {
 
                 // The feed URL is advertised in webhook payloads only when the
                 // loopback listener actually serves the feed.
+                let feed_scheme = if config.http.tls { "https" } else { "http" };
                 let feed_url = http
                     .filter(|_| config.events.feed_enabled)
-                    .map(|addr| format!("http://{addr}/feeds/changes.xml"));
+                    .map(|addr| format!("{feed_scheme}://{addr}/feeds/changes.xml"));
                 let webhooks = Arc::new(web_widow::webhooks::WebhookService::new(
                     Arc::clone(&config),
                     Arc::clone(&store),
@@ -301,13 +451,23 @@ fn main() -> anyhow::Result<()> {
                 if let Some(addr) = http {
                     #[cfg(feature = "http")]
                     {
+                        if config.http.tls
+                            && !addr.ip().is_loopback()
+                            && config.http.tls_cert_file.is_none()
+                        {
+                            anyhow::bail!(
+                                "tls_bind_not_loopback: generated certificates cover loopback only \
+                                 ({addr}); supply [http].tls_cert_file/[http].tls_key_file with the \
+                                 right SAN, or keep the loopback bind"
+                            );
+                        }
                         if !addr.ip().is_loopback() && !allow_non_loopback {
                             anyhow::bail!(
                                 "refusing a non-loopback HTTP bind ({addr}); pass --allow-non-loopback \
                                  only for a deliberate local-network deployment"
                             );
                         }
- // The feed is loopback-only by grant. A
+                        // The feed is loopback-only by design. A
                         // non-loopback listener is refused before any token is
                         // resolved or provisioned, so the posture cannot change
                         // silently.
@@ -326,17 +486,37 @@ fn main() -> anyhow::Result<()> {
                             &paths,
                         )?;
                         let shutdown = tokio_util::sync::CancellationToken::new();
-                        let serving = web_widow::mcp::http::serve(
-                            server,
-                            addr,
-                            token,
-                            web_widow::mcp::http::FeedRoute {
-                                enabled: config.events.feed_enabled,
-                                token: feed_token,
-                                events: Arc::clone(&events),
-                            },
-                            shutdown.clone(),
-                        );
+                        let feed = web_widow::mcp::http::FeedRoute {
+                            enabled: config.events.feed_enabled,
+                            token: feed_token,
+                            events: Arc::clone(&events),
+                        };
+                        let serving = async {
+                            if config.http.tls {
+                                let tls = web_widow::tls::load(&config.http, paths.root(), addr)
+                                    .map_err(|error| {
+                                        Box::new(error) as Box<dyn std::error::Error + Send + Sync>
+                                    })?;
+                                web_widow::mcp::http::serve_tls(
+                                    server,
+                                    addr,
+                                    token,
+                                    feed,
+                                    tls,
+                                    shutdown.clone(),
+                                )
+                                .await
+                            } else {
+                                web_widow::mcp::http::serve(
+                                    server,
+                                    addr,
+                                    token,
+                                    feed,
+                                    shutdown.clone(),
+                                )
+                                .await
+                            }
+                        };
                         tokio::pin!(serving);
                         tokio::select! {
                             result = &mut serving => {
@@ -413,6 +593,9 @@ fn main() -> anyhow::Result<()> {
                 interactions.shutdown().await;
                 renderer.shutdown().await;
             }
+            // `auth` returns before the data directory is opened; it never
+            // reaches this match.
+            Command::Auth { .. } => {}
             Command::RunDue { limit, .. } => {
                 // A second process on the same data directory is refused by the
                 // startup lock, so this pass is the only writer.
@@ -443,7 +626,7 @@ fn main() -> anyhow::Result<()> {
     });
     // Tokio's stdin reader is a blocking task that cannot be cancelled; on a
     // signal the explicit cleanup above is already done, so bound the runtime
-    // shutdown instead of waiting forever for that read (<=10 s).
+    // shutdown instead of waiting forever for that read (: <=10 s).
     runtime.shutdown_timeout(Duration::from_secs(2));
     outcome
 }

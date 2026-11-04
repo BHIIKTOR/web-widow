@@ -1,4 +1,4 @@
-//! Sitemap discovery (`sitemap` and `crawl_start.sitemap_urls`).
+//! Sitemap discovery (`sitemap` and `crawl_start.sitemap_urls`,).
 //!
 //! Streaming parse only: `quick-xml` for `<urlset>`/`<sitemapindex>` and a line
 //! reader for the plain-text format. A document type declaration is skipped and

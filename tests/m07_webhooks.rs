@@ -561,11 +561,15 @@ async fn delivered_history_is_pruned_and_dead_letters_are_kept_longer() {
             .unwrap();
     }
     env.store
-        .gc(RetentionConfig {
-            webhook_deliveries_days: 2,
-            webhook_dead_days: 3,
-            ..RetentionConfig::default()
-        })
+        .gc(
+            RetentionConfig {
+                webhook_deliveries_days: 2,
+                webhook_dead_days: 3,
+                ..RetentionConfig::default()
+            },
+            env.config.auth.audit_days,
+            7,
+        )
         .await
         .unwrap();
     let remaining: Vec<(String,)> = connection

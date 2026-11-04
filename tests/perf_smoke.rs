@@ -1,4 +1,4 @@
-//! A11 — performance smoke against the fixture server: 50 sequential and 8
+//! Performance smoke against the fixture server: 50 sequential and 8
 //! concurrent fetches of a ~100 KiB page. Reference, not a budget: the numbers
 //! are a regression baseline for later batches (§8).
 

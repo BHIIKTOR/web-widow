@@ -1,4 +1,4 @@
-//! 200 sequential renders of a ~200 KiB page, reporting RSS for the
+//!   — 200 sequential renders of a ~200 KiB page, reporting RSS for the
 //! Chrome process tree. Ignored by default because it is a multi-minute memory
 //! probe, not an ordinary regression test; the evidence run executes it with
 //! `--ignored`.

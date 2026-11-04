@@ -1,4 +1,4 @@
-//! A10 — startup refusals and operator warnings, exercised through the real
+//! Startup refusals and operator warnings, exercised through the real
 //! binary (the unit tests cover the mechanism; this covers the wiring).
 
 mod common;

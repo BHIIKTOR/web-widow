@@ -1,12 +1,12 @@
 -- Migration 003_monitor.sql — schema v3 (monitoring area).
 -- Applied inside a transaction by the writer; forward-only, tracked by
 -- PRAGMA user_version. `snapshots.result_hash` is the monitor's schema result
--- identity (the schema list has the column); the bytes live in the CAS so
+-- identity (the list has the column); the bytes live in the CAS so
 -- a field diff can read the previous values without a second column.
 
 CREATE TABLE monitors (
     id                    INTEGER PRIMARY KEY,
-    -- Canonical URL (B04 rule): tracking parameters stripped, query pairs sorted.
+    -- Canonical URL (rule): tracking parameters stripped, query pairs sorted.
     url                   TEXT    NOT NULL,
     mode                  TEXT    NOT NULL,
     -- Versioned profile identity (`spec/v1/...`) when the monitor has a schema.

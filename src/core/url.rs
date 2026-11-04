@@ -114,7 +114,8 @@ pub fn validate(url: &Url) -> Result<()> {
     }
     if !url.username().is_empty() || url.password().is_some() {
         return Err(WidowError::InvalidUrl(
-            "url userinfo is not supported: credentials are never taken from a URL".to_string(),
+            "url userinfo is not supported: v0.1 does not perform authenticated fetching"
+                .to_string(),
         ));
     }
     if url.host_str().is_none() {

@@ -11,9 +11,11 @@ use reqwest::header::{
     ACCEPT, CACHE_CONTROL, CONTENT_TYPE, ETAG, HeaderMap, IF_MODIFIED_SINCE, IF_NONE_MATCH,
     LAST_MODIFIED, LOCATION, RETRY_AFTER,
 };
+use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Client, Response};
 use url::Url;
 
+use crate::auth::{AuthHosts, CredentialPlan};
 use crate::config::FetchConfig;
 use crate::core::error::{Result, WidowError};
 use crate::fetch::content;
@@ -43,6 +45,39 @@ pub trait HopGuard: Send + Sync + std::fmt::Debug {
     fn check<'a>(&'a self, url: &'a Url) -> HopCheckFuture<'a>;
 }
 
+/// A sealed-jar session credential (v0.9): a `Cookie` header that may be
+/// attached **only** to the exact bound origin. The value is a secret and is
+/// never logged; `Debug` prints the site and origin only.
+#[derive(Clone)]
+pub struct SessionCredential {
+    pub site: String,
+    pub host: String,
+    pub port: u16,
+    pub cookie: String,
+    /// The site's own login page: a redirect to it means the session is dead.
+    pub login: Option<(String, String)>,
+}
+
+impl std::fmt::Debug for SessionCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionCredential")
+            .field("site", &self.site)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("cookie", &"<redacted>")
+            .finish()
+    }
+}
+
+impl SessionCredential {
+    /// The exact origin this credential belongs to.
+    pub fn matches(&self, url: &Url) -> bool {
+        crate::auth::canonical_url_host(url) == self.host
+            && url.port_or_known_default() == Some(self.port)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FetchRequest {
     pub url: Url,
@@ -57,6 +92,16 @@ pub struct FetchRequest {
     /// The content-type allowlist this request is entitled to. Only the
     /// `extract_rows` acquisition uses `Tabular`; every page path uses `Page`.
     pub scope: content::ContentScope,
+    /// `Some` for an authenticated fetch (v0.8): every hop is checked against
+    /// the plan's binding before a secret is resolved, and the credential is
+    /// attached per request, never to the client.
+    pub auth: Option<Arc<CredentialPlan>>,
+    /// Receives the canonical host of every hop that actually carried the
+    /// credential, so the audit row can name all of them (F-2).
+    pub auth_hosts: Option<Arc<AuthHosts>>,
+    /// `Some` for a sealed-session fetch (v0.9): the `Cookie` header is
+    /// attached only to the exact origin, and every other hop is refused.
+    pub session: Option<Arc<SessionCredential>>,
 }
 
 #[derive(Debug, Clone)]
@@ -183,8 +228,22 @@ impl HttpClient {
         let mut url = request.url.clone();
         let mut conditional = request.conditional.clone();
         let mut redirects = 0usize;
+        // Resolved at most once per fetch (the manager is never re-invoked for a
+        // redirect or a retry); it lives only for this call.
+        let mut auth_header: Option<(HeaderName, HeaderValue)> = None;
 
         loop {
+            // v0.9: a session cookie is exact-origin only, and the check runs
+            // *before* any hop work (SSRF, robots, lease), so a cross-origin
+            // redirect never touches the other origin at all.
+            if let Some(session) = &request.session
+                && !session.matches(&url)
+            {
+                return Err(WidowError::EgressBlocked {
+                    host: crate::auth::canonical_url_host(&url),
+                    reason: "credential".to_string(),
+                });
+            }
             let peer = self.ssrf.vet(&url).await?;
             let host = if peer.host.is_empty() {
                 url.host_str().unwrap_or_default().to_string()
@@ -207,6 +266,15 @@ impl HttpClient {
 
             let hop = loop {
                 let lease = self.gate.acquire(&host, robots_delay).await;
+                // v0.8 — the binding check runs on every hop, after redirect
+                // resolution and before any secret is resolved or attached.
+                if let Some(plan) = &request.auth {
+                    plan.check_url(&url, redirects > 0)?;
+                    if auth_header.is_none() {
+                        // One resolution per fetch: the manager is never retried.
+                        auth_header = Some(plan.resolve_header().await?);
+                    }
+                }
                 let outcome = tokio::time::timeout_at(
                     deadline,
                     self.hop(
@@ -215,6 +283,8 @@ impl HttpClient {
                         request.accept,
                         enforce_scope.then_some(request.scope),
                         request.max_body_bytes,
+                        auth_header.as_ref(),
+                        request.session.as_deref(),
                     ),
                 )
                 .await;
@@ -254,6 +324,14 @@ impl HttpClient {
                 break hop;
             };
 
+            // A hop that answered received the credential: record it before the
+            // redirect/binding handling so no host can be missing from the row.
+            if (request.auth.is_some() && auth_header.is_some() || request.session.is_some())
+                && let Some(hosts) = &request.auth_hosts
+            {
+                hosts.record(&crate::auth::canonical_url_host(&url));
+            }
+
             if is_redirect(hop.status) {
                 redirects += 1;
                 if redirects > self.limits.max_redirects {
@@ -261,6 +339,21 @@ impl HttpClient {
                         "more than {} redirects",
                         self.limits.max_redirects
                     )));
+                }
+                // A redirect back to the site's own login page is an expired
+                // session, not a page to render.
+                if let Some(session) = &request.session
+                    && let Some((login_host, login_path)) = &session.login
+                {
+                    let target = url.join(&hop.location.clone().unwrap_or_default()).ok();
+                    if let Some(target) = target {
+                        let host = crate::auth::canonical_url_host(&target);
+                        if host == *login_host && target.path().starts_with(login_path.as_str()) {
+                            return Err(WidowError::AuthSessionExpired {
+                                site: session.site.clone(),
+                            });
+                        }
+                    }
                 }
                 let location = hop.location.clone().ok_or_else(|| WidowError::Http {
                     status: Some(hop.status),
@@ -290,6 +383,19 @@ impl HttpClient {
                 });
             }
 
+            if request.session.is_some() && matches!(hop.status, 401 | 403) {
+                // The session is dead: typed, and the caller invalidates the jar.
+                return Err(WidowError::AuthSessionExpired {
+                    site: request
+                        .session
+                        .as_ref()
+                        .map(|session| session.site.clone())
+                        .unwrap_or_default(),
+                });
+            }
+            if request.auth.is_some() && matches!(hop.status, 401 | 403) {
+                return Err(WidowError::AuthRejected { status: hop.status });
+            }
             if !(200..300).contains(&hop.status)
                 && matches!(status_handling, StatusHandling::SuccessOnly)
             {
@@ -315,6 +421,7 @@ impl HttpClient {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn hop(
         &self,
         url: &Url,
@@ -322,8 +429,16 @@ impl HttpClient {
         accept: &'static str,
         scope: Option<content::ContentScope>,
         max_body_bytes: u64,
+        auth: Option<&(HeaderName, HeaderValue)>,
+        session: Option<&SessionCredential>,
     ) -> Result<Hop> {
         let mut builder = self.client.get(url.clone()).header(ACCEPT, accept);
+        if let Some((name, value)) = auth {
+            builder = builder.header(name, value);
+        }
+        if let Some(session) = session {
+            builder = builder.header(reqwest::header::COOKIE, session.cookie.as_str());
+        }
         if let Some(etag) = &conditional.etag {
             builder = builder.header(IF_NONE_MATCH, etag);
         }

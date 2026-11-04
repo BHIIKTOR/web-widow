@@ -397,7 +397,7 @@ impl CrawlManager {
             ..limits
         };
 
-        // Schema: validate before persisting (reject before any fetch).
+        // Schema: validate before persisting (: reject before any fetch).
         let (schema, persisted_schema) = match input.schema.as_ref() {
             Some(raw) => {
                 let validated = spec::validate(raw)?;
@@ -1040,7 +1040,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&parsed).unwrap(), "\"thin_only\"");
     }
 
-    /// C1-8: a start payload without sitemap input is byte-identical to the
+    ///: a start payload without sitemap input is byte-identical to the
     /// pre-sitemap contract (the new key is absent, not null).
     #[test]
     fn a_payload_without_a_sitemap_has_the_pre_sitemap_bytes() {

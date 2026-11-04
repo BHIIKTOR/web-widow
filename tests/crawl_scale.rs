@@ -1,4 +1,4 @@
-//! 500-page crawl through the single writer: page latency, write
+//!   — 500-page crawl through the single writer: page latency, write
 //! overhead and the absence of lock errors. A reference measurement, not a
 //! budget (§8 discipline).
 

@@ -2,7 +2,7 @@
 //! persistence, and monitor composition.
 //!
 //! Every request goes to the loopback fixture server; the real-feed read is a
-//! separate bounded operator transcript under `plan/artifacts/`.
+//! separate bounded operator transcript outside this repository.
 
 mod common;
 
@@ -41,7 +41,7 @@ fn row_counts(env: &TestEnv) -> (i64, i64, i64, i64, i64) {
     )
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn rss_items_keep_feed_order_with_normalized_fields() {
     let (fixture, env) = env_with(|_| {}).await;
@@ -231,7 +231,7 @@ async fn canonical_url_is_the_identity_and_tracking_variants_dedupe() {
     );
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn non_feed_and_broken_bodies_are_typed_failures() {
     let (fixture, env) = env_with(|_| {}).await;
@@ -285,12 +285,12 @@ async fn feed_reads_are_polite_and_write_no_content_rows() {
     );
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn a_feed_body_can_be_watched_and_an_item_url_is_an_ordinary_monitor() {
     let (fixture, env) = env_with(|_| {}).await;
     let feed_url = fixture.url("127.0.0.1", "/monitor/feed");
-    fixture.set_page("/monitor/feed", common::M04_FEED_RSS);
+    fixture.set_page("/monitor/feed", common::FEED_RSS);
 
     let monitor = env
         .monitors
@@ -316,7 +316,7 @@ async fn a_feed_body_can_be_watched_and_an_item_url_is_an_ordinary_monitor() {
 
     fixture.set_page(
         "/monitor/feed",
-        &common::M04_FEED_RSS.replace("First fixture story", "Renamed fixture story"),
+        &common::FEED_RSS.replace("First fixture story", "Renamed fixture story"),
     );
     let checked = env
         .monitors

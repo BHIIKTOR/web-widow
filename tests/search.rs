@@ -1,7 +1,7 @@
 //! `search` integration tests.
 //!
-//! Every test uses the loopback fixture server; the real-DDG transcript is a
-//! separate, bounded operator run recorded under `plan/artifacts/`.
+//! Every test uses the loopback fixture server; the real-engine transcript is a
+//! separate, bounded operator run outside this repository.
 
 mod common;
 
@@ -57,7 +57,7 @@ fn row_counts(env: &TestEnv) -> (i64, i64, i64, i64, i64) {
     )
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn search_returns_the_captured_organic_results() {
     let (fixture, env) = env_with_serp("/serp/html", "/serp/lite", |_| {}).await;
@@ -103,7 +103,7 @@ async fn search_returns_the_captured_organic_results() {
     assert_eq!(fixture.log.count_matching("/serp/lite"), 0);
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn lite_fallback_parses_when_the_primary_page_is_unparseable() {
     let (fixture, env) = env_with_serp("/serp/anomaly", "/serp/lite", |_| {}).await;
@@ -125,7 +125,7 @@ async fn lite_fallback_parses_when_the_primary_page_is_unparseable() {
     assert_eq!(fixture.log.count_matching("/serp/lite"), 1);
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn robots_refusal_is_final_and_never_tries_the_fallback_host() {
     let fixture = start_fixture().await;
@@ -159,7 +159,7 @@ async fn robots_refusal_is_final_and_never_tries_the_fallback_host() {
     );
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn site_freshness_and_limit_reach_the_engine_as_specified() {
     let (fixture, env) = env_with_serp("/serp/html", "/serp/lite", |_| {}).await;
@@ -201,7 +201,7 @@ async fn site_freshness_and_limit_reach_the_engine_as_specified() {
     assert_eq!(payload.limit_hit.as_deref(), Some("limit"));
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn site_is_enforced_on_results_not_only_requested() {
     let (_fixture, env) = env_with_serp("/serp/html", "/serp/lite", |_| {}).await;
@@ -235,7 +235,7 @@ async fn site_is_enforced_on_results_not_only_requested() {
     );
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn a_zero_result_page_is_a_success() {
     let (fixture, env) = env_with_serp("/serp/empty", "/serp/lite", |_| {}).await;
@@ -264,7 +264,7 @@ async fn an_anomaly_page_is_a_typed_failure() {
     assert_eq!(fixture.log.count_matching("/serp/anomaly"), 2);
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn search_writes_no_content_rows() {
     let (_fixture, env) = env_with_serp("/serp/html", "/serp/lite", |_| {}).await;
@@ -287,7 +287,7 @@ async fn search_writes_no_content_rows() {
     );
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn two_searches_respect_the_configured_interval() {
     let (fixture, env) = env_with_serp("/serp/html", "/serp/lite", |config| {

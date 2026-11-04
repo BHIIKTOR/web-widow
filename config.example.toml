@@ -199,7 +199,7 @@ max_blob_bytes = 21_474_836_480
 enabled = false
 model = "minilm-l6-v2-q"
 # model_dir = "/abs/path"          # default: <data_dir>/models/<model>
-# ort_dylib_path = "/abs/path"     # unset: discovery (E1)
+# ort_dylib_path = "/abs/path"     # unset: discovery order below
 chunk_chars = 900
 chunk_overlap = 120
 max_chunks_per_page = 60
@@ -234,3 +234,70 @@ allow_http = false
 enabled = false
 tick_ms = 30_000
 max_checks_per_tick = 25
+
+[http]
+# TLS on the same loopback listener (strict either-or). With `tls = true`
+# the listener is HTTPS only; generated material lives under <data>/tls/ and the
+# operator imports ca.pem once per client. An operator PEM pair overrides the
+# generated set (both paths or neither); it is never mixed with generation.
+tls = false
+# tls_cert_file = "/abs/path/cert.pem"   # PEM chain, leaf first
+# tls_key_file  = "/abs/path/key.pem"    # PEM private key, mode 0600
+
+# [auth] — operator-configured credentials. References live only in
+# this 0600 file; an agent names a profile on `fetch_page` and never supplies a
+# reference or a value. An authenticated fetch is return-only (no cache, no
+# rows, no blobs, no events) and records one value-free auth_audit row per
+# attempt. Commented out because every value shown here is the built-in default.
+#
+# [auth]
+# audit_days = 90                  # auth_audit retention, 1..=3650
+# manager_timeout_ms = 5000        # hard per-resolution timeout, 100..=60000
+# allow_loopback_http = false      # plain HTTP for literal loopback addresses only
+# persist = false # store authenticated bodies (return-only today)
+# index_authenticated = false      # include them in local search + embeddings
+# events_authenticated = false     # include events derived from them in the feed
+# page_retention_days = 7          # shorter retention for stored authenticated pages
+#
+# [auth.managers.op]               # every declared manager is validated at load
+# path = "/usr/bin/op"             # absolute, existing, executable; PATH never searched
+# env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"]
+#                                  # names only; values come from the service env.
+#                                  # HOME (when set) is passed; PATH and WEB_WIDOW_* are refused.
+#
+# [auth.managers.bw]
+# path = "/usr/bin/bw"
+# env_allow = ["BW_SESSION"]
+#
+# [auth.managers.pass]
+# path = "/usr/bin/pass"
+# env_allow = []
+#
+# [auth.profiles.github]           # bearer (default), basic or header
+# kind = "bearer"
+# host = "github.com"              # lowercase bare host; no scheme, port or path
+# port = 443                       # exact credential origin port, 1..=65535 (default 443)
+# reference = "op://Private/github/token"   # op://<vault>/<item>/<field>
+# allow_subdomains = false         # reachability only; a credential stays exact-origin
+#
+# [auth.profiles.legacy]
+# kind = "basic"
+# host = "legacy.example.com"
+# username_reference = "op://Private/legacy/username"   # a reference, never a literal
+# password_reference = "op://Private/legacy/password"
+#
+# [auth.profiles.github-session]   # kind = "session": operator-driven login + sealed jar
+# kind = "session"
+# host = "github.com"              # binding host; capture seals this exact host only
+# port = 443
+# login_url = "https://github.com/login"
+# login_origins = ["github.com"]   # exact hosts the login window may visit (must include host)
+# verify_url = "https://github.com/"   # https on the binding host; 2xx before sealing
+# assets = ["github.githubassets.com"]
+# session_max_age_days = 30
+#
+# [auth.profiles.internal]
+# kind = "header"
+# host = "internal.example.com"
+# header = "X-Api-Key"             # Host/Cookie/Content-Length/Proxy-* are refused
+# reference = "op://Private/internal/key"

@@ -9,7 +9,7 @@
 //! Two fail-closed repairs live here, applied in this order:
 //!
 //! 1. [`repair_structural_gaps`] restores content blocks (and their headings)
-//! that sit *between* two already-delivered blocks, following.
+//!    that sit *between* two already-delivered blocks, following.
 //!    It never re-selects the article, never inserts at the edges, and skips
 //!    the whole page when the 25 % bound would be exceeded.
 //! 2. [`restore_section_headings`] puts back a heading whose following content
@@ -942,7 +942,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Structural-gap repair
+    //  — structural-gap repair
     // -----------------------------------------------------------------------
 
     /// Ten delivered paragraphs give the 25 % page bound a realistic base, so a

@@ -1,4 +1,4 @@
-//! v0.6 — `events` JSON/RSS over real monitor changes (C3-3, C3-4, C3-7).
+//! v0.6 — `events` JSON/RSS over real monitor changes.
 
 mod common;
 
@@ -66,6 +66,7 @@ fn service(env: &TestEnv) -> EventsService {
         env.store.clone(),
         env.config.events.clone(),
         Arc::new(FeedRuntime::default()),
+        false,
     )
 }
 

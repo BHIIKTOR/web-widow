@@ -23,6 +23,7 @@ async fn static_only_build_serves_static_and_reports_render_unavailable() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("static fetch works in the static-only build");
@@ -43,6 +44,7 @@ async fn static_only_build_serves_static_and_reports_render_unavailable() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect_err("always must not silently downgrade");
@@ -65,6 +67,7 @@ async fn static_only_build_serves_static_and_reports_render_unavailable() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("auto falls back to the static result");

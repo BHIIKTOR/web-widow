@@ -1,8 +1,8 @@
 # web-widow operations
 
 Operator runbook for the packaged server. Every command here was executed
-on a clean data directory; the defaults below are checked
-against `config.example.toml` and the running binary, not inferred from internal
+on a clean data directory; the defaults below are checked against
+`config.example.toml` and the running binary, not inferred from internal
 notes.
 
 ## 1. Install and verify
@@ -86,8 +86,13 @@ build starts no timer unless enabled. All three `enabled` keys default to
   other 4xx/redirect dead; backoff `[60,300,1800,7200,21600]` s). The URL is
   treated as a secret and is never logged or returned — status shows the host
   only. See §9.8 for the egress disclosure and HMAC recipe.
+- `[auth]`: config-only credential profiles, manager binaries and the
+  `auth_audit` window. Validated at load and inert until the operator configures a profile;
+  `fetch_page.profile` is the only tool argument that selects one. The full contract, the audit
+  row/outcomes/retention and the operator runbook are in §12.
 - `[scheduler]`: the opt-in in-process timer. `enabled` is **false by default**;
-  `tick_ms` is 1 000..=600 000 (default 30 000) and `max_checks_per_tick` 1..=500 (also clamped by
+  `tick_ms` is 1 000..=600 000
+  (default 30 000) and `max_checks_per_tick` 1..=500 (also clamped by
   `monitor.max_checks_per_call`). It runs only in `serve`; `run-due` is unchanged
   and never starts the timer. One driver per instance: the data-directory lock
   makes a local `run-due` fail while the server runs, and `run-due --http` goes
@@ -168,7 +173,7 @@ still has a `blobs` row and a file.
 Schema v8 adds no retention key: `embeddings` and `embedding_state` cascade from
 `pages` (the store never deletes pages), and `monitor_webhooks`/
 `webhook_deliveries` cascade from `monitors`/`changes` (changes are retained).
-Their growth is bounded by the batch that writes them (E1/W1), not by this GC.
+Their growth is bounded by the rows written into them, not by this GC.
 
 ## 6. Backup and restore
 
@@ -191,10 +196,10 @@ database and blob tree, ensure the data directory is `0700`, start the binary.
 
 Schema v9 is additive: one `auth_audit` table and its two indexes
 (`auth_audit_at`, `auth_audit_site_at`). No existing table, column or row is
-touched. The table is empty on migration and stays empty until an authenticated
-fetch writes one value-free row per attempt; the release also adds the inert
-`[auth]` config contract, and `[auth].audit_days` (default 90, 1..=3650) prunes
-rows in the startup GC. There is no backfill.
+touched. The table is empty on migration and
+stays empty until an authenticated fetch writes one value-free row per attempt;
+the release also adds the inert `[auth]` config contract, and `[auth].audit_days`
+(default 90, 1..=3650) prunes rows in the startup GC. There is no backfill.
 
 A failed migration rolls back inside its transaction; a v8 binary refuses a v9
 database (`database schema v9 is newer than this binary (v8)`), so a binary
@@ -214,9 +219,9 @@ rollback means restoring the pre-migration database.
 ### Upgrade v9 → v10 (authenticated page labels, additive)
 
 Schema v10 is additive: two page labels and one index —
-`pages.authenticated INTEGER NOT NULL DEFAULT 0`, `pages.auth_site TEXT` and
-`pages_authenticated (authenticated, id)`. No existing column, row or value is
-rewritten; every pre-v10 page is unauthenticated by construction
+`pages.authenticated INTEGER NOT NULL DEFAULT 0`, `pages.auth_site TEXT`
+and `pages_authenticated (authenticated, id)`. No existing column, row or value
+is rewritten; every pre-v10 page is unauthenticated by construction
 (`authenticated = 0`, `auth_site = NULL`), and the upgrade never changes a count.
 There is no backfill and no background task; the labels are written only by an
 authenticated acquisition when `[auth].persist = true`.
@@ -287,10 +292,10 @@ strings "$BIN" | grep -q 'text/event-stream'      # http-capable when the unit p
 ```
 
 For the deployed release the durable artifacts are
-`~/.local/share/web-widow-backups/B02-shared-rollback-binary-ac31015-http`
+`~/.local/share/web-widow-backups/shared-rollback-binary-ac31015-http`
 (`403254f0…`, built from `ac31015 --features http`, schema v4, 11 tools) and
-`~/.local/share/web-widow-backups/B02-shared-previous-runtime-9ba61b68`
-(`9ba61b68…`, the original runtime image, http + v4, 10 tools). The **default**
+`~/.local/share/web-widow-backups/shared-previous-runtime-9ba61b68`
+(`9ba61b68…`, the v0.1 runtime image, http + v4, 10 tools). The **default**
 build `e7fd8a4c…` is not a valid rollback for an `--http` unit.
 
 A **v4 binary refuses a v5 database**:
@@ -306,13 +311,13 @@ preserved v4 rollback binary (expect the refusal above against the v5 copy; the
 pristine v4 file opens normally). Also start the rollback binary over
 `serve --http` on a copy of the v4 backup, verify `initialize` + `tools/list`
 shows the **11-tool v4-era surface**, and stop it cleanly. The exact executed
-commands and observations are retained in the release evidence.
+commands and observations are retained outside this repository.
 
 ### Upgrade v7 → v8 (embeddings/webhooks, additive)
 
 Schema v8 is additive: `embeddings`, `embedding_state`,
 `monitor_webhooks` and `webhook_deliveries`, plus their indexes. No existing
-table, column or row is changed, and P0 adds no tool and no background task. A
+table, column or row is changed, and this release adds no tool and no background task. A
 failed migration rolls back inside its transaction; a v7 binary refuses a v8
 database (`database schema v8 is newer than this binary (v7)`), so a binary
 rollback means restoring the pre-migration database.
@@ -321,15 +326,15 @@ rollback means restoring the pre-migration database.
    `PRAGMA user_version` and the counts (`pages`, `pages_fts`, `blobs`,
    `fetch_events`, `extractions`, `snapshots`, `changes`, `monitors`).
 2. Stop, install the v8 binary, start. The migration runs before serving; there
-   is no backfill in P0.
+   is no backfill.
 3. Verify: `PRAGMA user_version` = 8; the four new tables exist (empty on
    migration); every existing count is unchanged; `PRAGMA foreign_key_check`
    returns no rows.
-4. `[embeddings]`, `[webhooks]` and `[scheduler]` are validated at load. In E1
-   the embeddings section is live once the operator provisions the library and
-   model and sets `enabled = true`; in W1 `[webhooks]` is live once targets are
-   configured and `enabled = true` (nothing fires otherwise); in S1 the
-   `[scheduler]` timer is live when `enabled = true` (default off). Enabling the
+4. `[embeddings]`, `[webhooks]` and `[scheduler]` are validated at load.
+   `[embeddings]` is live once the operator provisions the library and model
+   and sets `enabled = true`; `[webhooks]` is live once targets are configured
+   and `enabled = true` (nothing fires otherwise); the `[scheduler]` timer is
+   live when `enabled = true` (default off). Enabling the
    timer means removing/disabling any cron `run-due` entry for that instance
    (one driver); leaving it off keeps cron valid.
 
@@ -377,14 +382,14 @@ them automatically); `[embeddings].enabled = false` disables the whole path.
 
 Schema v7 is additive: `recipes`, `recipe_versions` and
 `screenshots`, plus their indexes. No existing table, column or row is changed,
-and P0 adds no tool. A failed migration rolls back inside its transaction; a v6
+and this release adds no tool. A failed migration rolls back inside its transaction; a v6
 binary refuses a v7 database (`database schema v7 is newer than this binary
 (v6)`), so a binary rollback means restoring the pre-migration database.
 
 1. Preserve the v6 binary and `VACUUM INTO` each database; record
    `PRAGMA user_version` and the `pages`/`pages_fts` counts.
 2. Stop, install the v7 binary, start. The migration runs before serving; there
-   is no backfill in P0.
+   is no backfill.
 3. Verify: `PRAGMA user_version` = 7; `recipes`, `recipe_versions`,
    `screenshots` exist (empty on migration); every existing table and
    `pages_fts` count is unchanged.
@@ -405,7 +410,7 @@ pre-migration database.
    §6 above). Record `PRAGMA user_version` and the `pages` count.
 2. Stop the unit (`systemctl --user stop web-widow.service`).
 3. Install the new binary; verify its `sha256sum` and that it is feature-matched
-   for the unit (see the deployment note below).
+   for the unit (see the v0.2 note below).
 4. Start. The first start migrates to v6 and runs the backfill **before serving**:
    200 pages per transaction, capped at `[fts].max_index_chars`, idempotent. The
    log line is `fts backfill complete (schema v6)` with `scanned`, `with_text`,
@@ -431,8 +436,8 @@ v0.3 changes only the HTTP transport (stateless) and the `fetch_page`/
 `user_version` stays 5, monitor rows and snapshots are untouched, and the
 rollback is a binary swap, not a database restore.
 
-1. Preserve the previously deployed http artifact `99ab3a4…` as
-   `~/.local/share/web-widow-backups/v0.3-shared-rollback-http` (and a
+1. Preserve the deployed v0.2 http artifact `99ab3a4…` as
+   `~/.local/share/web-widow-backups/v0.3-shared-rollback-m02-http` (and a
    second-instance copy) with `sha256sum`; verify it has
    the HTTP transport (`strings "$BIN" | grep -q 'text/event-stream'`).
 2. Stop the unit, install the new `--features http` artifact at its
@@ -565,7 +570,7 @@ are untouched; the rollback is a binary swap.
   attributed to the page target, so they leave without the SSRF vet, robots,
   the host lease or the caps. This is a known hole in the N2 control, not only
   an untested path; the residual was reviewed 2026-11-01.** The close-on-attach
-  backstop is cleanup only: the guard-disabled G0 probe (B2d artifact) shows
+  backstop is cleanup only: the guard-disabled G0 probe shows
   every creation shape reached the private listener with the backstop alone, so
   creation prevention is the only egress control (server pre-dispatch hit-test
   at the click point + document guard). The hit-test resolves the deepest node
@@ -690,9 +695,9 @@ With no override, first start generates a local CA and leaf under `<data>/tls/`
 | File | Mode | Content |
 |---|---|---|
 | `ca.pem` | 0644 | local CA, CN `web-widow local CA`, `CA:TRUE`, ~10 years |
-| `ca-key.pem` | **0600** | CA private key, PKCS#8 ECDSA P-256 |
+| `ca-key.pem` | **0600** | CA private key, PKCS#8 ECDSA |
 | `server.pem` | 0644 | leaf, SANs `localhost`/`127.0.0.1`/`::1`, ~397 days |
-| `server-key.pem` | **0600** | leaf private key, PKCS#8 ECDSA P-256 |
+| `server-key.pem` | **0600** | leaf private key, PKCS#8 ECDSA |
 | `meta.json` | 0644 | format, expiry timestamps, SAN list and renewal timestamps |
 
 Generation runs under the data-directory lock and only when the set is absent.
@@ -772,8 +777,8 @@ restart with the previous binary/config; generated files may remain unused.
   job with the remaining ids and the partial typed results are returned. One
   in-flight check may overrun by at most one check. `monitor_id` + `wait_ms` is
   `schema_invalid`.
-- **Scheduler is opt-in (amended).** The original design chose
-  no scheduler; an amendment adds one. With `[scheduler].enabled = true`
+- **Scheduler is opt-in.** The v0.1 decision chose no scheduler; v0.7
+  amends it. With `[scheduler].enabled = true`
   (default false), `serve` runs a resident timer that drives the same `run_due`
   pass; `run-due` remains supported and is unchanged. One driver per instance:
   the serving process holds the data-directory lock, so a local `run-due` fails
@@ -860,8 +865,8 @@ through a tool, a monitor, page content or a prompt.
 
 ### 9.9 In-process scheduler (opt-in)
 
-The original design chose no scheduler: `monitor_check` on demand plus a
-single-shot `run-due` for cron/systemd. **An amendment adds** a
+v0.1 chose no scheduler: `monitor_check` on demand plus a
+single-shot `run-due` for cron/systemd. **v0.7 amends it** with a
 resident timer that is **opt-in and off by default**; every surrounding guarantee
 stays.
 
@@ -897,7 +902,7 @@ stays.
 
 ## 10. Search (DuckDuckGo discovery)
 
-- **One SERP page per call.** DDG returns ten organic results; there is no
+- **One SERP page per call.** DDG returns ten organic results; v0.2 has no
   pagination. A call makes at most two SERP requests: the configured html
   endpoint, then the lite endpoint only when the primary fails at transport or
   parse level. Route refusals (`blocked_by_robots`, `blocked_private_address`,
@@ -929,7 +934,7 @@ stays.
   success. Transient DDG challenge: one later retry is reasonable, never a loop;
   watch recurrence in the access log (`grep 'search failed'`/`'search completed'`)
   before treating it as a defect. A lite fallback rate near 100 % is the
-  indicator that the html markup drifted.
+   indicator that the html markup drifted.
 
 ### Field signals (no schema or data change)
 
@@ -1080,13 +1085,14 @@ sees zero requests.
 
 ## 11. Intended use and risk statements
 
-**Intended use.** Internal agent tooling over publicly accessible
-pages (docs, news, reference sites); robots.txt respected; ≤1 request/s per host;
-no login-gated or paywalled content. Authenticated fetching exists only as an
-**operator-configured, per-site opt-in** path (§12): the operator holds the
-reference and the provider credential, the agent names a profile on `fetch_page`
-only, and the body is returned without being stored. It does not bypass access
-controls, and SSO/session-gated sites remain unsupported.
+**Intended use.** Internal agent tooling over publicly accessible pages
+(docs, news, reference sites); robots.txt respected; ≤1 request/s per host.
+Authenticated fetching is an **operator-configured, per-site opt-in** path (§12): a
+secret reference for bearer/basic/header profiles, or an operator-captured
+`kind = "session"` login for session-gated sites. The agent names a profile on
+`fetch_page` only, and the body is return-only unless `[auth].persist` is set. The
+server adds no paywall or access-control bypass; the operator must be entitled to
+the access it supplies.
 
 **Readability omission.** `mode=main` can omit whole sibling content
 blocks (readability limitation). v0.4 repairs the **section-shaped** class (the
@@ -1100,8 +1106,8 @@ admitted, and pages without such a gap keep byte-identical output. Use
 completeness matters. The operator run observed **no** whole article-sibling
 omission in a 10-page docs/news/reference sample; navigation, sidebars and
 footers were excluded as intended. Two adjacent observations are recorded rather
-than folded into the readability limitation: python.org/about serves a
-JavaScript-fallback shell to both static and headless clients (site behavior; About content not delivered),
+than folded into the risk statement: python.org/about serves a JavaScript-fallback shell to
+both static and headless clients (site behavior; About content not delivered),
 and a broad `h2` schema selector on mdBook pages can pick theme UI — scope docs
 schemas with `container`. No mitigation is claimed beyond `mode=full`/`text` and
 schema scoping.
@@ -1127,7 +1133,7 @@ with no fetch and no side effect.
 audit_days = 90                  # auth_audit pruning, 1..=3650 (default 90)
 manager_timeout_ms = 5000        # hard per-resolution timeout, 100..=60000
 allow_loopback_http = false      # plain HTTP for literal loopback addresses only
-persist = false                  # store authenticated bodies (return-only when false)
+persist = false # v0.9: store authenticated bodies (return-only when false)
 index_authenticated = false      # include stored ones in FTS + embeddings
 events_authenticated = false     # include events derived from them in the feed
 page_retention_days = 7          # retention for stored authenticated pages, 1..=3650
@@ -1270,11 +1276,11 @@ resolved — distinct from a transport failure) · `egress_blocked` (the egress
 policy refused a request; also the row for a non-GET/HEAD attempt) ·
 `transport_error`.
 
-The session additions are value-free too: `session_expired` (the jar was
+The v0.9 session additions are value-free too: `session_expired` (the jar was
 expired, or the origin answered 401/403, or it redirected to the site's login
 page — the jar is destroyed), `session_missing` (no sealed jar for the profile),
 `challenge_refused` (the origin asked for an HTTP credential and the browser
-answered with a failure), and `auth_store_invalid` (the sidecar's host does
+answered with a failure,), and `auth_store_invalid` (the sidecar's host does
 not match the configured binding host; nothing is fetched).
 
 Two tool-error codes deliberately fold into `auth_secret_unavailable` because the
@@ -1385,8 +1391,8 @@ leaves nothing behind.
 | `auth_store_locked` | the collection exists but is locked | unlock the keyring, then retry |
 
 The service units inherit `DBUS_SESSION_BUS_ADDRESS` from the user manager; a
-host without a session bus is a typed refusal, recorded as such (the recorded
-transcript shows both the healthy path and the refusal).
+host without a session bus is a typed refusal, recorded as such (the operator
+runbook shows both the healthy path and the refusal).
 
 **CLI (takes no data-dir lock).** `auth` branches before the data directory is
 opened, so it runs while a `serve` process owns `<data>`:
@@ -1411,6 +1417,41 @@ web-widow --data-dir /srv/web-widow auth logout github
 reference. A failure exits non-zero with `code: message` on stderr. `status`
 consults the keyring only for a site that has a jar, so it works on a host with
 no session bus as long as nothing is sealed.
+
+## 13. Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `data directory … accessible by group/other` | `chmod 700` the data dir |
+| `data directory … already in use by pid N` | a server (or a hung process) holds the lock; stop it, or `ps -p N`; do not delete `server.lock` |
+| `render_unavailable` | pin `render.chrome_path`, check it is executable, or build with the `render` feature |
+| `blocked_by_robots` | expected; robots is enforced, `robots.enabled=false` is a loud operator override |
+| `blocked_private_address` | expected; add an exact host/CIDR to `fetch.allow_hosts` only for a deliberate local target |
+| `timeout` / `too_large` | raise the specific cap or retry; the caps are per request and enforced while streaming |
+| `sitemap` `too_large` | the gzip ceiling is 4× `[sitemap].max_bytes`; raise it deliberately, and check the document is a sitemap rather than a binary |
+| `pdf_extract` `render_unavailable` | PDFium is not loadable: check `[pdf].pdfium_path`, `pdfium_discovery`, `WEB_WIDOW_PDFIUM_PATH`, `<exe dir>/libpdfium.so`, `<data_dir>/lib/libpdfium.so`; the message lists what was tried |
+| `pdf_encrypted` | the PDF needs a real user password; `pdf_extract` never guesses (a separate decrypt step is not implemented) |
+| `pdf_invalid` | the body is not a parseable PDF (or is a PDF with a content-type mismatch); check `%PDF-`/the origin, not a retry loop |
+| `pdf_extract` `no_text_layer` | the PDF is image-only; that is a successful call, OCR is out of scope |
+| feed `401` | the request lacks the exact `?token=` capability token; check `WEB_WIDOW_FEED_TOKEN` or `<data_dir>/feed-token` (it is not the MCP bearer) |
+| feed `404` | `[events].feed_enabled = false`, or the binary was built without the `http` feature / was not started with `--http` |
+| `robots_cache` `unavailable` | the host has no cached body (a failure row) or the body is unparseable; the tool never fetches one |
+| HTTP `401` | the request lacks the exact `Authorization: Bearer <token>`; check env/file and mode `0600` |
+| HTTP bind refused | non-loopback needs `--allow-non-loopback`; keep it loopback and proxy TLS externally |
+| `run-due` non-zero | read stderr: lock, config, storage, or the renderer; per-monitor failures are in the JSON `failed` list, not the exit code |
+| High disk use | lower `retention.max_blob_bytes`; referenced blobs are retained by design; `VACUUM INTO` then replace the DB to compact |
+
+## 14. Uninstall
+
+Stop the server (SIGTERM) and remove the data directory:
+
+```sh
+rm -rf ~/.local/share/web-widow
+```
+
+Remove the binary from `PATH` and the config/token files if no longer needed.
+This deletes all fetched content, page history, snapshots and changes; there is
+no remote copy unless you made one.
 
 ### 12.7 Assisted login and capture
 
@@ -1508,7 +1549,7 @@ DevTools pipe (no TCP DevTools endpoint, no `DevToolsActivePort`), with:
 any other method is refused as `auth_method_refused` before the request reaches
 the origin (the audit row records `egress_blocked`), and the static paths issue
 `GET` only. No authenticated tool exposes a method, a body or any other mutation
-authority; adding one would be a separate, explicitly commissioned grant, not a
+authority; adding one would be a separate, explicitly decided change, not a
 configuration change.
 
 **Document vetting and its honest edge.** Before the browser is launched,
@@ -1517,8 +1558,9 @@ SSRF address vetting, then robots.txt, then the per-host politeness lease — so
 robots-disallowed or private-address target is refused with no browser and no
 profile created. That gate covers the **requested document**; a rendered page's
 own subresources are outside robots (they are still subject to the egress policy
-above). This is the same disclosed render residual as for any rendered page, not
-a claim that subresources are robots-checked.
+above). This is the same disclosed render residual as the unauthenticated
+render path, not a claim
+that subresources are robots-checked.
 
 **WebRTC.** The launch carries
 `--webrtc-ip-handling-policy=disable_non_proxied_udp`. **The `force-` spelling
@@ -1532,7 +1574,7 @@ target cannot be created hermetically, so a network namespace remains the
 stronger isolation for a deployment check; the residual is recorded, not hidden.
 
 **Persistence and egress (opt-in).** With `[auth].persist = false` (default) the
-return-only behaviour is unchanged: nothing is stored. With `persist = true`
+v0.8 return-only behaviour is unchanged: nothing is stored. With `persist = true`
 the body is stored **labelled** (`pages.authenticated = 1`, `pages.auth_site`)
 and **extraction-only** (no `blobs` row, `raw_hash` NULL — the body lives in the
 extraction JSON). Stored authenticated pages are then:
@@ -1570,38 +1612,3 @@ Checklist before the first authenticated reuse:
    retention window knowingly;
 4. a session fetch reports `authenticated: true`; an expired/missing jar is
    `auth_session_expired`/`auth_session_missing`, never a silent public fetch.
-
-## 13. Troubleshooting
-
-| Symptom | Check |
-|---|---|
-| `data directory … accessible by group/other` | `chmod 700` the data dir |
-| `data directory … already in use by pid N` | a server (or a hung process) holds the lock; stop it, or `ps -p N`; do not delete `server.lock` |
-| `render_unavailable` | pin `render.chrome_path`, check it is executable, or build with the `render` feature |
-| `blocked_by_robots` | expected; robots is enforced, `robots.enabled=false` is a loud operator override |
-| `blocked_private_address` | expected; add an exact host/CIDR to `fetch.allow_hosts` only for a deliberate local target |
-| `timeout` / `too_large` | raise the specific cap or retry; the caps are per request and enforced while streaming |
-| `sitemap` `too_large` | the gzip ceiling is 4× `[sitemap].max_bytes`; raise it deliberately, and check the document is a sitemap rather than a binary |
-| `pdf_extract` `render_unavailable` | PDFium is not loadable: check `[pdf].pdfium_path`, `pdfium_discovery`, `WEB_WIDOW_PDFIUM_PATH`, `<exe dir>/libpdfium.so`, `<data_dir>/lib/libpdfium.so`; the message lists what was tried |
-| `pdf_encrypted` | the PDF needs a real user password; `pdf_extract` never guesses (a separate decrypt step is not implemented) |
-| `pdf_invalid` | the body is not a parseable PDF (or is a PDF with a content-type mismatch); check `%PDF-`/the origin, not a retry loop |
-| `pdf_extract` `no_text_layer` | the PDF is image-only; that is a successful call, OCR is out of scope |
-| feed `401` | the request lacks the exact `?token=` capability token; check `WEB_WIDOW_FEED_TOKEN` or `<data_dir>/feed-token` (it is not the MCP bearer) |
-| feed `404` | `[events].feed_enabled = false`, or the binary was built without the `http` feature / was not started with `--http` |
-| `robots_cache` `unavailable` | the host has no cached body (a failure row) or the body is unparseable; the tool never fetches one |
-| HTTP `401` | the request lacks the exact `Authorization: Bearer <token>`; check env/file and mode `0600` |
-| HTTP bind refused | non-loopback needs `--allow-non-loopback`; keep it loopback and proxy TLS externally |
-| `run-due` non-zero | read stderr: lock, config, storage, or the renderer; per-monitor failures are in the JSON `failed` list, not the exit code |
-| High disk use | lower `retention.max_blob_bytes`; referenced blobs are retained by design; `VACUUM INTO` then replace the DB to compact |
-
-## 14. Uninstall
-
-Stop the server (SIGTERM) and remove the data directory:
-
-```sh
-rm -rf ~/.local/share/web-widow
-```
-
-Remove the binary from `PATH` and the config/token files if no longer needed.
-This deletes all fetched content, page history, snapshots and changes; there is
-no remote copy unless you made one.

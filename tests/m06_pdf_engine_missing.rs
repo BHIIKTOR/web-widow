@@ -1,8 +1,8 @@
-//! C2-9 — discovery failure names both settings and the searched locations.
+//! Discovery failure names both settings and the searched locations.
 //!
 //! Own process: the env variable is removed before the first call so the
 //! discovery chain has no candidate. The host has no system-wide libpdfium
-//! (recorded in the C2 evidence); a system library would make this test fail
+//! (recorded with the release notes); a system library would make this test fail
 //! loudly, which is the correct signal to update the evidence.
 
 mod common;

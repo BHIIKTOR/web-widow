@@ -91,7 +91,7 @@ struct BrowserSession {
 
 /// Which render profile a page uses. The text profile (fetch/extract) blocks
 /// stylesheets, fonts and images to keep Markdown extraction cheap. The visual
-/// profile (`screenshot`) allows them so the capture matches what
+/// profile (`screenshot`,) allows them so the capture matches what
 /// a user sees; media stays blocked in both. The profile is server-fixed: no
 /// tool argument selects it.
 #[derive(Debug, Clone, Copy)]
@@ -249,11 +249,19 @@ impl BrowserRenderer {
             // Popups are not traversed. This switch is honoured by Chromium's
             // test/headless modes; the ephemeral context is still disposed.
             .arg("block-new-web-contents")
-            // Browser-internal egress reducers: no DNS prefetch and
-            // no non-proxied UDP for WebRTC. These are launch-level, not the
+            // Browser-internal egress reducers: no DNS prefetch
+            // and no non-proxied UDP for WebRTC. These are launch-level, not the
             // Fetch gate.
-            .arg("--dns-prefetch-disable")
-            .arg("--force-webrtc-ip-handling-policy=disable_non_proxied_udp")
+            //
+            // `BrowserConfig::arg` takes an **unprefixed** key (or a (key, value)
+            // pair) and emits `--key[=value]` itself: a string that already
+            // starts with `--` becomes `----key`, which Chrome ignores. Measured
+            // on 156 through this renderer: the doubled-dash form leaked 2
+            // datagrams, the unprefixed pair 0; the separate `--force-` spelling
+            // is a no-op even when well formed (baseline 4, unprefixed 0,
+            // `--force-` 4).
+            .arg("dns-prefetch-disable")
+            .arg(("webrtc-ip-handling-policy", "disable_non_proxied_udp"))
             .build()
             .map_err(|error| {
                 (
@@ -832,7 +840,7 @@ impl BrowserRenderer {
 const ELEMENT_NODE: i64 = 1;
 
 /// Hard ceiling on paused requests per session, *including refused ones*, so a
-/// page cannot turn the gate into an unbounded vet/DNS channel (review F6).
+/// page cannot turn the gate into an unbounded vet/DNS channel (review).
 const MAX_SESSION_PAUSED_REQUESTS: u64 = 500;
 /// Rolling typed strings scrubbed from console output.
 const MAX_TYPED_SECRETS: usize = 8;
@@ -846,7 +854,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   // Every primitive the guard relies on is captured at install time, before any
   // page script runs on this document. A page that later replaces
   // Object.freeze, getAttribute, querySelector, composedPath, preventDefault or
-  // Reflect.apply cannot change what the guard already holds (review B2f/F3-F4).
+  // Reflect.apply cannot change what the guard already holds (review /-).
   const doc = document;
   const win = window;
   const apply = Reflect.apply;
@@ -903,7 +911,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   };
   // ASCII-only code-point fold, byte-equivalent to the server's
   // `eq_ignore_ascii_case`: a Unicode `toLowerCase` could classify a future
-  // keyword differently in the two predicates (review B2j low).
+  // keyword differently in the two predicates (review low).
   const asciiLower = (value) => {
     const text = str(value);
     let folded = '';
@@ -929,7 +937,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   let cancelledSeq = 0;
   let cancelledValue = null;
   // frozen with the captured primitive; the object lives only in this closure
-  // and is reachable from the page as a read-only view (review B2f/F3).
+  // and is reachable from the page as a read-only view (review /).
   const mark = (kind, target) => {
     cancelledSeq += 1;
     cancelledValue = freeze({
@@ -1022,7 +1030,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   // The form owner of a submit control: a non-empty `form` content attribute
   // resolves by id in the element's own tree (a sibling form in a shadow tree is
   // invisible to an event path and to closest()); otherwise the ancestor form
-  // applies. Review B2g/F1.
+  // applies. Review /.
   const formOwnerOf = (node, name) => {
     const reference = attr(node, 'form');
     if (reference) {
@@ -1061,7 +1069,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
     const name = localNameOf(node).toLowerCase();
     if (name === 'label') {
       // A label click activates its labeled control; the control may be a
-      // sibling in a shadow tree and is never in the event path (review B2h).
+      // sibling in a shadow tree and is never in the event path (review).
       const control = labelControlOf(node);
       return control ? activatorTarget(control) : null;
     }
@@ -1090,7 +1098,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   };
   // Page-script activation: element.click() and dispatchEvent('click') are
   // intercepted before the native call, including inside shadow roots whose
-  // event path never reaches the window listener (review F5).
+  // event path never reaches the window listener (review).
   try {
     const proto = HTMLElement.prototype;
     const nativeClick = proto.click;
@@ -1137,7 +1145,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   };
   // Interactive content (HTML spec): a label click that targets one of these,
   // or a descendant of one, does not run the label's activation behaviour
-  // (review B2i/F2).
+  // (review /).
   const isInteractiveContent = (node) => {
     const name = asciiLower(localNameOf(node));
     if (name === 'a') {
@@ -1209,7 +1217,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   // A submit event's effective target is the submitter's non-empty
   // `formtarget`, else the form's `target` — the same rule the click path and
   // the server use. Reading only the form's target over-blocks a
-  // `formtarget="_self"` submit inside a `_blank` form (review B2h low #2).
+  // `formtarget="_self"` submit inside a `_blank` form (review low #2).
   const submitTarget = (event, form) => {
     let submitter = null;
     if (submitterGetter) {
@@ -1245,7 +1253,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
   // document — removes every listener registered on the Document and its Window
   // while the patched prototypes and this closure survive. Re-assert the
   // listener set after each of those calls; re-adding the same reference is a
-  // no-op while it is still installed (review B2g/F2).
+  // no-op while it is still installed (review /).
   const reassertAfterDocumentWrite = (proto, method) => {
     try {
       const native = proto[method];
@@ -1289,7 +1297,7 @@ const POPUP_GUARD_JS_TEMPLATE: &str = r#"(() => {
 /// The isolated-world heartbeat carries its own secret, never the main-world
 /// guard nonce, and a distinct prefix: the page can call `__wwSessionGuard()`
 /// and read that nonce, so a shared value would let it forge the heartbeat
-/// (review B2g/F4). The console handler additionally refuses heartbeats that
+/// (review /). The console handler additionally refuses heartbeats that
 /// arrive from a default (main-world) execution context.
 const INTEGRITY_GUARD_JS_TEMPLATE: &str = r#"
 (() => {
@@ -1746,7 +1754,7 @@ async fn stop_tasks(
 }
 
 // ---------------------------------------------------------------------------
-// Held-page browser sessions
+// Held-page browser sessions (/040)
 // ---------------------------------------------------------------------------
 
 /// Shared per-session request state. Every field is observed by the Fetch
@@ -1787,7 +1795,7 @@ struct SessionNet {
     last_cancel_seq: AtomicU64,
     iw_heartbeat: AtomicBool,
     /// Main-world (default) execution contexts. A heartbeat from one of these
-    /// is page output, not the isolated world (review B2g/F4).
+    /// is page output, not the isolated world (review /).
     default_contexts: StdMutex<std::collections::HashSet<i64>>,
     max_requests: u32,
     max_bytes: u64,
@@ -1846,7 +1854,7 @@ impl SessionNet {
 
     /// An action-level refusal. Unlike a subresource refusal it always names
     /// itself: the prior reason is carried in the detail instead of masking the
-    /// click's own refusal (review B2f/F6).
+    /// click's own refusal (review /).
     fn record_action_block(&self, reason: impl Into<String>, detail: Option<String>) {
         let mut slot = self
             .blocked
@@ -1961,7 +1969,7 @@ impl BrowserRenderer {
         let guard_nonce = uuid::Uuid::now_v7().to_string();
         // The isolated world gets its own secret. The page can call
         // `__wwSessionGuard()` and read the main-world nonce, so a shared value
-        // would let it forge the heartbeat (review B2g/F4).
+        // would let it forge the heartbeat (review /).
         let iw_nonce = uuid::Uuid::now_v7().to_string();
         if !guard_disabled {
             let mut guard =
@@ -2023,7 +2031,7 @@ impl BrowserRenderer {
 
         // Related page/iframe targets (popups, OOPIFs) do not inherit the page
         // Fetch domain: attach them paused and close them before they run
-        // (review F1/F2). Dedicated workers are filtered out --
+        // (review /). Dedicated workers are filtered out --
         // their requests are observed on the page target's Fetch domain.
         let target_filter = TargetFilter::new(vec![
             FilterEntry {
@@ -2333,7 +2341,7 @@ fn clean_target(value: &str) -> String {
 }
 
 /// One node of the hit chain with attributes read from the browser process
-/// (`DOM.getAttributes`), never through page JavaScript (review B2f/F1).
+/// (`DOM.getAttributes`), never through page JavaScript (review /).
 struct ChainNode {
     local_name: String,
     attributes: Vec<String>,
@@ -2349,7 +2357,7 @@ fn attribute_of(attributes: &[String], name: &str) -> Option<String> {
 /// Whether a target name opens a new browsing context. Only the **exact empty
 /// string** falls back to the document's base target; a whitespace-only name is
 /// a named context and the UA creates one (g30 measures it). Keyword names are
-/// ASCII case-insensitive (review B2i/F1). The guard applies the same rule, so
+/// ASCII case-insensitive (review /). The guard applies the same rule, so
 /// the two predicates cannot diverge.
 fn opens_new_context(target: &str, base_target: &str) -> bool {
     // An empty **effective** target falls to the document's base target, then
@@ -2378,7 +2386,7 @@ fn effective_target(target: &str, base_target: &str) -> String {
 }
 
 /// A submit control's form owner, resolved in the control's own tree before the
-/// pure predicate runs.
+/// pure predicate runs (review /, low).
 #[derive(Clone)]
 enum FormOwner {
     /// The control has a form owner; its content `target`, if any.
@@ -2390,7 +2398,7 @@ enum FormOwner {
 
 /// The innermost tree (document or shadow root) containing `chain[index]`.
 /// Resolved per node, so a chain that crosses a declarative boundary never uses
-/// the hit node's tree for an outer-tree control (review B2h low #1).
+/// the hit node's tree for an outer-tree control (review low #1).
 fn tree_root_at(chain: &[DomNode], index: usize) -> Option<&DomNode> {
     chain[..=index]
         .iter()
@@ -2408,7 +2416,7 @@ fn tree_root_index(chain: &[DomNode], index: usize) -> Option<usize> {
 }
 
 /// The nearest ancestor form **inside the node's own tree**; an outer-tree form
-/// above the shadow boundary is not a form owner (review B2i low).
+/// above the shadow boundary is not a form owner (review low).
 fn nearest_ancestor_form(chain: &[DomNode], index: usize) -> Option<&DomNode> {
     let root = tree_root_index(chain, index)?;
     chain[root..index]
@@ -2451,7 +2459,7 @@ fn is_labelable(node: &DomNode) -> bool {
 
 /// Interactive content (HTML spec). A label click that targets one of these, or
 /// a descendant of one, does not run the label's activation behaviour, so the
-/// labeled control must not be modelled (review B2i/F2).
+/// labeled control must not be modelled (review /).
 fn is_interactive_content(node: &DomNode) -> bool {
     let attributes = node.attributes.as_deref().unwrap_or(&[]);
     match node.local_name.to_ascii_lowercase().as_str() {
@@ -2477,7 +2485,7 @@ fn is_interactive_content(node: &DomNode) -> bool {
 /// The control a `<label>` activates: `for` names the first element with that id
 /// in the label's own tree, if labelable; otherwise the first labelable
 /// descendant. A label click on that control is what the press will activate
-/// (review B2h high).
+/// (review high).
 fn find_labeled_control<'a>(tree_root: &'a DomNode, label: &'a DomNode) -> Option<&'a DomNode> {
     let reference = attribute_of(label.attributes.as_deref().unwrap_or(&[]), "for")
         .filter(|value| !value.trim().is_empty());
@@ -2511,7 +2519,7 @@ fn chain_new_context(
         if name == "a" || name == "area" {
             // An anchor/area without `href` is not a link: the UA navigates
             // nowhere (Blink `IsLink()`), so it must not be refused (review
-            // low).
+            //  low).
             if attribute_of(&node.attributes, "href").is_none() {
                 continue;
             }
@@ -2593,7 +2601,7 @@ fn find_node_chain(
 /// The hit node's own document: the innermost `#document` in the chain that
 /// already runs from the root document down to the node, cross-checked against
 /// the frame id the browser reported for the hit. A child-frame hit node
-/// therefore gets its own frame's `<base target>` (review B2f/F1).
+/// therefore gets its own frame's `<base target>` (review /).
 fn chain_document<'a>(chain: &'a [DomNode], frame: &FrameId) -> Option<&'a DomNode> {
     let document = chain
         .iter()
@@ -2698,7 +2706,7 @@ impl BrowserHeldSession {
 
     /// The first `<base>` element that has a `target` attribute, read from the
     /// browser process with `DOM.querySelector` + `DOM.getAttributes`. Page
-    /// JavaScript can neither intercept nor fake this read (review B2f/F1).
+    /// JavaScript can neither intercept nor fake this read (review /).
     async fn base_target_for(&self, document: &DomNode) -> Result<Option<String>> {
         let selected = self
             .page
@@ -2728,7 +2736,7 @@ impl BrowserHeldSession {
     /// own document's `<base target>`, and every attribute read through
     /// `DOM.getAttributes`. No page-realm expression is involved. An
     /// unresolvable tree, document or attribute read refuses the click with a
-    /// typed reason instead of dispatching unchecked (review B2f/F1-F3).
+    /// typed reason instead of dispatching unchecked (review /-).
     async fn pre_click_new_context(&self, point: &Point) -> Result<Option<(String, String)>> {
         if !self.net.guard_enabled {
             return Ok(None);
@@ -2737,7 +2745,7 @@ impl BrowserHeldSession {
         // `ignore_pointer_events_none` makes the hit test see what the click
         // will hit: a `pointer-events:none` overlay is transparent to the
         // press, so it must be transparent to the check as well (review
-        // B2g/F3).
+        // /).
         let hit_params = match GetNodeForLocationParams::builder()
             .x(point.x as i64)
             .y(point.y as i64)
@@ -2802,7 +2810,7 @@ impl BrowserHeldSession {
         // outside the hit chain — a sibling in a closed declarative shadow root,
         // where the guard's composed path is retargeted to the host and `submit`
         // is not composed. Resolve the labeled control and evaluate it with the
-        // same rule (review B2h high).
+        // same rule (review high).
         let Some(label_index) = chain
             .iter()
             .rposition(|node| node.local_name.eq_ignore_ascii_case("label"))
@@ -2812,7 +2820,7 @@ impl BrowserHeldSession {
         // The label's activation behaviour does nothing when the event targets
         // interactive content inside the label (the UA runs that content
         // instead), so the labeled control must not be modelled for this click
-        // (review B2i/F2).
+        // (review /).
         if chain[label_index + 1..].iter().any(is_interactive_content) {
             return Ok(None);
         }
@@ -2896,7 +2904,7 @@ impl BrowserHeldSession {
         // A submit control's form owner is not necessarily an ancestor: a
         // non-empty `form` attribute names a form in the control's own tree,
         // which for a shadow tree is a sibling invisible to the event path
-        // (review).
+        // (review /, low #1).
         let mut owners = Vec::with_capacity(facts.len());
         for (index, fact) in facts.iter().enumerate() {
             let name = fact.local_name.to_ascii_lowercase();
@@ -2951,7 +2959,7 @@ impl BrowserHeldSession {
     /// Scroll the element with the browser's own `DOM.scrollIntoViewIfNeeded`.
     /// `Element::scroll_into_view` runs page JavaScript (`this.scrollIntoView`)
     /// and would give the page a callback between the check and the dispatch
-    /// (review B2f/F2).
+    /// (review /).
     async fn scroll_element_into_view(&self, backend: BackendNodeId) -> Result<()> {
         let params = ScrollIntoViewIfNeededParams::builder()
             .backend_node_id(backend)
@@ -2995,7 +3003,7 @@ impl BrowserHeldSession {
     }
 
     /// A server-owned mouse event at the verified point. No page code decides
-    /// the coordinates (review B2f/F2).
+    /// the coordinates (review /).
     async fn dispatch_mouse(&self, point: &Point, kind: DispatchMouseEventType) -> Result<()> {
         let hover = kind == DispatchMouseEventType::MouseMoved;
         let pressed = kind == DispatchMouseEventType::MousePressed;
@@ -3103,7 +3111,7 @@ impl HeldSession for BrowserHeldSession {
                 .map_err(|error| {
                     WidowError::RenderFailed(format!("load listener failed: {error}"))
                 })?;
-            // Server-owned dispatch (review B2f/F2): the browser scrolls the
+            // Server-owned dispatch (review /): the browser scrolls the
             // element, the point is computed from the browser's own content
             // quads, and the click is dispatched with Input.dispatchMouseEvent
             // at that exact point. `Element::click` is not used: it calls page
@@ -3121,7 +3129,7 @@ impl HeldSession for BrowserHeldSession {
             // The one page-visible step before the check: a hover at the point.
             // Page handlers run here, and the check reads the DOM afterwards, so
             // a hover-triggered layout change is caught before anything is
-            // pressed (review F2).
+            // pressed (review).
             self.dispatch_mouse(&point, DispatchMouseEventType::MouseMoved)
                 .await?;
             if !self.point_is_stable(backend, &point).await? {
@@ -3137,7 +3145,7 @@ impl HeldSession for BrowserHeldSession {
             }
             // Re-read the box immediately before the press: a layout change
             // between the check and the dispatch refuses the click rather than
-            // dispatching at a point that was never verified (review F2).
+            // dispatching at a point that was never verified (review).
             if !self.point_is_stable(backend, &point).await? {
                 self.net.record_action_block(
                     "click_point_moved",
@@ -3722,7 +3730,7 @@ async fn session_fetch_loop(
         }
         // robots.txt governs page fetches, not assets; every request still
         // takes a per-host lease, so the session inherits the ≤1 req/s
-        // politeness floor (review F5).
+        // politeness floor (review).
         let delay = if event.resource_type == ResourceType::Document {
             match tokio::time::timeout(Duration::from_secs(10), net.gate.hop_guard.check(&url))
                 .await
@@ -3811,7 +3819,7 @@ async fn track_session_console(
 /// is authoritative when it is a boolean; a context with no usable flag is
 /// classified by its name (every main world has an empty name, an isolated
 /// world carries its world name). Unknown metadata therefore fails closed for
-/// heartbeat acceptance (review B2h low #3).
+/// heartbeat acceptance (review low #3).
 fn is_default_context(name: &str, aux_data: Option<&serde_json::Value>) -> bool {
     match aux_data
         .and_then(|aux| aux.get("isDefault"))
@@ -3829,7 +3837,7 @@ fn heartbeat_accepted(secret_matches: bool, context_is_known_default: bool) -> b
 }
 
 /// Track which execution contexts are the page's main worlds, so the
-/// isolated-world heartbeat cannot be forged from the page (review B2g/F4).
+/// isolated-world heartbeat cannot be forged from the page (review /).
 async fn track_execution_contexts(
     mut created: chromiumoxide::listeners::EventStream<EventExecutionContextCreated>,
     mut cleared: chromiumoxide::listeners::EventStream<EventExecutionContextsCleared>,
@@ -4124,7 +4132,7 @@ mod tests {
 /// Pure tests for the new-context model and the heartbeat classification. They
 /// need no browser: the nodes are deserialized CDP `DOM.Node` values, so the
 /// tree-shape rules (same tree, duplicate ids, nesting) are exercised directly
-/// (review B2h low #1 and low #3).
+/// (review low #1 and low #3).
 #[cfg(test)]
 mod b2h_tests {
     use super::*;

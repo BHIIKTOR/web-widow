@@ -1,5 +1,5 @@
-//! transport experiment as a test: E1-E6 plus a 10-call burst and the
-//! Access-log safety assertion.
+//! transport experiment as a test: six probes plus a 10-call burst and the
+//! access-log safety assertion (…).
 //!
 //! Only built with the `http` feature. The server is a real child process; the
 //! requests use explicit headers (not the SDK), so a stale or absent
@@ -198,7 +198,7 @@ async fn stateless_transport_survives_parallel_calls_and_ignores_session_ids() {
     wait_ready(&url).await;
     let client = reqwest::Client::new();
 
-    // E1: initialize, then 7 concurrent calls with the returned id (or a
+    // initialize, then 7 concurrent calls with the returned id (or a
     // synthetic one when stateless mode issues no id).
     let (status, headers, initialize_payload) = initialize(&client, &url, token).await;
     assert_eq!(status, StatusCode::OK);
@@ -231,7 +231,7 @@ async fn stateless_transport_survives_parallel_calls_and_ignores_session_ids() {
         assert!(parse(&body).is_some(), "{body}");
     }
 
-    // E2: 7 concurrent initializes, then one call on each id (synthetic when
+    // 7 concurrent initializes, then one call on each id (synthetic when
     // the stateless server issues none).
     let mut handles = Vec::new();
     for _ in 0..7 {
@@ -276,16 +276,16 @@ async fn stateless_transport_survives_parallel_calls_and_ignores_session_ids() {
         assert_eq!(status, StatusCode::OK, "{body}");
     }
 
-    // E3: a well-formed stale id is ignored, not 404.
+    // a well-formed stale id is ignored, not 404.
     let (status, _, body) = post(&client, &url, token, Some(STALE), &call_body(30)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert!(!body.contains("Session not found"), "{body}");
 
-    // E4: no session header is a normal call.
+    // no session header is a normal call.
     let (status, _, body) = post(&client, &url, token, None, &call_body(31)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
-    // E5: DELETE is not served; a call with the ignored id still works.
+    // DELETE is not served; a call with the ignored id still works.
     let response = client
         .delete(&url)
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -304,7 +304,7 @@ async fn stateless_transport_survives_parallel_calls_and_ignores_session_ids() {
     let (status, _, body) = post(&client, &url, token, Some(&e1_session), &call_body(32)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
-    // E6: GET is not served; no server-initiated messages.
+    // GET is not served; no server-initiated messages.
     let response = client
         .get(&url)
         .header(AUTHORIZATION, format!("Bearer {token}"))

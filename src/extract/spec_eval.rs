@@ -728,7 +728,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // `:main` roots at the article body and `*` is the record scope
+    //  — `:main` roots at the article body and `*` is the record scope
     // -----------------------------------------------------------------------
 
     const ARTICLE_DOC: &str = r#"<!doctype html>

@@ -4,7 +4,7 @@
 //! The model/runtime are provisioned artifacts, not crates. Like the render and
 //! PDF suites, a test that needs them prints `SKIP` and returns when
 //! `WEB_WIDOW_ORT_PATH` / `WEB_WIDOW_MODEL_DIR` are absent, so the ordinary suite
-//! stays hermetic. The gate and the E1 drill set both variables.
+//! stays hermetic. The gate and the semantic drill set both variables.
 
 mod common;
 

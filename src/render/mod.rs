@@ -110,7 +110,7 @@ impl DimensionsSource {
     }
 }
 
-/// The settled page plus its PNG capture (`screenshot`). No
+/// The settled page plus its PNG capture (`screenshot`,). No
 /// caller-supplied path or bytes ever reach the renderer.
 #[derive(Debug, Clone)]
 pub struct CapturedPage {

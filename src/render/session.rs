@@ -1,4 +1,4 @@
-//! Held-page session port.
+//! Held-page session port (/040).
 //!
 //! The interaction layer drives a held page only through [`HeldSession`], so it
 //! never names `chromiumoxide` and the static-only build still compiles. The

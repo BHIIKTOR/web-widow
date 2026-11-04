@@ -26,8 +26,8 @@ pub use compare::PageVersionRow;
 pub use corpus::CorpusPageRow;
 pub use datadir::{DataDir, write_private};
 pub use db::{
-    BlobRow, CachedExtraction, ContentHitRow, ContentHits, Database, ExtractionRow, FetchRecord,
-    GcReport, HostRow, IndexText, IndexWrite, PageRecord, ProfileRow, Recorded,
+    AuthAuditRow, BlobRow, CachedExtraction, ContentHitRow, ContentHits, Database, ExtractionRow,
+    FetchRecord, GcReport, HostRow, IndexText, IndexWrite, PageRecord, ProfileRow, Recorded,
 };
 pub use embeddings::{EmbeddingCandidate, EmbeddingCounts, NewEmbedding, SemanticChunkRow};
 pub use jobs::{CrawlResultRow, FrontierCounts, JobCounters, JobRow, LeasedUrl, NewJob, Seed};
@@ -53,8 +53,13 @@ pub struct Store {
 impl Store {
     /// Open (and migrate) the store. `fts` supplies the index-text cap the v6
     /// backfill applies to the pages that predate the index.
-    pub fn open(paths: &Paths, fts: &FtsConfig) -> Result<Self> {
-        let db = Arc::new(Database::open(&paths.database(), READ_CONNECTIONS, fts)?);
+    pub fn open(paths: &Paths, fts: &FtsConfig, index_authenticated: bool) -> Result<Self> {
+        let db = Arc::new(Database::open(
+            &paths.database(),
+            READ_CONNECTIONS,
+            fts,
+            index_authenticated,
+        )?);
         let blobs = BlobStore::new(paths.blobs());
         Ok(Self {
             db,
@@ -75,8 +80,16 @@ impl Store {
 
     /// Prune expired rows and enforce the blob budget, then remove the files
     /// whose rows were deleted. Idempotent and safe to interrupt.
-    pub async fn gc(&self, retention: RetentionConfig) -> Result<GcReport> {
-        let report = self.db.gc(retention).await?;
+    pub async fn gc(
+        &self,
+        retention: RetentionConfig,
+        auth_audit_days: u32,
+        auth_page_days: u32,
+    ) -> Result<GcReport> {
+        let report = self
+            .db
+            .gc(retention, auth_audit_days, auth_page_days)
+            .await?;
         for hash in &report.removed_blobs {
             if let Err(error) = self.blobs.remove(hash).await {
                 tracing::warn!(hash = %hash, error = %error, "could not remove evicted blob");

@@ -1,6 +1,6 @@
 //! /: the bundled SQLite must compile FTS5 in.
 //!
-//! This is the verification gate for v0.5
+//! This is the verification gate for v0.5 Lane B: the plan's no-manifest-change
 //! premise holds only if the already-bundled engine exposes FTS5. The test also
 //! pins the two SQL shapes the store depends on (rowid upsert, `bm25`, `snippet`)
 //! so a bundled-engine change cannot silently remove them.

@@ -93,7 +93,7 @@ fn urls(rows: &[serde_json::Value]) -> BTreeSet<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Traversal and the exact fetched URL set
+//  — traversal and the exact fetched URL set
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -164,7 +164,7 @@ async fn fixture_site_fetches_exactly_the_expected_url_set() {
 }
 
 // ---------------------------------------------------------------------------
-// Canonicalization is enforced at the frontier
+//  — canonicalization is enforced at the frontier
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -222,7 +222,7 @@ async fn canonical_variants_fetch_once_and_trailing_slash_is_distinct() {
 }
 
 // ---------------------------------------------------------------------------
-// Robots survives the crawl, including redirects into a blocked subtree
+//  — robots survives the crawl, including redirects into a blocked subtree
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -258,7 +258,7 @@ async fn robots_disallowed_subtree_is_never_requested() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-host rate applies to the crawl, measured server-side
+//  — per-host rate applies to the crawl, measured server-side
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -306,7 +306,7 @@ async fn per_host_interval_holds_across_a_hundred_requests() {
 }
 
 // ---------------------------------------------------------------------------
-// Max_pages stops cleanly and results paginate
+//  — max_pages stops cleanly and results paginate
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -364,7 +364,7 @@ async fn max_pages_stops_cleanly_and_pagination_round_trips() {
 }
 
 // ---------------------------------------------------------------------------
-// Calendar trap stops at the near-duplicate rule
+//  — calendar trap stops at the near-duplicate rule
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -401,7 +401,7 @@ async fn calendar_trap_stops_at_the_near_duplicate_rule() {
 }
 
 // ---------------------------------------------------------------------------
-// Cooperative cancel
+//  — cooperative cancel
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -457,7 +457,7 @@ async fn cancel_stops_leasing_and_keeps_partial_results() {
 }
 
 // ---------------------------------------------------------------------------
-// Schema-driven mining, and fail-fast on an invalid schema
+//  — schema-driven mining, and fail-fast on an invalid schema
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

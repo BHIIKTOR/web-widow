@@ -1,4 +1,4 @@
-//! A3 — golden corpus: Markdown snapshots paired with independently written
+//! Golden corpus: Markdown snapshots paired with independently written
 //! must-contain / must-not-contain assertions (§2).
 //!
 //! The snapshots are regression evidence; the assertions are the quality
@@ -263,7 +263,7 @@ fn latin1_fixture_decodes_through_the_charset_layer() {
 
 #[test]
 fn section_heading_fixture_reproduces_the_readability_drop() {
-    // Premise of the A3 repair: readability's assembled content carries no
+    // Premise of the repair: readability's assembled content carries no
     // heading at all for this page class, so the Markdown headings in the
     // snapshot can only come from `extract::headings`. If a future
     // `dom_smoothie` keeps them, this test fails and the repair should be

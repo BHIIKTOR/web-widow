@@ -1,4 +1,4 @@
-//! v0.6 — `robots_cache` (C3-1, C3-2): cache listing, path probe and the
+//! v0.6 — `robots_cache`: cache listing, path probe and the
 //! zero-network proof.
 
 mod common;

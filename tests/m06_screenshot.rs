@@ -1,4 +1,5 @@
-//! v0.6 — `screenshot` + `blob_get`.
+//! v0.6 — `screenshot` + `blob_get` (checks …,
+//! …).
 //!
 //! Lane-local fixture server: `tests/fixtures/m06/browser/` (tall, styled with
 //! CSS/font/image/media, plain) plus a robots.txt that disallows `/private`.
@@ -374,6 +375,7 @@ async fn blob_get_returns_the_cas_path_size_mime_and_bounded_references() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("page fetch");
@@ -501,7 +503,7 @@ async fn a_screenshot_blob_is_retained_then_collectable_after_its_row_is_removed
     retention.extractions_days = 3_650;
     let report = env
         .store
-        .gc(retention)
+        .gc(retention, env.config.auth.audit_days, 7)
         .await
         .expect("gc with the row present");
     assert_eq!(report.removed_blobs, Vec::<String>::new());
@@ -514,7 +516,11 @@ async fn a_screenshot_blob_is_retained_then_collectable_after_its_row_is_removed
     retention.screenshots_days = 3_650;
     retention.extractions_days = 3_650;
     retention.max_blob_bytes = 0;
-    let report = env.store.gc(retention).await.expect("gc without the row");
+    let report = env
+        .store
+        .gc(retention, env.config.auth.audit_days, 7)
+        .await
+        .expect("gc without the row");
     assert_eq!(report.removed_blobs, vec![payload.hash.clone()]);
     assert!(!blob_path.exists(), "the CAS file is removed");
     assert_eq!(blobs_rows(&env), 0);
@@ -565,6 +571,7 @@ async fn the_visual_profile_loads_assets_and_the_text_profile_keeps_blocking_the
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("text-profile render");

@@ -982,7 +982,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // One main-article source, one readability pass
+    //  — one main-article source, one readability pass
     // -----------------------------------------------------------------------
 
     const SCOPE_PAGE: &str = r#"<!doctype html>

@@ -19,6 +19,7 @@ fn input(url: String) -> FetchPageInput {
         max_chars: None,
         include_links: None,
         include_content: None,
+        profile: None,
     }
 }
 

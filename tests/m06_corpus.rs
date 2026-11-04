@@ -1,8 +1,9 @@
-//! `corpus_export` (JSONL + markdown) and `snapshot_compare`
+//! v0.6 — `corpus_export` (JSONL + markdown) and `snapshot_compare`
 //! (monitor snapshots and page fetch versions).
 //!
 //! Lane-local fixture server and helpers; `tests/common/mod.rs` is untouched.
-//! The live store is never opened here: the live check is the copy drill.
+//! The live store is never opened here: the live check is a copy drill run
+//! against a copied data directory.
 
 mod common;
 
@@ -272,7 +273,7 @@ async fn fetch_page(env: &common::TestEnv, url: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// A3-1 — JSONL shape, required keys, and the corpus boundary
+// JSONL shape, required keys, and the corpus boundary
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -418,7 +419,7 @@ async fn site_since_and_limit_filters_select_the_rows() {
 }
 
 // ---------------------------------------------------------------------------
-// A3-2 — markdown export
+// markdown export
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -480,7 +481,7 @@ fn db_url_hash(env: &common::TestEnv, url: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// A3-3 — bounds
+// bounds
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -521,7 +522,7 @@ async fn the_byte_budget_and_the_row_cap_are_reported() {
 }
 
 // ---------------------------------------------------------------------------
-// A3-4 — path safety
+// path safety
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -574,7 +575,7 @@ async fn exports_land_under_a_private_directory_and_are_never_overwritten() {
 }
 
 // ---------------------------------------------------------------------------
-// A3-5 — monitor pairs
+// monitor pairs
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -721,7 +722,7 @@ async fn a_schema_monitor_also_reports_record_changes() {
 }
 
 // ---------------------------------------------------------------------------
-// A3-6 — page fetch versions
+// page fetch versions
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -785,7 +786,7 @@ async fn page_versions_compare_as_stored_and_a_missing_extraction_is_typed() {
 }
 
 // ---------------------------------------------------------------------------
-// A3-8 — the corpus boundary and the content scope stay intact
+// the corpus boundary and the content scope stay intact
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

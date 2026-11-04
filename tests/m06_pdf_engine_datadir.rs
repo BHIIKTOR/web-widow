@@ -1,4 +1,4 @@
-//! C2-9 — the `<data_dir>/lib/libpdfium.so` candidate loads the engine.
+//! The `<data_dir>/lib/libpdfium.so` candidate loads the engine.
 //!
 //! Own process: the env variable is removed and the exe directory is not given
 //! a library, so the data-dir candidate is the first that exists.

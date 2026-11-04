@@ -1,4 +1,4 @@
-//! The packaged release — SIGTERM during a real crawl: the process exits within 10 s, the
+//!   — SIGTERM during a real crawl: the process exits within 10 s, the
 //! data-directory lock is released, the throwaway Chrome profile is wiped and
 //! the persisted job is in a clean, recoverable state.
 //!

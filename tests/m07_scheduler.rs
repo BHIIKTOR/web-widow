@@ -1,7 +1,7 @@
 //! v0.7 integration: the opt-in in-process scheduler.
 //!
 //! The timer-only test makes no `run-due` call: it starts the task, waits for a
-//! tick, and reads the DB. W1 enqueue is exercised by enabling `[webhooks]` with
+//! tick, and reads the DB. enqueue is exercised by enabling `[webhooks]` with
 //! an attachment but never spawning the dispatcher (TestEnv has no background
 //! tasks), so the assertion sees the outbox row, not a network attempt.
 
@@ -69,7 +69,7 @@ fn scheduler_config() -> web_widow::config::Config {
     config.monitor.min_interval_s = 1;
     config.monitor.default_interval_s = 1;
     config.monitor.max_interval_s = 60;
-    // W1 enqueue is on, but TestEnv never spawns the dispatcher.
+    //  enqueue is on, but TestEnv never spawns the dispatcher.
     config.webhooks.enabled = true;
     config.webhooks.targets.insert(
         "ops".to_string(),
@@ -138,10 +138,7 @@ async fn timer_alone_checks_a_due_monitor_and_enqueues_the_change() {
     let stopped = tokio::time::timeout(Duration::from_secs(2), handle)
         .await
         .is_ok();
-    assert!(
-        observed,
-        "the timer checked the due monitor and enqueued W1"
-    );
+    assert!(observed, "the timer checked the due monitor and enqueued ");
     assert!(stopped, "the timer stops on cancellation");
     assert_eq!(count(&env, "SELECT COUNT(*) FROM snapshots"), 2);
     assert_eq!(count(&env, "SELECT COUNT(*) FROM webhook_deliveries"), 1);

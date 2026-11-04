@@ -1,4 +1,4 @@
-//! C2-9 — `[pdf].pdfium_path` is strict and fails before any request.
+//! `[pdf].pdfium_path` is strict and fails before any request.
 //!
 //! This file is its own process, so the process-wide engine cache is empty and
 //! the failure is the real load error, not an "already loaded" state.

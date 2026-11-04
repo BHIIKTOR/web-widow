@@ -1,4 +1,4 @@
-//! C2-9 — the env candidate loads the engine (discovery order, first entry).
+//! The env candidate loads the engine (discovery order, first entry).
 //!
 //! Own process: the env variable is set before the first call, so the engine
 //! binds the provisioned library and a PDF extraction succeeds. A second

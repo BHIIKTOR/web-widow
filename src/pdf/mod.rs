@@ -1,4 +1,4 @@
-//! PDF text-layer extraction (PDFium 8125).
+//! PDF text-layer extraction (/, PDFium 8125).
 //!
 //! Pure parse: bytes + limits in, a bounded document model or a typed error out.
 //! Fetching (SSRF, robots, politeness, the PDF-specific content scope) stays in
@@ -9,7 +9,7 @@
 //! controls, and no OCR/images/forms/JavaScript are used.
 //!
 //! Version pinning: the bindings are `pdfium_8125`; the deployment records the
-//! library file's version and SHA-256 (see the C2 card).
+//! library file's version and SHA-256 (see the PDF notes).
 
 pub mod engine;
 
@@ -366,7 +366,7 @@ mod tests {
         assert!(parsed.markdown.contains("PAGE_TWO_MARKER"));
         assert_eq!(
             parsed.metadata.title.as_deref(),
-            Some("M06 C2 simple fixture")
+            Some("v0.6 simple fixture")
         );
         assert_eq!(parsed.metadata.author.as_deref(), Some("Fixture Author"));
         assert_eq!(

@@ -1,6 +1,6 @@
 //! Recipe storage: the name/version layer over `profiles`.
 //!
-//! P0 created `recipes` and `recipe_versions`; this module is the only writer.
+//! `recipes` and `recipe_versions` exist; this module is the only writer.
 //! The spec text stays in `profiles` (content-addressed), so a version row is a
 //! pointer: advancing a recipe adds rows and never edits a spec or a monitor's
 //! `profile_hash`.

@@ -1,6 +1,6 @@
 # Dependency gate configuration.
 #
-# The allow list below is the actual license policy for this stack: every
+# The allow list below is the actual license policy for the v0.1 stack: every
 # entry is a license family present in the resolved graph and acceptable for a
 # locally used, non-redistributed binary. A new crate with a license outside the
 # list fails the gate instead of entering silently.
@@ -11,15 +11,28 @@ all-features = true
 
 [advisories]
 ignore = [
-    # G1 — RUSTSEC-2024-0436: `paste 1.0.15` is unmaintained (the repository was
+    # RUSTSEC-2024-0436: `paste 1.0.15` is unmaintained (the repository was
     # archived), not vulnerable. Chain: fastembed 7.5.0 -> tokenizers 0.23.2 ->
     # paste 1.0.15, where paste is a compile-time proc-macro only (no runtime
     # input reaches it). No safe upgrade exists inside the granted chain:
     # tokenizers 0.23.2 is the latest 0.23 and 1.0.0-rc.3 is a different major.
     # Review/remove this ignore when fastembed/tokenizers drops paste, when
     # paste/pastey maintenance changes, or when any new advisory enters this
-    # chain; the E1 evidence (EV-E1) records the disposition.
+    # chain; this file records the disposition.
     "RUSTSEC-2024-0436",
+    # The session keyring chain is pinned to zbus 5: keyring 4.2.0 ->
+    # zbus-secret-service-keyring-store 1.0.1 -> secret-service 5.2.0 -> zbus
+    # 5.19.0 -> zvariant 5.15.1 + zbus_names 4.3.5. The three crates are
+    # *unmaintained* (merged into zbus 6.0.0 as modules), not vulnerable: no
+    # RUSTSEC advisory for them describes an exploitable defect, and the
+    # keyring crate exposes no store that speaks zbus 6 yet (`secret-service`
+    # and `zbus-secret-service-keyring-store` both require `^5`). The
+    # alternative `dbus-secret-service-keyring-store` needs libdbus, which is
+    # not available on the target units. Remove these ignores when the keyring
+    # store moves to zbus 6; the migration trigger is that release.
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
 ]
 
 [licenses]

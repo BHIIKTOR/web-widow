@@ -1,9 +1,9 @@
-//! v0.5
+//! v0.5 Lane B — the local full-text index and `search_content` over the real
 //! store and pipeline paths.
 //!
-//! Is driven through `fetch_page`, `extract`, `crawl_page` and
+//! is driven through `fetch_page`, `extract`, `crawl_page` and
 //! `monitor_fetch`, never by inserting an FTS row: the claim under test is that
-//! Every acquisition path maintains the index. / check the query
+//! every acquisition path maintains the index. / check the query
 //! contract on the store's own write API, where the fixture data is precise.
 
 mod common;

@@ -1,4 +1,4 @@
--- Migration 004_monitor_render.sql — schema v4 (B05 repair).
+-- Migration 004_monitor_render.sql — schema v4 (repair).
 --
 -- A monitor check's render mode is part of its result: the 304 short-circuit is
 -- only sound when the previous check was static, because a rendered check

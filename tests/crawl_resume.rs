@@ -1,4 +1,4 @@
-//! Crash and resume with a real process: SIGKILL mid-crawl, restart
+//!   — crash and resume with a real process: SIGKILL mid-crawl, restart
 //! on the same data directory, and the frontier continues without re-fetching
 //! what was already completed.
 

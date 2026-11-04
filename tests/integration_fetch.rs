@@ -1,4 +1,4 @@
-//! Integration behaviour against a local scripted HTTP server (A4–A9).
+//! Integration behaviour against a local scripted HTTP server.
 //!
 //! Every test asserts a server-visible fact (request log, stored rows, blob
 //! count) rather than only the tool output, so a check cannot pass by accident
@@ -26,7 +26,7 @@ fn error_code(error: &WidowError) -> ErrorCode {
 }
 
 // ---------------------------------------------------------------------------
-// A4 — SSRF gate on every hop
+// SSRF gate on every hop
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -131,7 +131,7 @@ async fn a_loopback_site_without_the_allowlist_is_blocked() {
 }
 
 // ---------------------------------------------------------------------------
-// A5 — caps
+// caps
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -248,7 +248,7 @@ async fn other_5xx_is_retried_once() {
 }
 
 // ---------------------------------------------------------------------------
-// A6 — robots enforcement, with server-side assertions
+// robots enforcement, with server-side assertions
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -410,6 +410,7 @@ async fn robots_override_is_off_by_default() {
             "include_links",
             "max_chars",
             "mode",
+            "profile",
             "render",
             "url"
         ]
@@ -417,7 +418,7 @@ async fn robots_override_is_off_by_default() {
 }
 
 // ---------------------------------------------------------------------------
-// A7 — CAS dedup and conditional GET
+// CAS dedup and conditional GET
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -489,6 +490,7 @@ async fn freshness_window_never_touches_the_network() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();
@@ -502,7 +504,7 @@ async fn freshness_window_never_touches_the_network() {
 }
 
 // ---------------------------------------------------------------------------
-// A8 — charset
+// charset
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -523,7 +525,7 @@ async fn latin1_page_is_decoded_via_meta_charset() {
 }
 
 // ---------------------------------------------------------------------------
-// A9 — truncation
+// truncation
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -539,6 +541,7 @@ async fn truncation_is_flagged_and_never_exceeds_the_cap() {
             max_chars: Some(40),
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();
@@ -564,6 +567,7 @@ async fn per_call_cap_cannot_exceed_the_server_cap() {
             max_chars: Some(10_000_000),
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();
@@ -602,6 +606,7 @@ async fn render_always_is_render_unavailable() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap_err();
@@ -623,6 +628,7 @@ async fn scripts_and_styles_never_reach_the_markdown() {
                 max_chars: None,
                 include_links: None,
                 include_content: None,
+                profile: None,
             })
             .await
             .unwrap();
@@ -650,6 +656,7 @@ async fn metadata_and_links_are_reported() {
             max_chars: None,
             include_links: Some(true),
             include_content: None,
+            profile: None,
         })
         .await
         .unwrap();

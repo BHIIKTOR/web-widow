@@ -8,13 +8,28 @@ license = "MIT"
 publish = false
 
 [features]
+# Test-harness only: adds a permissive `AuthEgressPolicy` constructor so a
+# policy-inversion drill can prove the gate's policy is the control. Off in
+# every shipped build; adds no dependency.
+gate-drill = []
 # JavaScript rendering. Enabled by default so the
 # ordinary `web-widow` binary can render; `--no-default-features` produces the
 # static-only build that must keep working without Chrome or CDP.
 default = ["render"]
 render = ["dep:chromiumoxide", "dep:futures-util"]
-# Loopback streamable HTTP transport.
-http = ["dep:axum", "rmcp/transport-streamable-http-server"]
+# Loopback streamable HTTP transport, and the v0.8 local-TLS listener. The TLS dependencies are only compiled with
+# this feature; the stdio and static-only builds stay unchanged.
+http = [
+    "dep:axum",
+    "dep:rcgen",
+    "dep:tokio-rustls",
+    "dep:rustls",
+    "dep:rustls-pki-types",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:time",
+    "rmcp/transport-streamable-http-server",
+]
 
 [lib]
 name = "web_widow"
@@ -29,6 +44,10 @@ anyhow = "1.0.104"
 axum = { version = "0.8.9", optional = true }
 blake3 = "1.8.7"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+base64 = "0.23"
+# Session envelope AEAD (XChaCha20-Poly1305) and the OS keyring for the data key.
+chacha20poly1305 = { version = "0.11.0", features = ["zeroize"] }
+keyring = { version = "4.2.0", default-features = false, features = ["v1"] }
 clap = { version = "4.6.7", features = ["derive"] }
 dirs = "7.0.0"
 ego-tree = "0.11.1"
@@ -74,7 +93,8 @@ sha2 = { version = "0.11.1", default-features = false, features = ["alloc"] }
 similar = "3.2.1"
 texting_robots = "0.2.2"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "sync", "fs", "signal", "macros", "io-util"] }
+zeroize = "1.9"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "sync", "fs", "signal", "macros", "io-util", "process"] }
 tokio-util = "0.7.20"
 toml = "1.1.8"
 tracing = "0.1.44"
@@ -83,6 +103,13 @@ url = "2.5.8"
 uuid = { version = "1.29.0", features = ["v7"] }
 chromiumoxide = { version = "0.9.1", default-features = false, optional = true }
 futures-util = { version = "0.3.31", default-features = false, features = ["std"], optional = true }
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"], optional = true }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "tls12", "aws_lc_rs"], optional = true }
+rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs", "logging", "tls12", "std"], optional = true }
+rustls-pki-types = { version = "1.15.1", features = ["std"], optional = true }
+time = { version = "0.3.53", default-features = false, features = ["std"], optional = true }
+hyper = { version = "1.12.0", default-features = false, features = ["server", "http1"], optional = true }
+hyper-util = { version = "0.1.21", default-features = false, features = ["service", "server-graceful", "tokio"], optional = true }
 
 [dev-dependencies]
 axum = "0.8.9"

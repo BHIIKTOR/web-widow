@@ -118,6 +118,17 @@ pub async fn serve(
     feed: FeedRoute,
     shutdown: CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    serve_with_scheme(server, addr, token, feed, shutdown, "http").await
+}
+
+async fn serve_with_scheme(
+    server: WebWidowServer,
+    addr: SocketAddr,
+    token: String,
+    feed: FeedRoute,
+    shutdown: CancellationToken,
+    scheme: &'static str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let local = listener.local_addr()?;
     if !feed_bind_allowed(&local, feed.enabled) {
@@ -131,7 +142,129 @@ pub async fn serve(
         .into());
     }
     let token: Arc<str> = Arc::from(token);
+    let router = build_router(
+        server,
+        Arc::clone(&token),
+        &feed,
+        local,
+        shutdown.child_token(),
+    );
+    if feed.enabled {
+        feed.events
+            .runtime()
+            .set_url(Some(format!("{scheme}://{local}/feeds/changes.xml")));
+    }
+    tracing::info!(
+        %local,
+        auth = "bearer",
+        stateless = true,
+        feed = if feed.enabled { "enabled" } else { "disabled" },
+        "serving MCP over streamable HTTP at /mcp"
+    );
+    let outcome = axum::serve(listener, router)
+        .with_graceful_shutdown(async move { shutdown.cancelled().await })
+        .await;
+    feed.events.runtime().set_url(None);
+    outcome?;
+    Ok(())
+}
 
+/// Serve the same router over an HTTPS listener with the prepared material.
+/// The TLS handshake is the only difference; bearer, feed, access log and the
+/// loopback posture are the shared router's behavior.
+pub async fn serve_tls(
+    server: WebWidowServer,
+    addr: SocketAddr,
+    token: String,
+    feed: FeedRoute,
+    tls: crate::tls::TlsMaterial,
+    shutdown: CancellationToken,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let local = listener.local_addr()?;
+    if !feed_bind_allowed(&local, feed.enabled) {
+        drop(listener);
+        return Err(format!(
+            "refusing to serve the change feed on a non-loopback address ({local}); \
+             set `[events].feed_enabled = false` for an MCP-only network deployment"
+        )
+        .into());
+    }
+    let token: Arc<str> = Arc::from(token);
+    let router = build_router(
+        server,
+        Arc::clone(&token),
+        &feed,
+        local,
+        shutdown.child_token(),
+    );
+    if feed.enabled {
+        feed.events
+            .runtime()
+            .set_url(Some(format!("https://{local}/feeds/changes.xml")));
+    }
+    let acceptor = tokio_rustls::TlsAcceptor::from(tls.config.clone());
+    let graceful = hyper_util::server::graceful::GracefulShutdown::new();
+    tracing::info!(
+        %local,
+        auth = "bearer",
+        stateless = true,
+        feed = if feed.enabled { "enabled" } else { "disabled" },
+        tls = tls.source.as_str(),
+        ca_path = ?tls.ca_path,
+        "serving MCP over TLS at /mcp"
+    );
+
+    let result: Result<(), Box<dyn std::error::Error + Send + Sync>> = async {
+        let shutdown = shutdown;
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                accepted = listener.accept() => {
+                    let (stream, peer) = accepted?;
+                    let acceptor = acceptor.clone();
+                    let router = router.clone();
+                    let watcher = graceful.watcher();
+                    tokio::spawn(async move {
+                        match acceptor.accept(stream).await {
+                            Ok(tls_stream) => {
+                                let io = hyper_util::rt::TokioIo::new(tls_stream);
+                                let service = hyper_util::service::TowerToHyperService::new(router);
+                                let connection = hyper::server::conn::http1::Builder::new()
+                                    .serve_connection(io, service);
+                                if let Err(error) = watcher.watch(connection).await {
+                                    tracing::debug!(%peer, error = %error, "TLS connection ended");
+                                }
+                            }
+                            Err(error) => {
+                                tracing::debug!(%peer, error = %error, "TLS handshake failed");
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        if tokio::time::timeout(std::time::Duration::from_secs(10), graceful.shutdown())
+            .await
+            .is_err()
+        {
+            tracing::warn!("TLS server did not drain within 10 s");
+        }
+        Ok(())
+    }
+    .await;
+    feed.events.runtime().set_url(None);
+    result?;
+    Ok(())
+}
+
+fn build_router(
+    server: WebWidowServer,
+    token: Arc<str>,
+    feed: &FeedRoute,
+    local: SocketAddr,
+    service_shutdown: CancellationToken,
+) -> Router {
     // Defaults keep Host validation to loopback. A deliberate non-loopback bind
     // still only accepts the bound IP (remote exposure is out of v0.1 scope).
     let allowed_hosts = vec![
@@ -142,7 +275,7 @@ pub async fn serve(
         "::1".to_string(),
     ];
     let config = StreamableHttpServerConfig::default()
-        .with_cancellation_token(shutdown.child_token())
+        .with_cancellation_token(service_shutdown)
         // JSON for simple request/response tools; the service falls back to SSE
         // when a handler emits a notification first.
         .with_json_response(true)
@@ -163,36 +296,17 @@ pub async fn serve(
         .layer(middleware::from_fn_with_state(token, require_bearer));
     let feed_state = FeedState {
         enabled: feed.enabled,
-        token: feed.token.map(Arc::from),
+        token: feed.token.clone().map(Arc::from),
         events: Arc::clone(&feed.events),
     };
     let feed_router = Router::new()
         .route("/feeds/changes.xml", get(feed_changes))
         .with_state(feed_state);
-    let router = Router::new()
+    Router::new()
         .merge(mcp)
         .merge(feed_router)
         // Outer: request diagnostics for both routes, so 401/404s are visible.
-        .layer(middleware::from_fn(access_log));
-
-    if feed.enabled {
-        feed.events
-            .runtime()
-            .set_url(Some(format!("http://{local}/feeds/changes.xml")));
-    }
-    tracing::info!(
-        %local,
-        auth = "bearer",
-        stateless = true,
-        feed = if feed.enabled { "enabled" } else { "disabled" },
-        "serving MCP over streamable HTTP at /mcp"
-    );
-    let outcome = axum::serve(listener, router)
-        .with_graceful_shutdown(async move { shutdown.cancelled().await })
-        .await;
-    feed.events.runtime().set_url(None);
-    outcome?;
-    Ok(())
+        .layer(middleware::from_fn(access_log))
 }
 
 /// `GET /feeds/changes.xml?token=<capability token>`: the RSS document from the

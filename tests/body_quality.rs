@@ -1,7 +1,7 @@
-//! Structured body and extract quality.
+//! v0.3 — structured body and extract quality.
 //!
-//! Every fixture is served by the loopback fixture server; the red baselines
-//! were captured separately against the previous binary.
+//! Every fixture is served by the loopback fixture server; the pre-change
+//! baselines were captured separately against the previous binary.
 
 mod common;
 
@@ -33,6 +33,7 @@ fn fetch_input(
         max_chars: None,
         include_links: None,
         include_content,
+        profile: None,
     }
 }
 
@@ -118,7 +119,7 @@ fn latest_extraction_json(env: &TestEnv) -> Value {
     serde_json::from_str(&stored).unwrap()
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn structured_body_crosses_and_the_cache_stores_it_once() {
     let fixture = start_fixture().await;
@@ -218,7 +219,7 @@ async fn a_pre_m03_cached_payload_delivers_the_body() {
     );
 }
 
-// -----------------------------------------------------------------------
+//  -----------------------------------------------------------------------
 #[tokio::test]
 async fn visible_text_transforms_skip_script_style_and_template() {
     let fixture = start_fixture().await;
@@ -288,7 +289,7 @@ async fn visible_text_transforms_skip_script_style_and_template() {
     assert!(!body.contains("AAAA"));
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn extract_caps_are_presentation_only_and_cache_full_values() {
     let fixture = start_fixture().await;
@@ -404,10 +405,10 @@ async fn max_records_takes_precedence_over_the_new_caps() {
     assert_eq!(payload.truncated_fields, 1);
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn rendered_extract_carries_the_thin_signal() {
-    let (fixture, env) = env_with_renderer(common::M03_THIN_SHELL, false).await;
+    let (fixture, env) = env_with_renderer(common::THIN_SHELL, false).await;
     let payload = env
         .pipeline
         .extract(extract_input(
@@ -461,7 +462,7 @@ async fn rendered_extract_carries_the_thin_signal() {
     assert_eq!(static_payload.render_mode, "static");
     assert!(static_payload.render_quality.is_none());
 
-    let (fixture, env) = env_with_renderer(common::M03_THIN_SHELL, true).await;
+    let (fixture, env) = env_with_renderer(common::THIN_SHELL, true).await;
     let fallback = env
         .pipeline
         .extract(extract_input(
@@ -478,7 +479,7 @@ async fn rendered_extract_carries_the_thin_signal() {
     assert!(fallback.render_quality.is_none());
 }
 
-// ----------------------------------------------------------------------
+//  ----------------------------------------------------------------------
 #[tokio::test]
 async fn main_container_excludes_nav_and_aside() {
     let fixture = start_fixture().await;

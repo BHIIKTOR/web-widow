@@ -1,4 +1,4 @@
-//! Spec evaluation over the parsed DOM, plus the separation from
+//! v0.2 — spec evaluation over the parsed DOM, plus the separation from
 //! `mode=main` selection.
 //!
 //! No network here: these tests drive `extract::spec_eval` directly against fixture
@@ -41,7 +41,7 @@ fn run(html: &str, raw: Value, max_records: usize) -> web_widow::extract::spec_e
 }
 
 // ---------------------------------------------------------------------------
-// List and table fixtures with exact expected values
+//  — list and table fixtures with exact expected values
 // ---------------------------------------------------------------------------
 
 /// The source-of-truth table, copied from the fixture generator. Written out here
@@ -200,7 +200,7 @@ fn table_fixture_preserves_cell_text_and_row_order() {
 }
 
 // ---------------------------------------------------------------------------
-// Nested selectors, all: true and attribute extraction
+//  — nested selectors, all: true and attribute extraction
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -291,7 +291,7 @@ fn attr_with_number_and_trim_reads_the_attribute_not_the_text() {
 }
 
 // ---------------------------------------------------------------------------
-// Fail-fast spec and field contracts
+//  — fail-fast spec and field contracts
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -361,7 +361,7 @@ fn invalid_specs_carry_the_json_pointer() {
 }
 
 // ---------------------------------------------------------------------------
-// The 5 000-record cap at the shipped default
+//  — the 5 000-record cap at the shipped default
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -388,7 +388,7 @@ fn record_cap_is_reachable_at_the_default_and_counted_in_full() {
 }
 
 // ---------------------------------------------------------------------------
-// Corpus robustness and determinism
+//  — corpus robustness and determinism
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -447,7 +447,7 @@ fn corpus_evaluation_is_panic_free_and_byte_deterministic() {
 }
 
 // ---------------------------------------------------------------------------
-// One parse per page, instrumented
+//  — one parse per page, instrumented
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -473,7 +473,7 @@ fn dom_parse_count_is_one_for_a_wide_spec() {
 }
 
 // ---------------------------------------------------------------------------
-// Spec extraction must not depend on main-mode selection
+//  — spec extraction must not depend on main-mode selection
 // ---------------------------------------------------------------------------
 
 #[test]

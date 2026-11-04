@@ -1,4 +1,4 @@
-//! Semantic retrieval over the stored corpus (since v0.7).
+//! Semantic retrieval over the stored corpus (v0.7).
 //!
 //! The engine is local and loaded lazily; a page is embedded by a bounded lazy
 //! backfill (never in the fetch path). Vectors are f32 little-endian blobs in
@@ -532,7 +532,11 @@ impl EmbeddingService {
         let candidates = self
             .store
             .db
-            .embedding_candidates(&model, settings.backfill_pages_per_pass as i64)
+            .embedding_candidates(
+                &model,
+                settings.backfill_pages_per_pass as i64,
+                self.config.auth.index_authenticated,
+            )
             .await?;
         let mut embedded = 0usize;
         let mut skipped = 0usize;

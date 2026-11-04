@@ -1,4 +1,4 @@
-//! Local ONNX embedding engine (since v0.7).
+//! Local ONNX embedding engine (v0.7).
 //!
 //! The engine is local and offline by construction: `fastembed` is built with
 //! `ort-load-dynamic` (no `hf-hub`, no `ureq`, no native-tls, no image models)
@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use crate::config::EmbeddingsConfig;
 use crate::core::error::{Result, WidowError};
 
-/// The only model id in v1 (P0 config contract).
+/// The only model id in v1.
 pub const MODEL_ID: &str = "minilm-l6-v2-q";
 /// `all-MiniLM-L6-v2` output dimensions.
 pub const MODEL_DIM: usize = 384;

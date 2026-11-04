@@ -1,18 +1,21 @@
-//! v0.4 — structural-gap repair neutrality harness (§3).
+//! v0.4 — structural-gap repair neutrality harness.
 //!
-//! The corpus is fixed here: the v0.1 committed fixtures, the v0.1 real-site
-//! sources, the chainalysis capture from, and a synthetic boilerplate page.
+//! The corpus is fixed here: the committed fixtures, a synthetic boilerplate
+//! page, and the operator source captures when they are present. The captures
+//! are not shipped with the repository, so `WEB_WIDOW_CORPUS_DIR` (default
+//! `<repo>/corpus`) points at them and a missing capture is skipped rather
+//! than failed.
 //! `tests/fixtures/m04/corpus-baseline/` holds the **pre-repair** Markdown for
 //! every page, produced by the candidate on the same bytes; this test diffs
 //! the current output against that retained baseline.
 //!
 //! Rules asserted:
-//! Every no-gap page is **byte-identical**;
-//! Every diff has **zero removed lines** (additions only);
-//! Only the sqlite.org page (and pages with a demonstrable gap) changes;
-//! The sqlite section 2 is restored in position within the 25 % bound;
-//! The boilerplate page adds nothing;
-//! Monitor `normalized_hash` is unchanged for every no-gap page.
+//! - every no-gap page is **byte-identical**;
+//! - every diff has **zero removed lines** (additions only);
+//! - only the sqlite.org page (and pages with a demonstrable gap) changes;
+//! - the sqlite section 2 is restored in position within the 25 % bound;
+//! - the boilerplate page adds nothing;
+//! - monitor `normalized_hash` is unchanged for every no-gap page.
 
 use std::path::PathBuf;
 
@@ -66,6 +69,22 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Operator captures that are not part of the committed fixture set.
+fn corpus_dir() -> PathBuf {
+    std::env::var("WEB_WIDOW_CORPUS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| root().join("corpus"))
+}
+
+/// The gap page's source capture, when the operator corpus is present. Two
+/// assertions below describe that page only, so they skip without it.
+fn sqlite_capture() -> Option<PathBuf> {
+    let path = corpus_dir()
+        .join("real-site/source")
+        .join("sqlite-whentouse.html");
+    path.is_file().then_some(path)
+}
+
 fn pages() -> Vec<Page> {
     let root = root();
     let mut pages = Vec::new();
@@ -77,19 +96,27 @@ fn pages() -> Vec<Page> {
         });
     }
     for name in REAL_PAGES {
+        let path = corpus_dir()
+            .join("real-site/source")
+            .join(format!("{name}.html"));
+        if !path.is_file() {
+            eprintln!("SKIP: no operator capture for {name}");
+            continue;
+        }
         pages.push(Page {
             key: format!("real_{name}"),
-            path: root
-                .join("plan/artifacts/M01-agent-web-crawler/B06/real-site/source")
-                .join(format!("{name}.html")),
+            path,
             base: "https://example.com/",
         });
     }
-    pages.push(Page {
-        key: "chainalysis".to_string(),
-        path: root.join("plan/artifacts/M04-extraction-fidelity-rss/B01/chainalysis-source.html"),
-        base: "https://www.chainalysis.com/",
-    });
+    let chainalysis = corpus_dir().join("extraction-fidelity/chainalysis-source.html");
+    if chainalysis.is_file() {
+        pages.push(Page {
+            key: "chainalysis".to_string(),
+            path: chainalysis,
+            base: "https://www.chainalysis.com/",
+        });
+    }
     pages.push(Page {
         key: "boilerplate".to_string(),
         path: root.join("tests/fixtures/m04/boilerplate.html"),
@@ -113,10 +140,10 @@ fn baseline(key: &str) -> String {
         .unwrap_or_else(|error| panic!("missing baseline for {key}: {error}"))
 }
 
-/// Evidence hook: `B02_DUMP_DIR=<dir>` writes every post-repair page there so
-/// the corpus diff can be retained next to the batch.
+/// Evidence hook: `WEB_WIDOW_CORPUS_DUMP_DIR=<dir>` writes every post-repair
+/// page there so the corpus diff can be retained next to the run.
 fn maybe_dump(key: &str, text: &str) {
-    let Ok(dir) = std::env::var("B02_DUMP_DIR") else {
+    let Ok(dir) = std::env::var("WEB_WIDOW_CORPUS_DUMP_DIR") else {
         return;
     };
     std::fs::create_dir_all(&dir).unwrap();
@@ -150,6 +177,10 @@ fn is_supersequence(needle: &str, haystack: &str) -> bool {
 
 #[test]
 fn every_page_is_unchanged_or_adds_lines_only() {
+    if sqlite_capture().is_none() {
+        eprintln!("SKIP: no operator capture for sqlite-whentouse");
+        return;
+    }
     let mut changed = Vec::new();
     for page in pages() {
         let before = baseline(&page.key);
@@ -176,6 +207,10 @@ fn every_page_is_unchanged_or_adds_lines_only() {
 
 #[test]
 fn sqlite_section_two_is_restored_in_position_and_within_the_bound() {
+    if sqlite_capture().is_none() {
+        eprintln!("SKIP: no operator capture for sqlite-whentouse");
+        return;
+    }
     let page = pages()
         .into_iter()
         .find(|page| page.key == "real_sqlite-whentouse")

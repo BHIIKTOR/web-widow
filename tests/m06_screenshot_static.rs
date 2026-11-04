@@ -1,4 +1,4 @@
-//! v0.6 — the static-only build has no browser, so `screenshot` is a typed
+//! v0.6-4 — the static-only build has no browser, so `screenshot` is a typed
 //! `render_unavailable` and writes nothing. Compiled only with
 //! `--no-default-features`.
 

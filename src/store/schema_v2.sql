@@ -1,7 +1,7 @@
 -- Migration 002_crawl.sql — schema v2 (jobs/frontier areas).
 -- Applied inside a transaction by the writer; forward-only, tracked by
--- PRAGMA user_version. `links_count` is additive to the documented column
--- list because `crawl_results` reports it per page (see EV-B04).
+-- PRAGMA user_version. `links_count` is additive to the column
+-- list because `crawl_results` reports it per page (see).
 
 CREATE TABLE jobs (
     id               TEXT PRIMARY KEY,
@@ -37,6 +37,6 @@ CREATE TABLE frontier (
 
 -- SQLite cannot name rowid in an index expression; every index carries it
 -- implicitly, so (job_id, state, priority) already provides the
--- (job_id, state, priority, rowid) order the schema asks for.
+-- (job_id, state, priority, rowid) order asks for.
 CREATE INDEX frontier_next ON frontier (job_id, state, priority);
 CREATE INDEX frontier_expiry ON frontier (state, lease_until);

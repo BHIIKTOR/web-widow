@@ -4,7 +4,7 @@
 //! upsert inside the same transaction as the page write; there are no triggers,
 //! so every write path that stores content must supply the text (see
 //! [`super::db::FetchRecord::index_text`]). Two write policies keep the row
-//! Honest (v0.5): delivered page text replaces it, a projection such as
+//! honest (v0.5): delivered page text replaces it, a projection such as
 //! `extract`'s record text may only fill a page that has none. The backfill
 //! fills the rows that predate schema v6 once, guarded by a marker, preferring
 //! the most recent stored Markdown over a later record-text extraction.
@@ -125,6 +125,7 @@ pub fn index_text_from_stored(result_json: Option<&str>) -> Option<String> {
 pub(super) fn backfill(
     connection: &mut Connection,
     max_index_chars: usize,
+    include_authenticated: bool,
 ) -> rusqlite::Result<()> {
     let done: Option<String> = connection
         .query_row(
@@ -162,16 +163,20 @@ pub(super) fn backfill(
                          ORDER BY e.created_at DESC, e.id DESC LIMIT 1)
                  FROM pages p
                  WHERE p.id > ?1
+                   AND (?3 = 1 OR p.authenticated = 0)
                  ORDER BY p.id
                  LIMIT ?2",
             )?;
-            let rows = statement.query_map(params![after, BACKFILL_BATCH], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                ))
-            })?;
+            let rows = statement.query_map(
+                params![after, BACKFILL_BATCH, i64::from(include_authenticated)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
         if rows.is_empty() {

@@ -1,4 +1,4 @@
-//! A2 — the real binary, over stdio JSON-RPC, against the fixture server.
+//! The real binary, over stdio JSON-RPC, against the fixture server.
 //!
 //! Calling handlers directly would prove neither the transport nor the schema
 //! serialization, so this test spawns `web-widow`, speaks MCP to it and asserts
@@ -195,9 +195,9 @@ async fn stdio_contract_exposes_all_tools() {
             "webhook_status",
             "webhook_target"
         ],
-        "M07 W1 surface exposes thirty-four tools"
+        "v0.7 surface exposes thirty-four tools"
     );
-    // Advertised schemas never carry schemars' non-standard integer
+    //  — advertised schemas never carry schemars' non-standard integer
     // formats, while types and bounds are untouched.
     const NON_STANDARD: &[&str] = &[
         "uint", "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "double",
@@ -275,6 +275,7 @@ async fn stdio_contract_exposes_all_tools() {
             "include_links",
             "max_chars",
             "mode",
+            "profile",
             "render",
             "url"
         ],

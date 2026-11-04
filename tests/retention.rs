@@ -1,4 +1,4 @@
-//! The packaged release — retention/GC drill: budget eviction order, change-point survival
+//!   — retention/GC drill: budget eviction order, change-point survival
 //! and no dangling content hash in any row.
 //!
 //! The drill deliberately mixes the reference sources the store has: a page raw
@@ -50,6 +50,7 @@ async fn gc_evicts_only_unreferenced_blobs_in_age_order_and_never_dangles() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("large page");
@@ -112,7 +113,11 @@ async fn gc_evicts_only_unreferenced_blobs_in_age_order_and_never_dangles() {
         snapshots_per_monitor: 20,
         ..RetentionConfig::default()
     };
-    let report = env.store.gc(retention).await.expect("retention pass");
+    let report = env
+        .store
+        .gc(retention, env.config.auth.audit_days, 7)
+        .await
+        .expect("retention pass");
 
     // Budget eviction is oldest-first and leaves the referenced body alone.
     assert_eq!(

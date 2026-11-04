@@ -1,4 +1,4 @@
-//! v0.6 — browser interaction primitives (`interact_*`).
+//! v0.6 — browser interaction primitives (`interact_*`; checks …).
 //!
 //! Lane-local fixture server plus a private probe listener on `127.0.0.2` that
 //! is deliberately **outside** the test SSRF allowlist. A real Chrome is
@@ -372,7 +372,7 @@ async fn click_navigates_and_a_css_only_control_is_clickable() {
         .await
         .expect("navigation click");
     assert!(nav.final_url.ends_with("/next.html"), "{}", nav.final_url);
-    assert_eq!(nav.title.as_deref(), Some("M06 next fixture"));
+    assert_eq!(nav.title.as_deref(), Some("v0.6 next fixture"));
     assert!(nav.console_tail.iter().all(|entry| entry.text.len() <= 500));
     case.close(&opened.session_id).await;
 }

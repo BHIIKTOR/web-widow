@@ -1,4 +1,4 @@
-//! Sitemap discovery and crawl seeding.
+//! v0.6 — sitemap discovery and crawl seeding (/ …).
 //!
 //! Hermetic: one lane-local axum fixture server on 0.0.0.0 (so 127.0.0.1,
 //! 127.0.0.2 and 127.0.0.9 reach different robots policies), one temporary data

@@ -1,4 +1,4 @@
-//! Log privacy. A separate test binary so the global tracing subscriber
+//! log privacy. A separate test binary so the global tracing subscriber
 //! is not raced by other tests in the same process.
 
 mod common;

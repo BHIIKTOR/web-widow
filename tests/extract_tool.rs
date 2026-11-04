@@ -39,7 +39,7 @@ fn input(url: String, spec: serde_json::Value, use_cache: Option<bool>) -> Extra
 }
 
 // ---------------------------------------------------------------------------
-// Absolute URLs use the response's final URL
+//  — absolute URLs use the response's final URL
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn relative_urls_resolve_against_the_final_url_after_a_redirect() {
 }
 
 // ---------------------------------------------------------------------------
-// Profile dedup and use_cache semantics, counted in the database
+//  — profile dedup and use_cache semantics, counted in the database
 // ---------------------------------------------------------------------------
 
 fn counts(env: &TestEnv) -> (i64, i64, i64) {

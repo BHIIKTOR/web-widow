@@ -1,9 +1,8 @@
 //! v0.4 — one shared main-article source for `fetch_page mode=main` and
-//! `:main`, and `selector:"*"` as the record scope itself (b, -q).
+//! `:main`, and `selector:"*"` as the record scope itself.
 //!
-//! The captured pre-fix baselines live under
-//!; this file is the permanent
-//! hermetic consistency check.
+//! The captured pre-fix baselines live outside this repository; this file is
+//! the permanent hermetic consistency check.
 
 mod common;
 
@@ -26,6 +25,7 @@ fn fetch_input(url: &str, mode: Mode) -> FetchPageInput {
         max_chars: None,
         include_links: None,
         include_content: None,
+        profile: None,
     }
 }
 
@@ -40,8 +40,8 @@ fn extract_input(url: &str, schema: Value) -> ExtractInput {
     }
 }
 
-/// The scope the spec evaluates is the article the delivered body comes
-/// from: the same distinctive sentence appears in both.
+/// The scope the spec evaluates is the article the delivered body comes from:
+/// the same distinctive sentence appears in both.
 #[tokio::test]
 async fn main_scope_carries_the_delivered_body_sentence() {
     let fixture = start_fixture().await;
@@ -105,7 +105,7 @@ async fn main_scope_carries_the_delivered_body_sentence() {
         "script reached the scope: {body}"
     );
 
-    // `*` is the scope element: inner HTML for `html`, one element for
+    //  — `*` is the scope element: inner HTML for `html`, one element for
     // `all: true`, and never the wrapper `<html>`/`<head>`.
     let html = record["body_html"].as_str().unwrap_or_default();
     assert!(html.contains("<p>The harbourmaster logged"), "{html}");
@@ -210,18 +210,27 @@ async fn main_field_selector_is_still_schema_invalid() {
     );
 }
 
-/// On a repaired page the `:main` records see the restored
-/// section, because records and Markdown share the repaired article.
+/// on a repaired page the `:main` records see the restored section, because
+/// records and Markdown share the repaired article.
+///
+/// The source capture is operator data, not part of the committed fixtures:
+/// without it the test has nothing to assert and returns.
 #[test]
 fn main_scope_on_a_repaired_page_includes_the_restored_section() {
     use std::path::PathBuf;
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bytes =
-        std::fs::read(root.join(
-            "plan/artifacts/M01-agent-web-crawler/B06/real-site/source/sqlite-whentouse.html",
-        ))
-        .unwrap();
+    let corpus = std::env::var("WEB_WIDOW_CORPUS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| root.join("corpus"));
+    let Ok(bytes) = std::fs::read(
+        corpus
+            .join("real-site/source")
+            .join("sqlite-whentouse.html"),
+    ) else {
+        eprintln!("SKIP: no operator capture for sqlite-whentouse");
+        return;
+    };
     let html = charset::decode(&bytes, Some("text/html")).text;
     let base = url::Url::parse("https://www.sqlite.org/whentouse.html").unwrap();
 

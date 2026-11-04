@@ -1,8 +1,8 @@
--- Migration 007_recipes_screenshots.sql — schema v7 (recipes and screenshots).
+-- Migration 007_recipes_screenshots.sql — schema v7 (v0.6).
 --
 -- Additive only: the naming/version layer for extraction recipes and
 -- the reference table that keeps screenshot blobs alive. No existing table,
--- column or row is touched, and no tool surface is added by P0.
+-- column or row is touched, and no tool surface is added.
 
 -- Recipe naming/version layer. The spec itself stays in `profiles`
 -- (content-addressed `spec_json`/`hash`); a version row points at the profile

@@ -1,6 +1,6 @@
 #![cfg(feature = "http")]
 
-//! v0.6 — the loopback feed route (C3-5, C3-6, C3-7).
+//! v0.6 — the loopback feed route.
 //!
 //! Spawns the real binary (`--features http`) over 127.0.0.1 with a seeded
 //! database and the capability token from the environment or the `0600`
@@ -39,7 +39,7 @@ fn seed(data_dir: &Path) {
     let paths = Paths::new(data_dir.to_path_buf());
     std::fs::create_dir_all(paths.blobs()).unwrap();
     let config = test_config();
-    let store = Store::open(&paths, &config.fts).expect("store opens");
+    let store = Store::open(&paths, &config.fts, false).expect("store opens");
     drop(store);
     let connection = rusqlite::Connection::open(paths.database()).unwrap();
     connection

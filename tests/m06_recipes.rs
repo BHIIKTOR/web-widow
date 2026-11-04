@@ -78,7 +78,7 @@ fn canonical(schema: &Value) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// A2-1 — save → list → apply equals extract, record for record
+// save → list → apply equals extract, record for record
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -157,7 +157,7 @@ async fn save_list_and_apply_match_extract_record_for_record() {
 }
 
 // ---------------------------------------------------------------------------
-// A2-2 — no-op saves, version bumps, old versions, monitor isolation
+// no-op saves, version bumps, old versions, monitor isolation
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -324,7 +324,7 @@ async fn an_old_version_still_applies_and_a_monitor_keeps_its_profile_hash() {
 }
 
 // ---------------------------------------------------------------------------
-// A2-3 — validation pointers and typed not_found
+// validation pointers and typed not_found
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -428,7 +428,7 @@ async fn unknown_recipes_versions_and_version_zero_are_typed() {
 }
 
 // ---------------------------------------------------------------------------
-// A2-4 — listing: prefix, pagination, literal wildcards
+// listing: prefix, pagination, literal wildcards
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -514,7 +514,7 @@ async fn listing_paginates_and_treats_a_prefix_literally() {
 }
 
 // ---------------------------------------------------------------------------
-// A2-5 — a fresh store starts with no recipes
+// a fresh store starts with no recipes
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -542,7 +542,7 @@ async fn a_fresh_store_has_no_recipes() {
 }
 
 // ---------------------------------------------------------------------------
-// A2-6 — applying stores an extraction and indexes row text fill-empty
+// applying stores an extraction and indexes row text fill-empty
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

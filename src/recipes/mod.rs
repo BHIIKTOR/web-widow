@@ -6,7 +6,7 @@
 //! [`crate::extract::spec`] validator with the same JSON pointers. Tabular
 //! (`extract_rows`) specs are not recipes; they are per-call arguments.
 //!
-//! Storage stays in P0's `recipes`/`recipe_versions` tables while the spec text
+//! Storage stays in the `recipes`/`recipe_versions` tables while the spec text
 //! stays in `profiles`, keyed by the validator's canonical hash. A version row is
 //! a *pointer* to that hash, so advancing a recipe never rewrites a monitor's
 //! `profile_hash` and `recipe_apply` never mutates a spec.

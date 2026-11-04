@@ -1,4 +1,4 @@
-//! v0.6 — PDF text-layer extraction on PDFium (`pdf_extract`, C2-1…C2-8).
+//! v0.6 — PDF text-layer extraction on PDFium (`pdf_extract`, …).
 //!
 //! Hermetic: a lane-local axum fixture server on 0.0.0.0 (127.0.0.1 allowed,
 //! 127.0.0.2 denies `/blocked`) serving the constructed PDF fixtures; one
@@ -228,7 +228,7 @@ async fn a_two_page_pdf_returns_markers_metadata_and_page_headings() {
     assert_eq!(payload.chars, payload.markdown.chars().count());
     assert_eq!(
         payload.metadata.title.as_deref(),
-        Some("M06 C2 simple fixture")
+        Some("v0.6 simple fixture")
     );
     assert_eq!(payload.metadata.author.as_deref(), Some("Fixture Author"));
     assert!(!payload.truncated);
@@ -533,5 +533,5 @@ async fn the_tool_payload_shape_is_the_documented_contract() {
         assert!(value.get(key).is_some(), "missing {key}: {value}");
     }
     assert_eq!(value["outcome"], json!("ok"));
-    assert_eq!(value["metadata"]["title"], json!("M06 C2 simple fixture"));
+    assert_eq!(value["metadata"]["title"], json!("v0.6 simple fixture"));
 }

@@ -39,6 +39,31 @@ pub enum ErrorCode {
     SessionExpired,
     SessionNotFound,
     ActionFailed,
+    AuthProfileUnknown,
+    AuthManagerFailed,
+    AuthManagerTimeout,
+    AuthSecretUnavailable,
+    AuthRejected,
+    AuthRedirectBlocked,
+    AuthHostNotAllowed,
+    AuthInsecureUrl,
+    AuthRenderUnsupported,
+    AuthHeaderRejected,
+    AuthStoreUnavailable,
+    AuthStoreLocked,
+    AuthSessionUnsupported,
+    AuthLoginNotTerminal,
+    AuthLoginOriginRefused,
+    AuthLoginFinalOriginRefused,
+    AuthVerifyFailed,
+    AuthCaptureEmpty,
+    AuthLoginBrowserFailed,
+    AuthChallengeRefused,
+    AuthSessionExpired,
+    AuthSessionMissing,
+    AuthStoreInvalid,
+    AuthMethodRefused,
+    EgressBlocked,
     Internal,
 }
 
@@ -71,6 +96,31 @@ impl ErrorCode {
             Self::SessionExpired => "session_expired",
             Self::SessionNotFound => "session_not_found",
             Self::ActionFailed => "action_failed",
+            Self::AuthProfileUnknown => "auth_profile_unknown",
+            Self::AuthManagerFailed => "auth_manager_failed",
+            Self::AuthManagerTimeout => "auth_manager_timeout",
+            Self::AuthSecretUnavailable => "auth_secret_unavailable",
+            Self::AuthRejected => "auth_rejected",
+            Self::AuthRedirectBlocked => "auth_redirect_blocked",
+            Self::AuthHostNotAllowed => "auth_host_not_allowed",
+            Self::AuthInsecureUrl => "auth_insecure_url",
+            Self::AuthRenderUnsupported => "auth_render_unsupported",
+            Self::AuthHeaderRejected => "auth_header_rejected",
+            Self::AuthStoreUnavailable => "auth_store_unavailable",
+            Self::AuthStoreLocked => "auth_store_locked",
+            Self::AuthSessionUnsupported => "auth_session_unsupported",
+            Self::AuthLoginNotTerminal => "auth_login_not_terminal",
+            Self::AuthLoginOriginRefused => "auth_login_origin_refused",
+            Self::AuthLoginFinalOriginRefused => "auth_login_final_origin_refused",
+            Self::AuthVerifyFailed => "auth_verify_failed",
+            Self::AuthCaptureEmpty => "auth_capture_empty",
+            Self::AuthLoginBrowserFailed => "auth_login_browser_failed",
+            Self::AuthChallengeRefused => "auth_challenge_refused",
+            Self::AuthSessionExpired => "auth_session_expired",
+            Self::AuthSessionMissing => "auth_session_missing",
+            Self::AuthStoreInvalid => "auth_store_invalid",
+            Self::AuthMethodRefused => "auth_method_refused",
+            Self::EgressBlocked => "egress_blocked",
             Self::Internal => "internal",
         }
     }
@@ -166,6 +216,105 @@ pub enum WidowError {
     #[error("action failed ({reason}): {message}")]
     ActionFailed { reason: String, message: String },
 
+    // v0.8 — the credential engine. Messages name the profile, provider or
+    // host only: never a reference, a header value, a secret or a URL path.
+    #[error("unknown auth profile `{profile}`: the operator configures profile names")]
+    AuthProfileUnknown { profile: String },
+
+    #[error("auth manager `{provider}` could not be started")]
+    AuthManagerFailed { provider: String },
+
+    #[error("auth manager `{provider}` exceeded the {limit_ms} ms timeout")]
+    AuthManagerTimeout { provider: String, limit_ms: u64 },
+
+    #[error("auth manager `{provider}` did not return a usable value")]
+    AuthSecretUnavailable { provider: String },
+
+    #[error("the origin rejected the configured credential (HTTP {status})")]
+    AuthRejected { status: u16 },
+
+    #[error("authenticated redirect to `{host}` refused: the profile binds `{bound}`")]
+    AuthRedirectBlocked { host: String, bound: String },
+
+    #[error("host `{host}` is outside the profile binding `{bound}`")]
+    AuthHostNotAllowed { host: String, bound: String },
+
+    #[error(
+        "authenticated fetch requires https (plain HTTP only for literal loopback hosts with auth.allow_loopback_http)"
+    )]
+    AuthInsecureUrl,
+
+    #[error(
+        "render=always is not supported with an auth profile; the authenticated path is static only"
+    )]
+    AuthRenderUnsupported,
+    #[error("header `{name}` cannot be set from a profile")]
+    AuthHeaderRejected { name: String },
+
+    // v0.9 — the sealed session store. Fail closed: no plaintext fallback,
+    // nothing written. `detail` is a sanitised platform reason, never a value.
+    #[error("the sealed session store is unavailable: {detail}")]
+    AuthStoreUnavailable { detail: String },
+
+    #[error("the OS keyring collection is locked: {detail}")]
+    AuthStoreLocked { detail: String },
+
+    // v0.9 — the assisted-login boundary. Every message is value-free: a
+    // host, a status, or a bounded detail string; never a cookie or a path.
+    #[error(
+        "a session profile is resolved by the authenticated browser path, not as a request header"
+    )]
+    AuthSessionUnsupported,
+
+    #[error("`auth login` needs an interactive terminal: it is an operator command, never a tool")]
+    AuthLoginNotTerminal,
+
+    #[error(
+        "login window refused navigation to `{host}`: only the declared login origins are allowed"
+    )]
+    AuthLoginOriginRefused { host: String },
+
+    #[error(
+        "the login window ended on `{host}`, not the binding host `{expected}`; nothing was captured"
+    )]
+    AuthLoginFinalOriginRefused { host: String, expected: String },
+
+    #[error(
+        "the captured session did not verify against `{verify_url}` (HTTP {status}, {reason}); nothing was sealed"
+    )]
+    AuthVerifyFailed {
+        verify_url: String,
+        status: u16,
+        reason: String,
+    },
+
+    #[error("the capture held no cookie for the binding host; nothing was sealed")]
+    AuthCaptureEmpty,
+
+    #[error("the login browser failed: {detail}")]
+    AuthLoginBrowserFailed { detail: String },
+
+    // v0.9 — the authenticated browser path. Value-free by construction.
+    #[error("the authenticated origin asked for an HTTP credential; refusal ")]
+    AuthChallengeRefused,
+
+    #[error("the sealed session for `{site}` has expired; run `auth login {site}` again")]
+    AuthSessionExpired { site: String },
+
+    #[error("no sealed session for `{site}`; run `auth login {site}` first")]
+    AuthSessionMissing { site: String },
+
+    #[error(
+        "the sealed session for `{site}` is not valid for its configured host; run `auth login {site}`"
+    )]
+    AuthStoreInvalid { site: String },
+
+    #[error("the authenticated browser is read-only: only GET and HEAD are allowed")]
+    AuthMethodRefused,
+
+    #[error("egress blocked for host `{host}`: {reason}")]
+    EgressBlocked { host: String, reason: String },
+
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -198,6 +347,31 @@ impl WidowError {
             Self::SessionExpired { .. } => ErrorCode::SessionExpired,
             Self::SessionNotFound { .. } => ErrorCode::SessionNotFound,
             Self::ActionFailed { .. } => ErrorCode::ActionFailed,
+            Self::AuthProfileUnknown { .. } => ErrorCode::AuthProfileUnknown,
+            Self::AuthManagerFailed { .. } => ErrorCode::AuthManagerFailed,
+            Self::AuthManagerTimeout { .. } => ErrorCode::AuthManagerTimeout,
+            Self::AuthSecretUnavailable { .. } => ErrorCode::AuthSecretUnavailable,
+            Self::AuthRejected { .. } => ErrorCode::AuthRejected,
+            Self::AuthRedirectBlocked { .. } => ErrorCode::AuthRedirectBlocked,
+            Self::AuthHostNotAllowed { .. } => ErrorCode::AuthHostNotAllowed,
+            Self::AuthInsecureUrl => ErrorCode::AuthInsecureUrl,
+            Self::AuthRenderUnsupported => ErrorCode::AuthRenderUnsupported,
+            Self::AuthHeaderRejected { .. } => ErrorCode::AuthHeaderRejected,
+            Self::AuthStoreUnavailable { .. } => ErrorCode::AuthStoreUnavailable,
+            Self::AuthStoreLocked { .. } => ErrorCode::AuthStoreLocked,
+            Self::AuthSessionUnsupported => ErrorCode::AuthSessionUnsupported,
+            Self::AuthLoginNotTerminal => ErrorCode::AuthLoginNotTerminal,
+            Self::AuthLoginOriginRefused { .. } => ErrorCode::AuthLoginOriginRefused,
+            Self::AuthLoginFinalOriginRefused { .. } => ErrorCode::AuthLoginFinalOriginRefused,
+            Self::AuthVerifyFailed { .. } => ErrorCode::AuthVerifyFailed,
+            Self::AuthCaptureEmpty => ErrorCode::AuthCaptureEmpty,
+            Self::AuthLoginBrowserFailed { .. } => ErrorCode::AuthLoginBrowserFailed,
+            Self::AuthChallengeRefused => ErrorCode::AuthChallengeRefused,
+            Self::AuthSessionExpired { .. } => ErrorCode::AuthSessionExpired,
+            Self::AuthSessionMissing { .. } => ErrorCode::AuthSessionMissing,
+            Self::AuthStoreInvalid { .. } => ErrorCode::AuthStoreInvalid,
+            Self::AuthMethodRefused => ErrorCode::AuthMethodRefused,
+            Self::EgressBlocked { .. } => ErrorCode::EgressBlocked,
             Self::Internal(_) => ErrorCode::Internal,
         }
     }
@@ -215,7 +389,8 @@ impl WidowError {
             Self::Http {
                 status: Some(status),
                 ..
-            } => Some(format!("status={status}")),
+            }
+            | Self::AuthRejected { status } => Some(format!("status={status}")),
             Self::TooLarge { limit } => Some(format!("limit_bytes={limit}")),
             Self::Dns { host, .. } => Some(format!("host={host}")),
             Self::SchemaInvalid { pointer, .. } => Some(format!("pointer={pointer}")),
@@ -223,6 +398,7 @@ impl WidowError {
             | Self::SessionExpired { session_id }
             | Self::SessionNotFound { session_id } => Some(format!("session_id={session_id}")),
             Self::ActionFailed { reason, .. } => Some(format!("reason={reason}")),
+            Self::EgressBlocked { host, reason } => Some(format!("host={host} reason={reason}")),
             _ => None,
         }
     }
@@ -231,6 +407,7 @@ impl WidowError {
     pub fn http_status(&self) -> Option<u16> {
         match self {
             Self::Http { status, .. } => *status,
+            Self::AuthRejected { status } => Some(*status),
             _ => None,
         }
     }
@@ -353,6 +530,31 @@ mod tests {
                     message: "x".into(),
                 },
                 ErrorCode::ActionFailed,
+            ),
+            (
+                WidowError::AuthHeaderRejected {
+                    name: "Host".into(),
+                },
+                ErrorCode::AuthHeaderRejected,
+            ),
+            (
+                WidowError::AuthStoreUnavailable {
+                    detail: "no session bus".into(),
+                },
+                ErrorCode::AuthStoreUnavailable,
+            ),
+            (
+                WidowError::AuthStoreLocked {
+                    detail: "locked".into(),
+                },
+                ErrorCode::AuthStoreLocked,
+            ),
+            (
+                WidowError::EgressBlocked {
+                    host: "x".into(),
+                    reason: "host".into(),
+                },
+                ErrorCode::EgressBlocked,
             ),
             (WidowError::Internal("x".into()), ErrorCode::Internal),
         ];

@@ -92,8 +92,8 @@ pub struct ValidatedSpec {
     /// Canonical JSON (sorted keys, no optional nulls): the profile identity.
     pub canonical_json: String,
     /// `spec/v1/<BLAKE3-256 of canonical_json>`; the `profiles.hash` value.
-    /// The prefix is the semantic version of the spec evaluation rules
-    /// (carry-forward): a future refinement that changes what a field means
+    /// The prefix is the semantic version of the spec evaluation rules (
+    /// carry-forward): a future refinement that changes what a field means
     /// bumps the prefix instead of silently reusing an old profile row.
     pub hash: String,
 }

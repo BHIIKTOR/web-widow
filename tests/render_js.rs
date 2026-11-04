@@ -25,6 +25,7 @@ fn input(url: String, policy: RenderPolicy) -> FetchPageInput {
         max_chars: None,
         include_links: None,
         include_content: None,
+        profile: None,
     }
 }
 

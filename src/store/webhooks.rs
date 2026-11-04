@@ -1,4 +1,4 @@
-//! Webhook outbox persistence (since v0.7).
+//! Webhook outbox persistence (v0.7).
 //!
 //! Enqueue happens inside the check transaction (see
 //! [`super::monitor::Database::record_check`]); this module owns the attachment

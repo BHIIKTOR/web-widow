@@ -1,4 +1,4 @@
-//! Browser interaction primitives (since v0.6).
+//! Browser interaction primitives (/040, v0.6).
 //!
 //! One held page per process, one action per call, observe → act → observe.
 //! The manager owns validation, TTL/action bounds, wait timing and screenshot

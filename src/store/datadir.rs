@@ -2,7 +2,7 @@
 //!
 //! Both refusals are startup errors, not warnings: a world-readable data
 //! directory or a second writer on the same database are local-boundary
-//! violations (A10).
+//! violations.
 
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};

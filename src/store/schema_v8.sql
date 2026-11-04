@@ -1,8 +1,8 @@
--- Migration 008_embeddings_webhooks.sql — schema v8 (semantic events).
+-- Migration 008_embeddings_webhooks.sql — schema v8 (v0.7).
 --
 -- Additive only: embedding rows + per-page state, monitor→target
 -- attachments, and the durable webhook delivery outbox. No existing table,
--- column or row is touched, and no tool surface or behaviour is added by P0.
+-- column or row is touched, and no tool surface or behaviour is added.
 
 -- One row per (page, model, chunk). Vectors are f32 little-endian blobs; `dim`
 -- is validated so a read can reject a truncated/corrupt blob without guessing.

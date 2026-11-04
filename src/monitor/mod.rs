@@ -1,4 +1,5 @@
 //! Change monitoring: schedule, snapshots, diffs and the `monitor_*` tools
+//!.
 //!
 //! One check is one URL. It shares the pipeline's conditional-acquisition path
 //! (so the SSRF gate, robots policy, caps and the 304 short-circuit are the same

@@ -1,4 +1,4 @@
-//! v0.6 — the static-only build has no browser, so every `interact_*`
+//! v0.6-11 — the static-only build has no browser, so every `interact_*`
 //! operation is a typed `render_unavailable` and no session or row is created.
 
 #![cfg(not(feature = "render"))]

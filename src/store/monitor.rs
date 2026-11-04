@@ -1,4 +1,4 @@
-//! Monitor persistence (monitoring area).
+//! Monitor persistence (monitoring area,).
 //!
 //! A check is one URL, so there is no frontier here: `monitors` is the schedule,
 //! `snapshots` is the append-only history and `changes` is the sparse change
@@ -536,6 +536,7 @@ impl Database {
         monitor_id: Option<i64>,
         since: Option<DateTime<Utc>>,
         limit: usize,
+        include_authenticated: bool,
     ) -> Result<Vec<EventRow>> {
         let since = since.map(super::db::fmt_time);
         self.read(move |connection| {
@@ -549,11 +550,17 @@ impl Database {
                  LEFT JOIN pages p ON p.canonical_url = m.url
                  WHERE (?1 IS NULL OR c.monitor_id = ?1)
                    AND (?2 IS NULL OR c.detected_at >= ?2)
+                   AND (?4 = 1 OR p.authenticated IS NULL OR p.authenticated = 0)
                  ORDER BY c.detected_at DESC, c.id DESC
                  LIMIT ?3",
             )?;
             let rows = statement.query_map(
-                params![monitor_id, since, limit.min(i64::MAX as usize) as i64],
+                params![
+                    monitor_id,
+                    since,
+                    limit.min(i64::MAX as usize) as i64,
+                    i64::from(include_authenticated)
+                ],
                 |row| {
                     let stats_json: String = row.get(7)?;
                     Ok(EventRow {

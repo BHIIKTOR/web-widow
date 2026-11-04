@@ -1,6 +1,6 @@
 #![cfg(feature = "http")]
 
-//! C3 rework — `http::serve` refuses a non-loopback bind when the feed is on.
+//! `http::serve` refuses a non-loopback bind when the feed is on.
 //!
 //! Binds `0.0.0.0:0` (no external traffic: `serve` returns before accepting)
 //! and checks the listener is dropped, so the guard cannot be bypassed by a
@@ -26,6 +26,7 @@ async fn serve_refuses_a_non_loopback_bind_with_the_feed_enabled() {
         Arc::clone(&env.store),
         env.config.events.clone(),
         Arc::clone(&runtime),
+        false,
     ));
     let interactions = Arc::new(web_widow::interaction::InteractionManager::new(
         Arc::clone(&env.config),

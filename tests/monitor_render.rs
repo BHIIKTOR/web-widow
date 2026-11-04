@@ -1,4 +1,4 @@
-//! A render-mode monitor sees script-driven content that static
+//!   — a render-mode monitor sees script-driven content that static
 //! monitoring cannot. Needs Chrome; skips with an explicit marker otherwise.
 
 #![cfg(feature = "render")]
@@ -121,6 +121,7 @@ async fn render_mode_monitor_detects_script_driven_change_static_cannot_see() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("static fetch v3");
@@ -135,6 +136,7 @@ async fn render_mode_monitor_detects_script_driven_change_static_cannot_see() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("static fetch v4");
@@ -194,6 +196,7 @@ async fn a_rendered_monitor_never_trusts_a_static_304() {
             max_chars: None,
             include_links: None,
             include_content: None,
+            profile: None,
         })
         .await
         .expect("static fetch");

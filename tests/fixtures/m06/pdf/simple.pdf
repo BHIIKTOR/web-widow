@@ -10,9 +10,9 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 173 >>
+<< /Length 171 >>
 stream
-BT /F1 24 Tf 72 720 Td (M06 C2 FIXTURE) Tj ET
+BT /F1 24 Tf 72 720 Td (v0.6 FIXTURE) Tj ET
 BT /F1 18 Tf 72 680 Td (PAGE_ONE_MARKER) Tj ET
 BT /F1 12 Tf 72 640 Td (The first page carries this distinctive sentence.) Tj ET
 endstream
@@ -21,9 +21,9 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
 endobj
 6 0 obj
-<< /Length 167 >>
+<< /Length 165 >>
 stream
-BT /F1 24 Tf 72 720 Td (M06 C2 FIXTURE) Tj ET
+BT /F1 24 Tf 72 720 Td (v0.6 FIXTURE) Tj ET
 BT /F1 18 Tf 72 680 Td (PAGE_TWO_MARKER) Tj ET
 BT /F1 12 Tf 72 640 Td (The second page carries a different marker.) Tj ET
 endstream
@@ -32,7 +32,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 8 0 obj
-<< /Title (M06 C2 simple fixture) /Author (Fixture Author) /Subject (Two-page text-layer PDF) /Creator (make_fixtures.py) /Producer (web-widow tests) /CreationDate (D:20260101120000Z) /ModDate (D:20260102120000Z) >>
+<< /Title (v0.6 simple fixture) /Author (Fixture Author) /Subject (Two-page text-layer PDF) /Creator (make_fixtures.py) /Producer (web-widow tests) /CreationDate (D:20260101120000Z) /ModDate (D:20260102120000Z) >>
 endobj
 xref
 0 9
@@ -41,12 +41,12 @@ xref
 0000000064 00000 n 
 0000000127 00000 n 
 0000000253 00000 n 
-0000000477 00000 n 
-0000000603 00000 n 
-0000000821 00000 n 
-0000000891 00000 n 
+0000000475 00000 n 
+0000000601 00000 n 
+0000000817 00000 n 
+0000000887 00000 n 
 trailer
 << /Size 9 /Root 1 0 R /Info 8 0 R >>
 startxref
-1122
+1116
 %%EOF

@@ -1,4 +1,4 @@
-//! Embedding persistence: candidates, vector rows,
+//! Embedding persistence (v0.7): candidates, vector rows,
 //! state, coverage counts and the reads `search_semantic` needs.
 //!
 //! All writes go through the single writer closure; vectors are f32
@@ -75,6 +75,7 @@ impl Database {
         &self,
         model: &str,
         limit: i64,
+        include_authenticated: bool,
     ) -> Result<Vec<EmbeddingCandidate>> {
         let model = model.to_string();
         self.read(move |connection| {
@@ -83,6 +84,7 @@ impl Database {
                  FROM pages p
                  LEFT JOIN embedding_state s ON s.page_id = p.id
                  WHERE EXISTS (SELECT 1 FROM extractions e WHERE e.page_id = p.id)
+                   AND (?3 = 1 OR p.authenticated = 0)
                    AND (s.page_id IS NULL
                         OR s.model <> ?1
                         OR EXISTS (SELECT 1 FROM extractions e
@@ -91,12 +93,15 @@ impl Database {
                  LIMIT ?2"
             );
             let mut statement = connection.prepare(&sql)?;
-            let rows = statement.query_map(params![model, limit], |row| {
-                Ok(EmbeddingCandidate {
-                    page_id: row.get(0)?,
-                    result_json: row.get(1)?,
-                })
-            })?;
+            let rows = statement.query_map(
+                params![model, limit, i64::from(include_authenticated)],
+                |row| {
+                    Ok(EmbeddingCandidate {
+                        page_id: row.get(0)?,
+                        result_json: row.get(1)?,
+                    })
+                },
+            )?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
         })
         .await
@@ -318,7 +323,7 @@ mod tests {
     fn open() -> (Database, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.keep().join("embeddings.db");
-        let db = Database::open(&path, 1, &FtsConfig::default()).unwrap();
+        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
         (db, path)
     }
 
@@ -371,7 +376,7 @@ mod tests {
             insert_page(&connection, 2, "second page text", &at);
         }
         let model = "minilm-l6-v2-q";
-        let candidates = db.embedding_candidates(model, 10).await.unwrap();
+        let candidates = db.embedding_candidates(model, 10, false).await.unwrap();
         assert_eq!(candidates.len(), 2);
 
         let rows = vec![NewEmbedding {
@@ -391,7 +396,7 @@ mod tests {
         assert_eq!(counts.pending_pages, 1);
         assert_eq!(counts.vector_bytes, 4);
 
-        let remaining = db.embedding_candidates(model, 10).await.unwrap();
+        let remaining = db.embedding_candidates(model, 10, false).await.unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].page_id, 2);
 
@@ -413,7 +418,7 @@ mod tests {
                 .unwrap();
             insert_page(&connection, 1, "first page text", &first);
         }
-        let candidates = db.embedding_candidates(model, 10).await.unwrap();
+        let candidates = db.embedding_candidates(model, 10, false).await.unwrap();
         let text = crate::store::fts::index_text_from_stored(candidates[0].result_json.as_deref())
             .unwrap();
         db.replace_page_embeddings(
@@ -432,7 +437,12 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(db.embedding_candidates(model, 10).await.unwrap().is_empty());
+        assert!(
+            db.embedding_candidates(model, 10, false)
+                .await
+                .unwrap()
+                .is_empty()
+        );
 
         let later = crate::store::db::fmt_time(Utc::now() + chrono::Duration::seconds(1));
         {
@@ -458,7 +468,7 @@ mod tests {
                 )
                 .unwrap();
         }
-        let candidates = db.embedding_candidates(model, 10).await.unwrap();
+        let candidates = db.embedding_candidates(model, 10, false).await.unwrap();
         assert_eq!(
             candidates.len(),
             1,

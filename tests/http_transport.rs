@@ -1,8 +1,8 @@
-//! The packaged release / — the loopback streamable HTTP transport: bearer auth, a real
+//! / — the loopback streamable HTTP transport: bearer auth, a real
 //! MCP SDK client, stdout hygiene and a clean SIGTERM.
 //!
 //! Only built/run when the `http` feature is enabled (`cargo test --features http`),
-//! Which is also the feature set packages.
+//! which is also the feature set packages.
 
 #![cfg(feature = "http")]
 
