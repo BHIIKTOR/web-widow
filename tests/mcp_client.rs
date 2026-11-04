@@ -105,7 +105,7 @@ async fn an_mcp_sdk_client_uses_every_tool_family_over_stdio() {
         "the SDK client sees the complete tool surface (34 tools)"
     );
     // Every advertised output schema names a root `type`: strict clients
-    // (pydantic `ListToolsResult` in Hermes) reject a schema that only carries
+    // (pydantic `ListToolsResult` models) reject a schema that only carries
     // `anyOf`. `events` is an untagged enum, so it needs the explicit root type
     // while keeping its `anyOf` variants.
     for tool in &tools {
