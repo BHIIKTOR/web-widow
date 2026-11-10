@@ -1,8 +1,8 @@
 {"version":"https://jsonfeed.org/version/1.1","title":"Fixture JSON feed",
  "home_page_url":"https://example.com/","language":"en",
  "items":[{"id":"fixture-json-1","title":"JSON fixture item",
-   "url":"https://example.com/json-item","date_published":"2026-10-31T09:00:00Z",
-   "content_text":"JSON fixture summary."},
-  {"id":"fixture-json-2","title":"JSON second item",
-   "url":"https://example.com/json-second","date_published":"2026-10-31T10:00:00Z",
-   "content_html":"<p>Second JSON <b>summary</b>.</p>"}]}
+ "url":"https://example.com/json-item","date_published":"2026-10-31T09:00:00Z",
+ "content_text":"JSON fixture summary."},
+ {"id":"fixture-json-2","title":"JSON second item",
+ "url":"https://example.com/json-second","date_published":"2026-10-31T10:00:00Z",
+ "content_html":"<p>Second JSON <b>summary</b>.</p>"}]}

@@ -1,6 +1,6 @@
--- Migration 005_monitor_label.sql — schema v5 (v0.2).
+-- Migration 005_monitor_label.sql — schema v5 (agent-ergonomics).
 --
 -- A label is human-facing metadata for monitor_list. Identity stays the row id;
--- labels are neither unique nor pattern-enforced. NULL = unlabeled,
+-- labels are neither unique nor pattern-enforced (). NULL = unlabeled,
 -- which is the state of every pre-v5 row.
 ALTER TABLE monitors ADD COLUMN label TEXT;

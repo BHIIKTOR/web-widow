@@ -1,4 +1,4 @@
-## A language empowering everyone  
+## A language empowering everyone 
  to build reliable and efficient software.
 
 ## Why Rust?
@@ -83,4 +83,4 @@ Rust would not exist without the generous contributions of time, work, and resou
 
 Rust is a community project and is very thankful for the many community contributions it receives.
 
-[See individual contributors](https://thanks.rust-lang.org/)
+[See individual contributors](https://thanks.rust-lang.org)

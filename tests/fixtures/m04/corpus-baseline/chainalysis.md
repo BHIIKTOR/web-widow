@@ -22,15 +22,15 @@ regulators worldwide use Chainalysis data
 
 customers – the largest network in the industry
 
-[![](https://www.chainalysis.com/wp-content/uploads/2026/05/reactor-static.svg)](https://www.chainalysis.com/product/reactor/)
+[![](https://www.chainalysis.com/wp-content/uploads/2026/05/reactor-static.svg)](https://www.chainalysis.com/product/reactor)
 
  
 
-[![](https://www.chainalysis.com/wp-content/uploads/2026/10/block-home-sentinel-1.svg)](https://www.chainalysis.com/product/sentinel/)
+[![](https://www.chainalysis.com/wp-content/uploads/2026/10/block-home-sentinel-1.svg)](https://www.chainalysis.com/product/sentinel)
 
  
 
-[![](https://www.chainalysis.com/wp-content/uploads/2026/10/address-screening-static-03.svg)](https://www.chainalysis.com/product/address-screening/)
+[![](https://www.chainalysis.com/wp-content/uploads/2026/10/address-screening-static-03.svg)](https://www.chainalysis.com/product/address-screening)
 
  
 
@@ -52,13 +52,13 @@ customers – the largest network in the industry
 
 ## The Chainalysis difference
 
-The only blockchain intelligence independently validated in academic research and tested under the [Daubert standard](https://www.chainalysis.com/blog/bitcoin-fog-daubert-hearing-chainalysis/) in U.S. federal court.
+The only blockchain intelligence independently validated in academic research and tested under the [Daubert standard](https://www.chainalysis.com/blog/bitcoin-fog-daubert-hearing-chainalysis) in U.S. federal court.
 
 ![](https://www.chainalysis.com/wp-content/uploads/2025/02/checkmark-orange.svg)
 
 ### Operational expertise
 
-The largest [services team](https://www.chainalysis.com/services/), the most certified professionals, and the only shared intelligence community where 2K+ investigators and compliance leaders collaborate across cases.
+The largest [services team](https://www.chainalysis.com/services), the most certified professionals, and the only shared intelligence community where 2K+ investigators and compliance leaders collaborate across cases.
 
 ![](https://www.chainalysis.com/wp-content/uploads/2025/01/logo-bny-2024.svg)
 
@@ -68,7 +68,7 @@ The largest [services team](https://www.chainalysis.com/services/), the most cer
 
 The world's largest custodian bank chose Chainalysis as the compliance foundation for its digital asset platform — the first Global Systemically Important Bank to do so. 
 
-[Learn more](https://www.chainalysis.com/blog/chainalysis-bny-mellon-announcement/) 
+[Learn more](https://www.chainalysis.com/blog/chainalysis-bny-mellon-announcement) 
 
 [![](https://www.chainalysis.com/wp-content/uploads/2024/10/calgary-police-service-2.jpg)](https://vimeo.com/1018809489) 
 
@@ -78,7 +78,7 @@ The world's largest custodian bank chose Chainalysis as the compliance foundatio
 
 CPS became the first police agency in Canada to create a dedicated blockchain investigation team in partnership with Chainalysis. 
 
-[Read the story](https://www.chainalysis.com/customer-stories/calgary-police-service/) 
+[Read the story](https://www.chainalysis.com/customer-stories/calgary-police-service) 
 
 [![](https://www.chainalysis.com/wp-content/uploads/2022/03/irs-ci.jpg)](https://vimeo.com/948751985) 
 
@@ -88,7 +88,7 @@ CPS became the first police agency in Canada to create a dedicated blockchain in
 
 A 2,000-agent federal agency uses Chainalysis as a force multiplier to investigate and prosecute crypto financial crimes. 
 
-[Read the story](https://www.chainalysis.com/customer-stories/irs-ci/) 
+[Read the story](https://www.chainalysis.com/customer-stories/irs-ci) 
 
 ![Person working on financial application](https://www.chainalysis.com/wp-content/uploads/2024/10/bitmex.jpg)
 
@@ -98,7 +98,7 @@ A 2,000-agent federal agency uses Chainalysis as a force multiplier to investiga
 
 One of the largest crypto exchanges transformed its compliance operations and dramatically cut illicit exposure with Chainalysis. 
 
-[Read the story](https://www.chainalysis.com/customer-stories/bitmex/) 
+[Read the story](https://www.chainalysis.com/customer-stories/bitmex) 
 
 ![](https://www.chainalysis.com/wp-content/uploads/2024/04/moonpay.jpg)
 
@@ -108,15 +108,15 @@ One of the largest crypto exchanges transformed its compliance operations and dr
 
 By integrating the Chainalysis blockchain analytics platform, MoonPay has significantly reduced false positives, leading to increased revenue through fewer blocked transactions and customer offboarding. 
 
-[Read the story](https://www.chainalysis.com/customer-stories/moonpay/) 
+[Read the story](https://www.chainalysis.com/customer-stories/moonpay) 
 
  
 
-*   [The $6.4 Billion Binance Hack: Tracing the North Korea Link](https://www.chainalysis.com/blog/binance-exploit-latest-findings-and-response/)
-*   [Chainalysis Security Incident Information](https://www.chainalysis.com/blog/security-incident-october-30/)
-*   [South Africa Leads Sub-Saharan Africa’s 13.4% Crypto Growth](https://www.chainalysis.com/blog/sub-saharan-africa-crypto-adoption-2026/)
-*   [Treasury Sanctions Russians, North Koreans supporting DPRK IT Worker Fraud](https://www.chainalysis.com/blog/ofac-sanctions-dprk-it-worker-fraud/)
-*   [International Law Enforcement Seizes Domain of Virtualine Bulletproof Hosting Service](https://www.chainalysis.com/blog/virtualine-bulletproof-hosting-seizure-october-2026/)
+* [The $6.4 Billion Binance Hack: Tracing the North Korea Link](https://www.chainalysis.com/blog/binance-exploit-latest-findings-and-response)
+* [Chainalysis Security Incident Information](https://www.chainalysis.com/blog/security-incident-october-30)
+* [South Africa Leads Sub-Saharan Africa’s 13.4% Crypto Growth](https://www.chainalysis.com/blog/sub-saharan-africa-crypto-adoption-2026)
+* [Treasury Sanctions Russians, North Koreans supporting DPRK IT Worker Fraud](https://www.chainalysis.com/blog/ofac-sanctions-dprk-it-worker-fraud)
+* [International Law Enforcement Seizes Domain of Virtualine Bulletproof Hosting Service](https://www.chainalysis.com/blog/virtualine-bulletproof-hosting-seizure-october-2026)
 
  
 

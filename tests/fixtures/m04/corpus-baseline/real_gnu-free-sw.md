@@ -10,24 +10,24 @@ We campaign for these freedoms because everyone deserves them. With these freedo
 
 ### Table of contents
 
-*   [The Free Software Definition](#fs-definition)
-    *   [The four essential freedoms](#four-freedoms)
-    *   [Free software *can* be commercial](#selling)
-*   [Clarifying the Boundary Between Free and Nonfree](#clarifying)
-    *   [The freedom to run the program as you wish](#run-the-program)
-    *   [The freedom to study the source code and make changes](#make-changes)
-    *   [The freedom to redistribute if you wish: basic requirements](#redistribute)
-    *   [Copyleft](#copyleft)
-    *   [Rules about packaging and distribution details](#packaging)
-    *   [Export regulations](#exportcontrol)
-    *   [Legal considerations](#legal-details)
-    *   [Contract-based licenses](#contracts)
-*   [The Free Software Definition in Practice](#in-practice)
-    *   [How we interpret these criteria](#interpretation)
-    *   [Get help with free licenses](#get-help)
-    *   [Use the right words when talking about free software](#terminology)
-*   [Beyond Software](#beyond-software)
-*   [History](#History)
+* [The Free Software Definition](#fs-definition)
+ * [The four essential freedoms](#four-freedoms)
+ * [Free software *can* be commercial](#selling)
+* [Clarifying the Boundary Between Free and Nonfree](#clarifying)
+ * [The freedom to run the program as you wish](#run-the-program)
+ * [The freedom to study the source code and make changes](#make-changes)
+ * [The freedom to redistribute if you wish: basic requirements](#redistribute)
+ * [Copyleft](#copyleft)
+ * [Rules about packaging and distribution details](#packaging)
+ * [Export regulations](#exportcontrol)
+ * [Legal considerations](#legal-details)
+ * [Contract-based licenses](#contracts)
+* [The Free Software Definition in Practice](#in-practice)
+ * [How we interpret these criteria](#interpretation)
+ * [Get help with free licenses](#get-help)
+ * [Use the right words when talking about free software](#terminology)
+* [Beyond Software](#beyond-software)
+* [History](#History)
 
 ### The Free Software Definition
 
@@ -37,10 +37,10 @@ The free software definition presents the criteria for whether a particular soft
 
 A program is free software if the program's users (referred to individually here as “you”) have the four essential freedoms: [\[1\]](#f1) 
 
-*   The freedom to run the program as you wish, for any purpose (freedom 0).
-*   The freedom to study how the program works, and change it so it does your computing as you wish (freedom 1). Access to the source code is a precondition for this.
-*   The freedom to redistribute copies so you can help others (freedom 2).
-*   The freedom to distribute copies of your modified versions to others (freedom 3). By doing this you can give the whole community a chance to benefit from your changes. Access to the source code is a precondition for this.
+* The freedom to run the program as you wish, for any purpose (freedom 0).
+* The freedom to study how the program works, and change it so it does your computing as you wish (freedom 1). Access to the source code is a precondition for this.
+* The freedom to redistribute copies so you can help others (freedom 2).
+* The freedom to distribute copies of your modified versions to others (freedom 3). By doing this you can give the whole community a chance to benefit from your changes. Access to the source code is a precondition for this.
 
 A program is free software if it gives users adequately all of these freedoms. Otherwise, it is nonfree. While we can distinguish various nonfree distribution schemes in terms of how far they fall short of being free, we consider them all equally unethical.
 
@@ -156,7 +156,7 @@ Another group uses the term “open source” to mean something close (but not i
 
 The same arguments also make sense for other kinds of works of practical use—that is to say, works that embody useful knowledge, such as educational works and reference works. [Wikipedia](https://wikipedia.org) is the best-known example. 
 
-Any kind of work *can* be free, and the definition of free software has been extended to a definition of [free cultural works](http://freedomdefined.org/) applicable to any kind of works. 
+Any kind of work *can* be free, and the definition of free software has been extended to a definition of [free cultural works](http://freedomdefined.org) applicable to any kind of works. 
 
 ### History
 
@@ -234,10 +234,10 @@ Clarify that all retroactive changes to the license are unacceptable, even if it
 
 Four clarifications of points not explicit enough, or stated in some places but not reflected everywhere:
 
-*   “Improvements” does not mean the license can substantively limit what kinds of modified versions you can release. Freedom 3 includes distributing modified versions, not just changes.
-*   The right to merge in existing modules refers to those that are suitably licensed.
-*   Explicitly state the conclusion of the point about export controls.
-*   Imposing a license change constitutes revoking the old license.
+* “Improvements” does not mean the license can substantively limit what kinds of modified versions you can release. Freedom 3 includes distributing modified versions, not just changes.
+* The right to merge in existing modules refers to those that are suitably licensed.
+* Explicitly state the conclusion of the point about export controls.
+* Imposing a license change constitutes revoking the old license.
 
 [Version 1.57](https://example.com/philosophy/free-sw-history/57.html)
 
@@ -279,4 +279,4 @@ There are gaps in the version numbers shown above because there are other change
 
 ### Footnote
 
-1.  The reason they are numbered 0, 1, 2 and 3 is historical. Around 1990 there were three freedoms, numbered 1, 2 and 3. Then we realized that the freedom to run the program needed to be mentioned explicitly. It was clearly more basic than the other three, so it properly should precede them. Rather than renumber the others, we made it freedom 0.
+1. The reason they are numbered 0, 1, 2 and 3 is historical. Around 1990 there were three freedoms, numbered 1, 2 and 3. Then we realized that the freedom to run the program needed to be mentioned explicitly. It was clearly more basic than the other three, so it properly should precede them. Rather than renumber the others, we made it freedom 0.

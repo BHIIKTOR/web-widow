@@ -1,8 +1,8 @@
 # web-widow configuration — every value shown is the built-in default.
 #
 # Only two settings widen what the tool may reach, and both live here:
-#   fetch.allow_hosts   private/LAN hosts and CIDRs (each match is logged)
-#   robots.enabled      set false to disable robots.txt enforcement (logged loudly)
+# fetch.allow_hosts private/LAN hosts and CIDRs (each match is logged)
+# robots.enabled set false to disable robots.txt enforcement (logged loudly)
 # Neither is exposed as a tool argument, environment variable or CLI flag.
 #
 # HTTP transport (build with --features http): the bearer token is NOT a config
@@ -47,14 +47,14 @@ max_field_chars = 16_384
 cache_freshness_s = 300
 
 [feed]
-# fetch_feed defaults and caps. default_limit <= max_limit <= 100.
+# fetch_feed defaults and caps (). default_limit <= max_limit <= 100.
 default_limit = 20
 max_limit = 100
 # Plain-text summary/description cap; cuts are counted in truncated_summaries.
 max_summary_chars = 2_000
 
 [sitemap]
-# `sitemap` / `crawl_start.sitemap_urls` ceilings.
+# `sitemap` / `crawl_start.sitemap_urls` ceilings ().
 # Fetched body cap (1..=64 MiB); a gzip body is decompressed only up to 4× this.
 max_bytes = 20_971_520
 # URL entries kept per document (1..=50 000) and index children fetched (1..=10).
@@ -62,7 +62,7 @@ max_urls = 5_000
 max_children = 5
 
 [pdf]
-# `pdf_extract` ceilings and the native PDFium engine.
+# `pdf_extract` ceilings and the native PDFium engine ().
 # Strict path to libpdfium.so: when set, exactly this file is loaded and a
 # failure is render_unavailable naming the key; there is no fallback.
 # pdfium_path = "/usr/local/lib/web-widow/libpdfium.so"
@@ -193,13 +193,13 @@ snapshots_per_monitor = 20
 max_blob_bytes = 21_474_836_480
 
 [embeddings]
-# Local semantic index. `serve` loads the provisioned ONNX Runtime
+# E1 — local semantic index. `serve` loads the provisioned ONNX Runtime
 # library + pinned model files when enabled and runs the bounded lazy backfill;
 # `search_semantic` and `embedding_status` read the result. No network access.
 enabled = false
 model = "minilm-l6-v2-q"
-# model_dir = "/abs/path"          # default: <data_dir>/models/<model>
-# ort_dylib_path = "/abs/path"     # unset: discovery order below
+# model_dir = "/abs/path" # default: <data_dir>/models/<model>
+# ort_dylib_path = "/abs/path" # unset: discovery (E1)
 chunk_chars = 900
 chunk_overlap = 120
 max_chunks_per_page = 60
@@ -209,7 +209,7 @@ backfill_interval_ms = 30_000
 query_max_chars = 512
 
 [webhooks]
-# Deliberate outbound change notifications. `serve` runs the
+# W1 — deliberate outbound change notifications. `serve` runs the
 # dispatcher when enabled; local `run-due` performs one bounded flush. A check
 # only inserts an outbox row. Targets exist ONLY here as named entries; tools
 # and monitors attach names, never URLs. The URL is treated as a secret: it is
@@ -221,14 +221,14 @@ max_attempts = 5
 allow_http = false
 # [webhooks.targets.<name>]
 # name: ^[a-z0-9][a-z0-9_-]{0,31}$
-# url = "https://..."          # https unless allow_http; no userinfo
-# kind = "generic"             # generic | slack | discord
-# secret_env = "VAR"           # at most one of secret_env/secret_file
-# auth_env = "VAR"             # at most one of auth_env/auth_file
-# include_diff = false         # operator opt-in; diff is omitted by default
+# url = "https://..." # https unless allow_http; no userinfo
+# kind = "generic" # generic | slack | discord
+# secret_env = "VAR" # at most one of secret_env/secret_file
+# auth_env = "VAR" # at most one of auth_env/auth_file
+# include_diff = false # operator opt-in; diff is omitted by default
 
 [scheduler]
-# Opt-in in-process timer. `serve` checks
+# S1 — opt-in in-process timer (amended). `serve` checks
 # due monitors on this tick via the same run_due pass; `run-due` is unchanged.
 # Enabling the timer means removing/disabling any cron run-due for the instance.
 enabled = false
@@ -241,29 +241,29 @@ max_checks_per_tick = 25
 # operator imports ca.pem once per client. An operator PEM pair overrides the
 # generated set (both paths or neither); it is never mixed with generation.
 tls = false
-# tls_cert_file = "/abs/path/cert.pem"   # PEM chain, leaf first
-# tls_key_file  = "/abs/path/key.pem"    # PEM private key, mode 0600
+# tls_cert_file = "/abs/path/cert.pem" # PEM chain, leaf first
+# tls_key_file = "/abs/path/key.pem" # PEM private key, mode 0600
 
-# [auth] — operator-configured credentials. References live only in
+# [auth] — auth-crawl v1: config-named credentials. References live only in
 # this 0600 file; an agent names a profile on `fetch_page` and never supplies a
 # reference or a value. An authenticated fetch is return-only (no cache, no
 # rows, no blobs, no events) and records one value-free auth_audit row per
 # attempt. Commented out because every value shown here is the built-in default.
 #
 # [auth]
-# audit_days = 90                  # auth_audit retention, 1..=3650
-# manager_timeout_ms = 5000        # hard per-resolution timeout, 100..=60000
-# allow_loopback_http = false      # plain HTTP for literal loopback addresses only
-# persist = false # store authenticated bodies (return-only today)
-# index_authenticated = false      # include them in local search + embeddings
-# events_authenticated = false     # include events derived from them in the feed
-# page_retention_days = 7          # shorter retention for stored authenticated pages
+# audit_days = 90 # auth_audit retention, 1..=3650
+# manager_timeout_ms = 5000 # hard per-resolution timeout, 100..=60000
+# allow_loopback_http = false # plain HTTP for literal loopback addresses only
+# persist = false # store authenticated bodies ( stays return-only)
+# index_authenticated = false # include them in local search + embeddings
+# events_authenticated = false # include events derived from them in the feed
+# page_retention_days = 7 # shorter retention for stored authenticated pages
 #
-# [auth.managers.op]               # every declared manager is validated at load
-# path = "/usr/bin/op"             # absolute, existing, executable; PATH never searched
+# [auth.managers.op] # every declared manager is validated at load
+# path = "/usr/bin/op" # absolute, existing, executable; PATH never searched
 # env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"]
-#                                  # names only; values come from the service env.
-#                                  # HOME (when set) is passed; PATH and WEB_WIDOW_* are refused.
+# # names only; values come from the service env.
+# # HOME (when set) is passed; PATH and WEB_WIDOW_* are refused.
 #
 # [auth.managers.bw]
 # path = "/usr/bin/bw"
@@ -273,31 +273,31 @@ tls = false
 # path = "/usr/bin/pass"
 # env_allow = []
 #
-# [auth.profiles.github]           # bearer (default), basic or header
+# [auth.profiles.github] # bearer (default), basic or header
 # kind = "bearer"
-# host = "github.com"              # lowercase bare host; no scheme, port or path
-# port = 443                       # exact credential origin port, 1..=65535 (default 443)
-# reference = "op://Private/github/token"   # op://<vault>/<item>/<field>
-# allow_subdomains = false         # reachability only; a credential stays exact-origin
+# host = "github.com" # lowercase bare host; no scheme, port or path
+# port = 443 # exact credential origin port, 1..=65535 (default 443)
+# reference = "op://Private/github/token" # op://<vault>/<item>/<field>
+# allow_subdomains = false # reachability only; a credential stays exact-origin
 #
 # [auth.profiles.legacy]
 # kind = "basic"
 # host = "legacy.example.com"
-# username_reference = "op://Private/legacy/username"   # a reference, never a literal
+# username_reference = "op://Private/legacy/username" # a reference, never a literal
 # password_reference = "op://Private/legacy/password"
 #
-# [auth.profiles.github-session]   # kind = "session": operator-driven login + sealed jar
+# [auth.profiles.github-session] # kind = "session": operator-driven login + sealed jar
 # kind = "session"
-# host = "github.com"              # binding host; capture seals this exact host only
+# host = "github.com" # binding host; capture seals this exact host only
 # port = 443
 # login_url = "https://github.com/login"
-# login_origins = ["github.com"]   # exact hosts the login window may visit (must include host)
-# verify_url = "https://github.com/"   # https on the binding host; 2xx before sealing
+# login_origins = ["github.com"] # exact hosts the login window may visit (must include host)
+# verify_url = "https://github.com/" # https on the binding host; 2xx before sealing
 # assets = ["github.githubassets.com"]
 # session_max_age_days = 30
 #
 # [auth.profiles.internal]
 # kind = "header"
 # host = "internal.example.com"
-# header = "X-Api-Key"             # Host/Cookie/Content-Length/Proxy-* are refused
+# header = "X-Api-Key" # Host/Cookie/Content-Length/Proxy-* are refused
 # reference = "op://Private/internal/key"

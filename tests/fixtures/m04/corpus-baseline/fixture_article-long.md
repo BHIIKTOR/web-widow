@@ -14,10 +14,10 @@ Local fishermen negotiated a compensation fund, and the array now pauses for six
 
 ## The numbers
 
-| Metric         | Value  |
+| Metric | Value |
 | -------------- | ------ |
-| Capacity       | 6 MW   |
-| Annual output  | 21 GWh |
-| Homes supplied | 5,400  |
+| Capacity | 6 MW |
+| Annual output | 21 GWh |
+| Homes supplied | 5,400 |
 
 The remaining question is storage: the tide is predictable but not dispatchable, and the battery container on the quay covers only forty minutes of peak demand.

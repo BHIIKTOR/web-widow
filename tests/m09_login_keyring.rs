@@ -1,4 +1,4 @@
-//! v0.9 — the keyring preflight happens **before** any window.
+//! the keyring preflight happens **before** any window.
 //!
 //! This is its own test binary so the deliberately broken D-Bus address cannot
 //! affect any other test's keyring access. The Chrome path is a non-existent

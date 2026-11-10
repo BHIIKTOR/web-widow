@@ -1,38 +1,38 @@
--- Migration 002_crawl.sql — schema v2 (jobs/frontier areas).
+-- Migration 002_crawl.sql — schema v2 ( jobs/frontier areas).
 -- Applied inside a transaction by the writer; forward-only, tracked by
 -- PRAGMA user_version. `links_count` is additive to the column
--- list because `crawl_results` reports it per page (see).
+-- list because `crawl_results` reports it per page (see EV-B04).
 
 CREATE TABLE jobs (
-    id               TEXT PRIMARY KEY,
-    kind             TEXT NOT NULL,
-    spec_json        TEXT NOT NULL,
-    state            TEXT NOT NULL,
-    created_at       TEXT NOT NULL,
-    started_at       TEXT,
-    finished_at      TEXT,
-    counters_json    TEXT NOT NULL,
-    cancel_requested INTEGER NOT NULL DEFAULT 0,
-    error            TEXT
+ id TEXT PRIMARY KEY,
+ kind TEXT NOT NULL,
+ spec_json TEXT NOT NULL,
+ state TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ started_at TEXT,
+ finished_at TEXT,
+ counters_json TEXT NOT NULL,
+ cancel_requested INTEGER NOT NULL DEFAULT 0,
+ error TEXT
 );
 
 CREATE INDEX jobs_state ON jobs (state);
 
 CREATE TABLE frontier (
-    job_id      TEXT    NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
-    url_hash    TEXT    NOT NULL,
-    url         TEXT    NOT NULL,
-    depth       INTEGER NOT NULL,
-    priority    INTEGER NOT NULL,
-    state       TEXT    NOT NULL,
-    attempts    INTEGER NOT NULL DEFAULT 0,
-    lease_until TEXT,
-    last_error  TEXT,
-    links_count INTEGER NOT NULL DEFAULT 0,
-    -- Near-duplicate identity of the delivered Markdown (link targets removed);
-    -- the trap guard is rebuilt from this after a restart.
-    content_hash TEXT,
-    PRIMARY KEY (job_id, url_hash)
+ job_id TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
+ url_hash TEXT NOT NULL,
+ url TEXT NOT NULL,
+ depth INTEGER NOT NULL,
+ priority INTEGER NOT NULL,
+ state TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ lease_until TEXT,
+ last_error TEXT,
+ links_count INTEGER NOT NULL DEFAULT 0,
+ -- Near-duplicate identity of the delivered Markdown (link targets removed);
+ -- the trap guard is rebuilt from this after a restart.
+ content_hash TEXT,
+ PRIMARY KEY (job_id, url_hash)
 );
 
 -- SQLite cannot name rowid in an index expression; every index carries it

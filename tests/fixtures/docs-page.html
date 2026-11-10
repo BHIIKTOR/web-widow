@@ -1,34 +1,34 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Configure the queue — Acme Docs</title>
-  <style>.sidebar{width:240px}</style>
+ <meta charset="utf-8">
+ <title>Configure the queue — Acme Docs</title>
+ <style>.sidebar{width:240px}</style>
 </head>
 <body>
-  <div class="layout">
-    <nav class="sidebar">
-      <a href="/docs/install">Install</a>
-      <a href="/docs/queue">Queue</a>
-      <a href="/docs/retries">Retries</a>
-      <a href="/docs/api">API reference</a>
-    </nav>
-    <main class="content">
-      <h1>Configure the queue</h1>
-      <p>The queue is configured in <code>acme.toml</code>. Changes take effect after a restart, and an invalid file prevents startup rather than silently falling back.</p>
-      <h2>Minimal configuration</h2>
-      <pre><code>[queue]
+ <div class="layout">
+ <nav class="sidebar">
+ <a href="/docs/install">Install</a>
+ <a href="/docs/queue">Queue</a>
+ <a href="/docs/retries">Retries</a>
+ <a href="/docs/api">API reference</a>
+ </nav>
+ <main class="content">
+ <h1>Configure the queue</h1>
+ <p>The queue is configured in <code>acme.toml</code>. Changes take effect after a restart, and an invalid file prevents startup rather than silently falling back.</p>
+ <h2>Minimal configuration</h2>
+ <pre><code>[queue]
 workers = 4
 lease_seconds = 30
 </code></pre>
-      <p><code>workers</code> must not exceed the number of database connections. With the default pool of 8, a value of 4 leaves capacity for readers.</p>
-      <h2>Leases</h2>
-      <p>A worker leases a job for <code>lease_seconds</code>. If the worker dies, the lease expires and another worker may take the job. Leases are not renewed automatically; a long job must call <code>renew()</code>.</p>
-      <pre><code>job.renew(Duration::from_secs(30))?;
+ <p><code>workers</code> must not exceed the number of database connections. With the default pool of 8, a value of 4 leaves capacity for readers.</p>
+ <h2>Leases</h2>
+ <p>A worker leases a job for <code>lease_seconds</code>. If the worker dies, the lease expires and another worker may take the job. Leases are not renewed automatically; a long job must call <code>renew()</code>.</p>
+ <pre><code>job.renew(Duration::from_secs(30))?;
 </code></pre>
-      <p>Reusing a lease identifier after it expired is an error, and the call returns <code>LeaseLost</code>.</p>
-      <div class="callout warning">Do not set <code>lease_seconds</code> below the p99 job duration.</div>
-    </main>
-  </div>
+ <p>Reusing a lease identifier after it expired is an error, and the call returns <code>LeaseLost</code>.</p>
+ <div class="callout warning">Do not set <code>lease_seconds</code> below the p99 job duration.</div>
+ </main>
+ </div>
 </body>
 </html>

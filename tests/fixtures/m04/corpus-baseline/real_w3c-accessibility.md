@@ -2,8 +2,8 @@ Page Contents
 
 ## Accessibility in Context
 
-> The power of the Web is in its universality.  
->  Access by everyone regardless of disability is an essential aspect.
+> The power of the Web is in its universality. 
+> Access by everyone regardless of disability is an essential aspect.
 
 The Web is fundamentally designed to work for all people, whatever their hardware, software, language, location, or ability. When the Web meets this goal, it is accessible to people with a diverse range of hearing, movement, sight, and cognitive ability.
 
@@ -15,27 +15,27 @@ Thus the impact of disability is radically changed on the Web because the Web re
 
 Web accessibility means that websites, tools, and technologies are designed and developed so that people with disabilities can use them. More specifically, people can:
 
-*   perceive, understand, navigate, and interact with the Web
-*   contribute to the Web
+* perceive, understand, navigate, and interact with the Web
+* contribute to the Web
 
 Web accessibility encompasses all disabilities that affect access to the Web, including:
 
-*   auditory
-*   cognitive
-*   neurological
-*   physical
-*   speech
-*   visual
+* auditory
+* cognitive
+* neurological
+* physical
+* speech
+* visual
 
 Web accessibility also benefits people *without* disabilities, for example:
 
-*   people using mobile phones, smart watches, smart TVs, and other devices with small screens, different input modes, etc.
-*   older people with changing abilities due to ageing
-*   people with “temporary disabilities” such as a broken arm or lost glasses
-*   people with “situational limitations” such as in bright sunlight or in an environment where they cannot listen to audio
-*   people using a slow Internet connection, or who have limited or expensive bandwidth
+* people using mobile phones, smart watches, smart TVs, and other devices with small screens, different input modes, etc.
+* older people with changing abilities due to ageing
+* people with “temporary disabilities” such as a broken arm or lost glasses
+* people with “situational limitations” such as in bright sunlight or in an environment where they cannot listen to audio
+* people using a slow Internet connection, or who have limited or expensive bandwidth
 
-For a 7-minute video with examples of how accessibility is essential for people with disabilities and useful for everyone in a variety of situations, see:  
+For a 7-minute video with examples of how accessibility is essential for people with disabilities and useful for everyone in a variety of situations, see: 
  [![](https://example.com/WAI/content-images/intro-accessibility/video-still-accessibility-perspectives-16-9.jpg) Web Accessibility Perspectives Video *(YouTube)*](https://www.youtube.com/watch?v=3f31oufqFSM) 
 
 ## Accessibility is Important for Individuals, Businesses, Society
@@ -46,9 +46,9 @@ The Web offers the possibility of unprecedented access to information and intera
 
 Accessibility supports social inclusion for people with disabilities as well as others, such as:
 
-*   older people
-*   people in rural areas
-*   people in developing countries
+* older people
+* people in rural areas
+* people in developing countries
 
 **There is also a strong business case for accessibility.** As shown in the previous section, accessible design improves overall user experience and satisfaction, especially in a variety of situations, across different devices, and for older users. Accessibility can enhance your brand, drive innovation, and extend your market reach.
 
@@ -58,7 +58,7 @@ Web accessibility is **required by law** in many situations.
 
 Web accessibility depends on several components working together, including web technologies, web browsers and other "user agents", authoring tools, and websites.
 
-The W3C Web Accessibility Initiative ([WAI](https://example.com/WAI/about/participating/)) develops technical specifications, guidelines, techniques, and supporting resources that describe accessibility solutions. These are considered international standards for web accessibility; for example, WCAG 2.2 is also an ISO standard: ISO/IEC 40500.
+The W3C Web Accessibility Initiative ([WAI](https://example.com/WAI/about/participating)) develops technical specifications, guidelines, techniques, and supporting resources that describe accessibility solutions. These are considered international standards for web accessibility; for example, WCAG 2.2 is also an ISO standard: ISO/IEC 40500.
 
 ### Making Your Website Accessible
 
@@ -100,8 +100,8 @@ It’s easy and relatively inexpensive for websites to provide transcripts. Ther
 
 ## For More Information
 
-W3C WAI provides a wide range of resources on different aspects of web accessibility [standards](https://example.com/WAI/standards-guidelines/), [education](https://example.com/WAI/teach-advocate/), [testing/evaluation](https://example.com/WAI/test-evaluate/), [project management, and policy](https://example.com/WAI/planning/). We encourage you to explore this website, or look through the [WAI Resources](https://example.com/WAI/resources/) list.
+W3C WAI provides a wide range of resources on different aspects of web accessibility [standards](https://example.com/WAI/standards-guidelines), [education](https://example.com/WAI/teach-advocate), [testing/evaluation](https://example.com/WAI/test-evaluate), [project management, and policy](https://example.com/WAI/planning). We encourage you to explore this website, or look through the [WAI Resources](https://example.com/WAI/resources) list.
 
-**[Digital Accessibility Foundations - Free Online Course](https://example.com/WAI/courses/foundations-course/)** provides the foundation you need to make your digital technology accessible.
+**[Digital Accessibility Foundations - Free Online Course](https://example.com/WAI/courses/foundations-course)** provides the foundation you need to make your digital technology accessible.
 
 [Back to Top](#top)

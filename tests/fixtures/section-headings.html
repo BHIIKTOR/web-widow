@@ -2,28 +2,28 @@
 <html lang="en">
 <head><meta charset="utf-8"><title>Choosing a storage engine — Ops Notes</title></head>
 <body>
-  <article>
-    <div class="page-title">Choosing a storage engine</div>
-    <p>These notes record the two thresholds we actually hit and the checks we run before changing engines.</p>
-    <h1 id="single-file">1. When a single file is enough</h1>
-    <div class="content">
-      <p>Copying one file is a backup an operator can reason about, and restoring it is a single command that either works or fails loudly in front of the person running it.</p>
-      <p>A file-based store needs no daemon, no configuration file, no supervision and no upgrade window, which matters for a service that one part-time operator maintains.</p>
-      <p>Reader concurrency is cheap when the storage engine pages through a single file, and our read-to-write ratio is roughly forty to one in production traffic.</p>
-      <p>Everything lives on one host, so there is no second machine that needs the data and no reason to pay for a network protocol between the application and its rows.</p>
-    </div>
-    <h1 id="server">2. When a server earns its keep</h1>
-    <div class="content">
-      <p>Several processes that must write at the same instant need one arbiter that holds the lock and queues the rest, which a single file cannot provide by itself.</p>
-      <p>A file cannot be shared across machines safely, so network-separated clients are the second reason to run a server process at all.</p>
-    </div>
-    <h1 id="checklist">3. Checklist before migrating</h1>
-    <div class="content">
-      <p>Measure write concurrency for a full week, including the nightly batch, before concluding that a file is the bottleneck.</p>
-      <p>Restore a backup into a scratch directory and query it; a backup that merely completes is not a backup.</p>
-      <p>Write the rollback plan first, so the migration is reversible on the day it goes wrong.</p>
-    </div>
-  </article>
-  <footer><p>Subscribe to the ops newsletter</p></footer>
+ <article>
+ <div class="page-title">Choosing a storage engine</div>
+ <p>These notes record the two thresholds we actually hit and the checks we run before changing engines.</p>
+ <h1 id="single-file">1. When a single file is enough</h1>
+ <div class="content">
+ <p>Copying one file is a backup an operator can reason about, and restoring it is a single command that either works or fails loudly in front of the person running it.</p>
+ <p>A file-based store needs no daemon, no configuration file, no supervision and no upgrade window, which matters for a service that one part-time operator maintains.</p>
+ <p>Reader concurrency is cheap when the storage engine pages through a single file, and our read-to-write ratio is roughly forty to one in production traffic.</p>
+ <p>Everything lives on one host, so there is no second machine that needs the data and no reason to pay for a network protocol between the application and its rows.</p>
+ </div>
+ <h1 id="server">2. When a server earns its keep</h1>
+ <div class="content">
+ <p>Several processes that must write at the same instant need one arbiter that holds the lock and queues the rest, which a single file cannot provide by itself.</p>
+ <p>A file cannot be shared across machines safely, so network-separated clients are the second reason to run a server process at all.</p>
+ </div>
+ <h1 id="checklist">3. Checklist before migrating</h1>
+ <div class="content">
+ <p>Measure write concurrency for a full week, including the nightly batch, before concluding that a file is the bottleneck.</p>
+ <p>Restore a backup into a scratch directory and query it; a backup that merely completes is not a backup.</p>
+ <p>Write the rollback plan first, so the migration is reversible on the day it goes wrong.</p>
+ </div>
+ </article>
+ <footer><p>Subscribe to the ops newsletter</p></footer>
 </body>
 </html>

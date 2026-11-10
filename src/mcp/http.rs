@@ -29,40 +29,40 @@ use crate::events::EventsService;
 
 /// The feed route inputs: its own capability token, never the MCP bearer.
 pub struct FeedRoute {
-    pub enabled: bool,
-    pub token: Option<String>,
-    pub events: Arc<EventsService>,
+ pub enabled: bool,
+ pub token: Option<String>,
+ pub events: Arc<EventsService>,
 }
 
 /// The feed is loopback-only: it may be enabled only on a loopback bind.
 /// `main` refuses startup and [`serve`] re-checks, so a library caller cannot
 /// bypass the posture.
 pub fn feed_bind_allowed(addr: &SocketAddr, feed_enabled: bool) -> bool {
-    !feed_enabled || addr.ip().is_loopback()
+ !feed_enabled || addr.ip().is_loopback()
 }
 
 #[derive(Clone)]
 struct FeedState {
-    enabled: bool,
-    token: Option<Arc<str>>,
-    events: Arc<EventsService>,
+ enabled: bool,
+ token: Option<Arc<str>>,
+ events: Arc<EventsService>,
 }
 
 async fn require_bearer(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
-    let authorized = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .is_some_and(|provided| constant_time_eq(provided.as_bytes(), token.as_bytes()));
-    if authorized {
-        return next.run(request).await;
-    }
-    let mut response = (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
-    response
-        .headers_mut()
-        .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
-    response
+ let authorized = request
+.headers()
+.get(header::AUTHORIZATION)
+.and_then(|value| value.to_str().ok())
+.and_then(|value| value.strip_prefix("Bearer "))
+.is_some_and(|provided| constant_time_eq(provided.as_bytes(), token.as_bytes()));
+ if authorized {
+ return next.run(request).await;
+ }
+ let mut response = (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+ response
+.headers_mut()
+.insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+ response
 }
 
 /// Request-level transport diagnostics: method, path, status, the first eight
@@ -73,38 +73,38 @@ async fn require_bearer(State(token): State<Arc<str>>, request: Request, next: N
 /// default level); DEBUG otherwise. This middleware is layered **outside** the
 /// bearer check so it also sees `401`s.
 async fn access_log(request: Request, next: Next) -> Response {
-    let method = request.method().clone();
-    let path = request.uri().path().to_string();
-    let session = request
-        .headers()
-        .get("mcp-session-id")
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.chars().take(8).collect::<String>())
-        .unwrap_or_else(|| "none".to_string());
-    let started = Instant::now();
-    let response = next.run(request).await;
-    let status = response.status().as_u16();
-    let duration_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
-    if status >= 400 {
-        tracing::info!(
-            method = %method,
-            path = %path,
-            status,
-            session = %session,
-            duration_ms,
-            "http request"
-        );
-    } else {
-        tracing::debug!(
-            method = %method,
-            path = %path,
-            status,
-            session = %session,
-            duration_ms,
-            "http request"
-        );
-    }
-    response
+ let method = request.method().clone();
+ let path = request.uri().path().to_string();
+ let session = request
+.headers()
+.get("mcp-session-id")
+.and_then(|value| value.to_str().ok())
+.map(|value| value.chars().take(8).collect::<String>())
+.unwrap_or_else(|| "none".to_string());
+ let started = Instant::now();
+ let response = next.run(request).await;
+ let status = response.status().as_u16();
+ let duration_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+ if status >= 400 {
+ tracing::info!(
+ method = %method,
+ path = %path,
+ status,
+ session = %session,
+ duration_ms,
+ "http request"
+);
+ } else {
+ tracing::debug!(
+ method = %method,
+ path = %path,
+ status,
+ session = %session,
+ duration_ms,
+ "http request"
+);
+ }
+ response
 }
 
 /// Serve `server` over streamable HTTP at `/mcp` until `shutdown` is cancelled.
@@ -112,201 +112,194 @@ async fn access_log(request: Request, next: Next) -> Response {
 /// The caller has already validated the bind address, the token and the
 /// loopback policy; this function only enforces the token on the wire.
 pub async fn serve(
-    server: WebWidowServer,
-    addr: SocketAddr,
-    token: String,
-    feed: FeedRoute,
-    shutdown: CancellationToken,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    serve_with_scheme(server, addr, token, feed, shutdown, "http").await
+ server: WebWidowServer,
+ addr: SocketAddr,
+ token: String,
+ feed: FeedRoute,
+ shutdown: CancellationToken) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+ serve_with_scheme(server, addr, token, feed, shutdown, "http").await
 }
 
 async fn serve_with_scheme(
-    server: WebWidowServer,
-    addr: SocketAddr,
-    token: String,
-    feed: FeedRoute,
-    shutdown: CancellationToken,
-    scheme: &'static str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let local = listener.local_addr()?;
-    if !feed_bind_allowed(&local, feed.enabled) {
-        // Drop the listener without serving: a non-loopback bind must never
-        // expose the feed (or its token check) on another interface.
-        drop(listener);
-        return Err(format!(
-            "refusing to serve the change feed on a non-loopback address ({local}); \
-             set `[events].feed_enabled = false` for an MCP-only network deployment"
-        )
-        .into());
-    }
-    let token: Arc<str> = Arc::from(token);
-    let router = build_router(
-        server,
-        Arc::clone(&token),
-        &feed,
-        local,
-        shutdown.child_token(),
-    );
-    if feed.enabled {
-        feed.events
-            .runtime()
-            .set_url(Some(format!("{scheme}://{local}/feeds/changes.xml")));
-    }
-    tracing::info!(
-        %local,
-        auth = "bearer",
-        stateless = true,
-        feed = if feed.enabled { "enabled" } else { "disabled" },
-        "serving MCP over streamable HTTP at /mcp"
-    );
-    let outcome = axum::serve(listener, router)
-        .with_graceful_shutdown(async move { shutdown.cancelled().await })
-        .await;
-    feed.events.runtime().set_url(None);
-    outcome?;
-    Ok(())
+ server: WebWidowServer,
+ addr: SocketAddr,
+ token: String,
+ feed: FeedRoute,
+ shutdown: CancellationToken,
+ scheme: &'static str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+ let listener = tokio::net::TcpListener::bind(addr).await?;
+ let local = listener.local_addr()?;
+ if !feed_bind_allowed(&local, feed.enabled) {
+ // Drop the listener without serving: a non-loopback bind must never
+ // expose the feed (or its token check) on another interface.
+ drop(listener);
+ return Err(format!(
+ "refusing to serve the change feed on a non-loopback address ({local}); \
+ set `[events].feed_enabled = false` for an MCP-only network deployment"
+)
+.into());
+ }
+ let token: Arc<str> = Arc::from(token);
+ let router = build_router(
+ server,
+ Arc::clone(&token),
+ &feed,
+ local,
+ shutdown.child_token());
+ if feed.enabled {
+ feed.events
+.runtime()
+.set_url(Some(format!("{scheme}://{local}/feeds/changes.xml")));
+ }
+ tracing::info!(
+ %local,
+ auth = "bearer",
+ stateless = true,
+ feed = if feed.enabled { "enabled" } else { "disabled" },
+ "serving MCP over streamable HTTP at /mcp"
+);
+ let outcome = axum::serve(listener, router)
+.with_graceful_shutdown(async move { shutdown.cancelled().await })
+.await;
+ feed.events.runtime().set_url(None);
+ outcome?;
+ Ok(())
 }
 
 /// Serve the same router over an HTTPS listener with the prepared material.
 /// The TLS handshake is the only difference; bearer, feed, access log and the
 /// loopback posture are the shared router's behavior.
 pub async fn serve_tls(
-    server: WebWidowServer,
-    addr: SocketAddr,
-    token: String,
-    feed: FeedRoute,
-    tls: crate::tls::TlsMaterial,
-    shutdown: CancellationToken,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let local = listener.local_addr()?;
-    if !feed_bind_allowed(&local, feed.enabled) {
-        drop(listener);
-        return Err(format!(
-            "refusing to serve the change feed on a non-loopback address ({local}); \
-             set `[events].feed_enabled = false` for an MCP-only network deployment"
-        )
-        .into());
-    }
-    let token: Arc<str> = Arc::from(token);
-    let router = build_router(
-        server,
-        Arc::clone(&token),
-        &feed,
-        local,
-        shutdown.child_token(),
-    );
-    if feed.enabled {
-        feed.events
-            .runtime()
-            .set_url(Some(format!("https://{local}/feeds/changes.xml")));
-    }
-    let acceptor = tokio_rustls::TlsAcceptor::from(tls.config.clone());
-    let graceful = hyper_util::server::graceful::GracefulShutdown::new();
-    tracing::info!(
-        %local,
-        auth = "bearer",
-        stateless = true,
-        feed = if feed.enabled { "enabled" } else { "disabled" },
-        tls = tls.source.as_str(),
-        ca_path = ?tls.ca_path,
-        "serving MCP over TLS at /mcp"
-    );
+ server: WebWidowServer,
+ addr: SocketAddr,
+ token: String,
+ feed: FeedRoute,
+ tls: crate::tls::TlsMaterial,
+ shutdown: CancellationToken) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+ let listener = tokio::net::TcpListener::bind(addr).await?;
+ let local = listener.local_addr()?;
+ if !feed_bind_allowed(&local, feed.enabled) {
+ drop(listener);
+ return Err(format!(
+ "refusing to serve the change feed on a non-loopback address ({local}); \
+ set `[events].feed_enabled = false` for an MCP-only network deployment"
+)
+.into());
+ }
+ let token: Arc<str> = Arc::from(token);
+ let router = build_router(
+ server,
+ Arc::clone(&token),
+ &feed,
+ local,
+ shutdown.child_token());
+ if feed.enabled {
+ feed.events
+.runtime()
+.set_url(Some(format!("https://{local}/feeds/changes.xml")));
+ }
+ let acceptor = tokio_rustls::TlsAcceptor::from(tls.config.clone());
+ let graceful = hyper_util::server::graceful::GracefulShutdown::new();
+ tracing::info!(
+ %local,
+ auth = "bearer",
+ stateless = true,
+ feed = if feed.enabled { "enabled" } else { "disabled" },
+ tls = tls.source.as_str(),
+ ca_path = ?tls.ca_path,
+ "serving MCP over TLS at /mcp"
+);
 
-    let result: Result<(), Box<dyn std::error::Error + Send + Sync>> = async {
-        let shutdown = shutdown;
-        loop {
-            tokio::select! {
-                _ = shutdown.cancelled() => break,
-                accepted = listener.accept() => {
-                    let (stream, peer) = accepted?;
-                    let acceptor = acceptor.clone();
-                    let router = router.clone();
-                    let watcher = graceful.watcher();
-                    tokio::spawn(async move {
-                        match acceptor.accept(stream).await {
-                            Ok(tls_stream) => {
-                                let io = hyper_util::rt::TokioIo::new(tls_stream);
-                                let service = hyper_util::service::TowerToHyperService::new(router);
-                                let connection = hyper::server::conn::http1::Builder::new()
-                                    .serve_connection(io, service);
-                                if let Err(error) = watcher.watch(connection).await {
-                                    tracing::debug!(%peer, error = %error, "TLS connection ended");
-                                }
-                            }
-                            Err(error) => {
-                                tracing::debug!(%peer, error = %error, "TLS handshake failed");
-                            }
-                        }
-                    });
-                }
-            }
-        }
-        if tokio::time::timeout(std::time::Duration::from_secs(10), graceful.shutdown())
-            .await
-            .is_err()
-        {
-            tracing::warn!("TLS server did not drain within 10 s");
-        }
-        Ok(())
-    }
-    .await;
-    feed.events.runtime().set_url(None);
-    result?;
-    Ok(())
+ let result: Result<(), Box<dyn std::error::Error + Send + Sync>> = async {
+ let shutdown = shutdown;
+ loop {
+ tokio::select! {
+ _ = shutdown.cancelled() => break,
+ accepted = listener.accept() => {
+ let (stream, peer) = accepted?;
+ let acceptor = acceptor.clone();
+ let router = router.clone();
+ let watcher = graceful.watcher();
+ tokio::spawn(async move {
+ match acceptor.accept(stream).await {
+ Ok(tls_stream) => {
+ let io = hyper_util::rt::TokioIo::new(tls_stream);
+ let service = hyper_util::service::TowerToHyperService::new(router);
+ let connection = hyper::server::conn::http1::Builder::new()
+.serve_connection(io, service);
+ if let Err(error) = watcher.watch(connection).await {
+ tracing::debug!(%peer, error = %error, "TLS connection ended");
+ }
+ }
+ Err(error) => {
+ tracing::debug!(%peer, error = %error, "TLS handshake failed");
+ }
+ }
+ });
+ }
+ }
+ }
+ if tokio::time::timeout(std::time::Duration::from_secs(10), graceful.shutdown())
+.await
+.is_err()
+ {
+ tracing::warn!("TLS server did not drain within 10 s");
+ }
+ Ok(())
+ }
+.await;
+ feed.events.runtime().set_url(None);
+ result?;
+ Ok(())
 }
 
 fn build_router(
-    server: WebWidowServer,
-    token: Arc<str>,
-    feed: &FeedRoute,
-    local: SocketAddr,
-    service_shutdown: CancellationToken,
-) -> Router {
-    // Defaults keep Host validation to loopback. A deliberate non-loopback bind
-    // still only accepts the bound IP (remote exposure is out of v0.1 scope).
-    let allowed_hosts = vec![
-        local.ip().to_string(),
-        local.to_string(),
-        "localhost".to_string(),
-        "127.0.0.1".to_string(),
-        "::1".to_string(),
-    ];
-    let config = StreamableHttpServerConfig::default()
-        .with_cancellation_token(service_shutdown)
-        // JSON for simple request/response tools; the service falls back to SSE
-        // when a handler emits a notification first.
-        .with_json_response(true)
-        // Stateless streamable HTTP: every POST is served directly;
-        // a supplied session id is not consulted, so stale/unknown/absent ids
-        // cannot 404. `initialize` still completes the handshake.
-        .with_legacy_session_mode(false)
-        .with_allowed_hosts(allowed_hosts);
-    let service = StreamableHttpService::new(
-        move || Ok(server.clone()),
-        Arc::new(LocalSessionManager::default()),
-        config,
-    );
-    // The bearer is scoped to the MCP nest only. The feed route lives outside it
-    // and carries its own capability token.
-    let mcp = Router::new()
-        .nest_service("/mcp", service)
-        .layer(middleware::from_fn_with_state(token, require_bearer));
-    let feed_state = FeedState {
-        enabled: feed.enabled,
-        token: feed.token.clone().map(Arc::from),
-        events: Arc::clone(&feed.events),
-    };
-    let feed_router = Router::new()
-        .route("/feeds/changes.xml", get(feed_changes))
-        .with_state(feed_state);
-    Router::new()
-        .merge(mcp)
-        .merge(feed_router)
-        // Outer: request diagnostics for both routes, so 401/404s are visible.
-        .layer(middleware::from_fn(access_log))
+ server: WebWidowServer,
+ token: Arc<str>,
+ feed: &FeedRoute,
+ local: SocketAddr,
+ service_shutdown: CancellationToken) -> Router {
+ // Defaults keep Host validation to loopback. A deliberate non-loopback bind
+ // still only accepts the bound IP (remote exposure is out of scope).
+ let allowed_hosts = vec![
+ local.ip().to_string(),
+ local.to_string(),
+ "localhost".to_string(),
+ "127.0.0.1".to_string(),
+ "::1".to_string(),
+ ];
+ let config = StreamableHttpServerConfig::default()
+.with_cancellation_token(service_shutdown)
+ // JSON for simple request/response tools; the service falls back to SSE
+ // when a handler emits a notification first.
+.with_json_response(true)
+ // Stateless streamable HTTP (): every POST is served directly;
+ // a supplied session id is not consulted, so stale/unknown/absent ids
+ // cannot 404. `initialize` still completes the handshake.
+.with_legacy_session_mode(false)
+.with_allowed_hosts(allowed_hosts);
+ let service = StreamableHttpService::new(
+ move || Ok(server.clone()),
+ Arc::new(LocalSessionManager::default()),
+ config);
+ // The bearer is scoped to the MCP nest only. The feed route lives outside it
+ // and carries its own capability token.
+ let mcp = Router::new()
+.nest_service("/mcp", service)
+.layer(middleware::from_fn_with_state(token, require_bearer));
+ let feed_state = FeedState {
+ enabled: feed.enabled,
+ token: feed.token.clone().map(Arc::from),
+ events: Arc::clone(&feed.events),
+ };
+ let feed_router = Router::new()
+.route("/feeds/changes.xml", get(feed_changes))
+.with_state(feed_state);
+ Router::new()
+.merge(mcp)
+.merge(feed_router)
+ // Outer: request diagnostics for both routes, so 401/404s are visible.
+.layer(middleware::from_fn(access_log))
 }
 
 /// `GET /feeds/changes.xml?token=<capability token>`: the RSS document from the
@@ -314,87 +307,82 @@ fn build_router(
 /// Missing/wrong token → 401; disabled → 404; `If-None-Match` matching the body
 /// hash → 304. The access log records the path only (never the query).
 async fn feed_changes(State(state): State<FeedState>, request: Request) -> Response {
-    if !state.enabled {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
-    let Some(expected) = state.token.as_deref() else {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    };
-    let provided = request
-        .uri()
-        .query()
-        .and_then(|query| {
-            url::form_urlencoded::parse(query.as_bytes())
-                .find(|(key, _)| key == "token")
-                .map(|(_, value)| value.into_owned())
-        })
-        .unwrap_or_default();
-    if !constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
-        return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
-    }
-    let xml = match state.events.feed_xml().await {
-        Ok(xml) => xml,
-        Err(error) => {
-            tracing::warn!(code = error.code().as_str(), "feed document failed");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "feed unavailable").into_response();
-        }
-    };
-    let etag = format!("\"{}\"", blake3::hash(xml.as_bytes()).to_hex());
-    if request
-        .headers()
-        .get(header::IF_NONE_MATCH)
-        .and_then(|value| value.to_str().ok())
-        == Some(etag.as_str())
-    {
-        let mut response = StatusCode::NOT_MODIFIED.into_response();
-        response.headers_mut().insert(
-            header::ETAG,
-            HeaderValue::from_str(&etag).unwrap_or(HeaderValue::from_static("\"\"")),
-        );
-        response.headers_mut().insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("max-age=60"),
-        );
-        return response;
-    }
-    let mut response = (StatusCode::OK, xml).into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/rss+xml; charset=utf-8"),
-    );
-    response.headers_mut().insert(
-        header::ETAG,
-        HeaderValue::from_str(&etag).unwrap_or(HeaderValue::from_static("\"\"")),
-    );
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("max-age=60"),
-    );
-    response
+ if !state.enabled {
+ return (StatusCode::NOT_FOUND, "not found").into_response();
+ }
+ let Some(expected) = state.token.as_deref() else {
+ return (StatusCode::NOT_FOUND, "not found").into_response();
+ };
+ let provided = request
+.uri()
+.query()
+.and_then(|query| {
+ url::form_urlencoded::parse(query.as_bytes())
+.find(|(key, _)| key == "token")
+.map(|(_, value)| value.into_owned())
+ })
+.unwrap_or_default();
+ if !constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
+ return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+ }
+ let xml = match state.events.feed_xml().await {
+ Ok(xml) => xml,
+ Err(error) => {
+ tracing::warn!(code = error.code().as_str(), "feed document failed");
+ return (StatusCode::INTERNAL_SERVER_ERROR, "feed unavailable").into_response();
+ }
+ };
+ let etag = format!("\"{}\"", blake3::hash(xml.as_bytes()).to_hex());
+ if request
+.headers()
+.get(header::IF_NONE_MATCH)
+.and_then(|value| value.to_str().ok())
+ == Some(etag.as_str())
+ {
+ let mut response = StatusCode::NOT_MODIFIED.into_response();
+ response.headers_mut().insert(
+ header::ETAG,
+ HeaderValue::from_str(&etag).unwrap_or(HeaderValue::from_static("\"\"")));
+ response.headers_mut().insert(
+ header::CACHE_CONTROL,
+ HeaderValue::from_static("max-age=60"));
+ return response;
+ }
+ let mut response = (StatusCode::OK, xml).into_response();
+ response.headers_mut().insert(
+ header::CONTENT_TYPE,
+ HeaderValue::from_static("application/rss+xml; charset=utf-8"));
+ response.headers_mut().insert(
+ header::ETAG,
+ HeaderValue::from_str(&etag).unwrap_or(HeaderValue::from_static("\"\"")));
+ response.headers_mut().insert(
+ header::CACHE_CONTROL,
+ HeaderValue::from_static("max-age=60"));
+ response
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::token::constant_time_eq;
+ use crate::core::token::constant_time_eq;
 
-    #[test]
-    fn the_feed_bind_predicate_is_loopback_only() {
-        use std::net::SocketAddr;
-        let loopback: SocketAddr = "127.0.0.1:8765".parse().unwrap();
-        let any: SocketAddr = "0.0.0.0:8765".parse().unwrap();
-        let lan: SocketAddr = "192.168.1.10:8765".parse().unwrap();
-        assert!(super::feed_bind_allowed(&loopback, true));
-        assert!(!super::feed_bind_allowed(&any, true));
-        assert!(!super::feed_bind_allowed(&lan, true));
-        assert!(super::feed_bind_allowed(&any, false));
-        assert!(super::feed_bind_allowed(&lan, false));
-    }
+ #[test]
+ fn the_feed_bind_predicate_is_loopback_only() {
+ use std::net::SocketAddr;
+ let loopback: SocketAddr = "127.0.0.1:8765".parse().unwrap();
+ let any: SocketAddr = "0.0.0.0:8765".parse().unwrap();
+ let lan: SocketAddr = "192.168.1.10:8765".parse().unwrap();
+ assert!(super::feed_bind_allowed(&loopback, true));
+ assert!(!super::feed_bind_allowed(&any, true));
+ assert!(!super::feed_bind_allowed(&lan, true));
+ assert!(super::feed_bind_allowed(&any, false));
+ assert!(super::feed_bind_allowed(&lan, false));
+ }
 
-    #[test]
-    fn bearer_comparison_is_exact() {
-        assert!(constant_time_eq(b"secret-token", b"secret-token"));
-        assert!(!constant_time_eq(b"secret-toke", b"secret-token"));
-        assert!(!constant_time_eq(b"secret-tokeN", b"secret-token"));
-        assert!(!constant_time_eq(b"", b"secret-token"));
-    }
+ #[test]
+ fn bearer_comparison_is_exact() {
+ assert!(constant_time_eq(b"secret-token", b"secret-token"));
+ assert!(!constant_time_eq(b"secret-toke", b"secret-token"));
+ assert!(!constant_time_eq(b"secret-tokeN", b"secret-token"));
+ assert!(!constant_time_eq(b"", b"secret-token"));
+ }
 }

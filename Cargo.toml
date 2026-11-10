@@ -8,16 +8,17 @@ license = "MIT"
 publish = false
 
 [features]
-# Test-harness only: adds a permissive `AuthEgressPolicy` constructor so a
-# policy-inversion drill can prove the gate's policy is the control. Off in
-# every shipped build; adds no dependency.
+# C-gate drill only: adds a permissive `AuthEgressPolicy` constructor so the C7
+# class drill can prove the gate's policy is the control (M09 C). Off in every
+# shipped build; adds no dependency.
 gate-drill = []
-# JavaScript rendering. Enabled by default so the
+# JavaScript rendering (IMP-DEC-002 / ITEM-004). Enabled by default so the
 # ordinary `web-widow` binary can render; `--no-default-features` produces the
 # static-only build that must keep working without Chrome or CDP.
 default = ["render"]
 render = ["dep:chromiumoxide", "dep:futures-util"]
-# Loopback streamable HTTP transport, and the v0.8 local-TLS listener. The TLS dependencies are only compiled with
+# Loopback streamable HTTP transport (IMP-DEC-003 / ITEM-007, granted) and
+# the M08 T1 local-TLS listener. The TLS dependencies are only compiled with
 # this feature; the stdio and static-only builds stay unchanged.
 http = [
     "dep:axum",
@@ -53,10 +54,10 @@ dirs = "7.0.0"
 ego-tree = "0.11.1"
 dom_smoothie = "0.18.2"
 encoding_rs = "0.8.42"
-# Local embedding inference. `load-dynamic` only:
+# Local embedding inference (M07 E1, IMP-ITEM-005). `load-dynamic` only:
 # no build-time download, no hf-hub/ureq/native-tls, no image models.
 fastembed = { version = "=7.5.0", default-features = false, features = ["ort-load-dynamic"] }
-# RSS/Atom/JSON Feed parsing. `sanitize` (ammonia) stays off:
+# RSS/Atom/JSON Feed parsing (IMP-DEC-019). `sanitize` (ammonia) stays off:
 # summaries are converted to plain text, never served back as markup.
 feed-rs = "3.0.0"
 flate2 = "1.1.10"
@@ -79,7 +80,7 @@ reqwest = { version = "0.13.5", default-features = false, features = [
     "stream",
     "hickory-dns",
 ] }
-# HMAC-SHA256 for webhook signing; already in the lock via rustls.
+# HMAC-SHA256 for webhook signing (M07 W1); already in the lock via rustls.
 ring = "0.17.14"
 rmcp = { version = "3.7.0", default-features = false, features = ["server", "transport-io", "macros"] }
 regex = "1.13.1"
@@ -88,7 +89,7 @@ schemars = "1.2.3"
 scraper = "0.29.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-# SHA-256 only for the pinned model-artifact provenance check.
+# SHA-256 only for the pinned model-artifact provenance check (M07 E1).
 sha2 = { version = "0.11.1", default-features = false, features = ["alloc"] }
 similar = "3.2.1"
 texting_robots = "0.2.2"

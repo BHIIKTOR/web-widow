@@ -4,8 +4,8 @@ We provide a web service on the example domain hosts to provide basic informatio
 
 ## Further Reading
 
-*   [IANA-managed Reserved Domains](https://example.com/domains/reserved)
-*   [Special-Use Domain Names](https://example.com/go/rfc6761) (RFC 6761)
-*   [Reserved Top Level DNS Names](https://example.com/go/rfc2606) (RFC 2606)
+* [IANA-managed Reserved Domains](https://example.com/domains/reserved)
+* [Special-Use Domain Names](https://example.com/go/rfc6761) (RFC 6761)
+* [Reserved Top Level DNS Names](https://example.com/go/rfc2606) (RFC 2606)
 
 Last revised 4 weeks ago.

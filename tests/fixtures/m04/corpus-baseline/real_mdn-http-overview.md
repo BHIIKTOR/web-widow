@@ -28,11 +28,11 @@ A server is not necessarily a single machine, but several server software instan
 
 Between the Web browser and the server, numerous computers and machines relay the HTTP messages. Due to the layered structure of the Web stack, most of these operate at the transport, network or physical levels, becoming transparent at the HTTP layer and potentially having a significant impact on performance. Those operating at the application layers are generally called **proxies**. These can be transparent, forwarding on the requests they receive without altering them in any way, or non-transparent, in which case they will change the request in some way before passing it along to the server. Proxies may perform numerous functions:
 
-*   caching (the cache can be public or private, like the browser cache)
-*   filtering (like an antivirus scan or parental controls)
-*   load balancing (to allow multiple servers to serve different requests)
-*   authentication (to control access to different resources)
-*   logging (allowing the storage of historical information)
+* caching (the cache can be public or private, like the browser cache)
+* filtering (like an antivirus scan or parental controls)
+* load balancing (to allow multiple servers to serve different requests)
+* authentication (to control access to different resources)
+* logging (allowing the storage of historical information)
 
 ## [Basic aspects of HTTP](#basic_aspects_of_http)
 
@@ -64,42 +64,42 @@ This extensible nature of HTTP has, over time, allowed for more control and func
 
 Here is a list of common features controllable with HTTP:
 
-*   *[Caching](https://example.com/en-US/docs/Web/HTTP/Guides/Caching)*: How documents are cached can be controlled by HTTP. The server can instruct proxies and clients about what to cache and for how long. The client can instruct intermediate cache proxies to ignore the stored document.
-*   *Relaxing the origin constraint*: To prevent snooping and other privacy invasions, Web browsers enforce strict separation between websites. Only pages from the **same origin** can access all the information of a Web page. Though such a constraint is a burden to the server, HTTP headers can relax this strict separation on the server side, allowing a document to become a patchwork of information sourced from different domains; there could even be security-related reasons to do so.
-*   *Authentication*: Some pages may be protected so that only specific users can access them. Basic authentication may be provided by HTTP, either using the [`WWW-Authenticate`](https://example.com/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate) and similar headers, or by setting a specific session using [HTTP cookies](https://example.com/en-US/docs/Web/HTTP/Guides/Cookies).
-*   *[Proxy and tunneling](https://example.com/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling)*: Servers or clients are often located on intranets and hide their true IP address from other computers. HTTP requests then go through proxies to cross this network barrier. Not all proxies are HTTP proxies. The SOCKS protocol, for example, operates at a lower level. Other protocols, like FTP, can be handled by these proxies.
-*   *Sessions*: Using HTTP cookies allows you to link requests with the state of the server. This creates sessions, despite basic HTTP being a state-less protocol. This is useful not only for e-commerce shopping baskets, but also for any site allowing user configuration of the output.
+* *[Caching](https://example.com/en-US/docs/Web/HTTP/Guides/Caching)*: How documents are cached can be controlled by HTTP. The server can instruct proxies and clients about what to cache and for how long. The client can instruct intermediate cache proxies to ignore the stored document.
+* *Relaxing the origin constraint*: To prevent snooping and other privacy invasions, Web browsers enforce strict separation between websites. Only pages from the **same origin** can access all the information of a Web page. Though such a constraint is a burden to the server, HTTP headers can relax this strict separation on the server side, allowing a document to become a patchwork of information sourced from different domains; there could even be security-related reasons to do so.
+* *Authentication*: Some pages may be protected so that only specific users can access them. Basic authentication may be provided by HTTP, either using the [`WWW-Authenticate`](https://example.com/en-US/docs/Web/HTTP/Reference/Headers/WWW-Authenticate) and similar headers, or by setting a specific session using [HTTP cookies](https://example.com/en-US/docs/Web/HTTP/Guides/Cookies).
+* *[Proxy and tunneling](https://example.com/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling)*: Servers or clients are often located on intranets and hide their true IP address from other computers. HTTP requests then go through proxies to cross this network barrier. Not all proxies are HTTP proxies. The SOCKS protocol, for example, operates at a lower level. Other protocols, like FTP, can be handled by these proxies.
+* *Sessions*: Using HTTP cookies allows you to link requests with the state of the server. This creates sessions, despite basic HTTP being a state-less protocol. This is useful not only for e-commerce shopping baskets, but also for any site allowing user configuration of the output.
 
 ## [HTTP flow](#http_flow)
 
 When a client wants to communicate with a server, either the final server or an intermediate proxy, it performs the following steps:
 
-1.  Open a TCP connection: The TCP connection is used to send a request, or several, and receive an answer. The client may open a new connection, reuse an existing connection, or open several TCP connections to the servers.
+1. Open a TCP connection: The TCP connection is used to send a request, or several, and receive an answer. The client may open a new connection, reuse an existing connection, or open several TCP connections to the servers.
 
-2.  Send an HTTP message: HTTP messages (before HTTP/2) are human-readable. With HTTP/2, these messages are encapsulated in frames, making them impossible to read directly, but the principle remains the same. For example:
+2. Send an HTTP message: HTTP messages (before HTTP/2) are human-readable. With HTTP/2, these messages are encapsulated in frames, making them impossible to read directly, but the principle remains the same. For example:
 
-    ```
-    GET / HTTP/1.1
-    Host: developer.mozilla.org
-    Accept-Language: fr
-    ```
+ ```
+ GET / HTTP/1.1
+ Host: developer.mozilla.org
+ Accept-Language: fr
+ ```
 
-3.  Read the response sent by the server, such as:
+3. Read the response sent by the server, such as:
 
-    ```
-    HTTP/1.1 200 OK
-    Date: Sat, 09 Oct 2010 14:28:02 GMT
-    Server: Apache
-    Last-Modified: Tue, 01 Dec 2009 20:18:22 GMT
-    ETag: "51142bc1-7449-479b075b2891b"
-    Accept-Ranges: bytes
-    Content-Length: 29769
-    Content-Type: text/html
+ ```
+ HTTP/1.1 200 OK
+ Date: Sat, 09 Oct 2010 14:28:02 GMT
+ Server: Apache
+ Last-Modified: Tue, 01 Dec 2009 20:18:22 GMT
+ ETag: "51142bc1-7449-479b075b2891b"
+ Accept-Ranges: bytes
+ Content-Length: 29769
+ Content-Type: text/html
 
-    <!doctype html>… (here come the 29769 bytes of the requested web page)
-    ```
+ <!doctype html>… (here come the 29769 bytes of the requested web page)
+ ```
 
-4.  Close or reuse the connection for further requests.
+4. Close or reuse the connection for further requests.
 
 If HTTP pipelining is activated, several requests can be sent without waiting for the first response to be fully received. HTTP pipelining has proven difficult to implement in existing networks, where old pieces of software coexist with modern versions. HTTP pipelining has been superseded in HTTP/2 with more robust multiplexing requests within a frame.
 
@@ -117,11 +117,11 @@ An example HTTP request:
 
 Requests consist of the following elements:
 
-*   An HTTP [method](https://example.com/en-US/docs/Web/HTTP/Reference/Methods), usually a verb like [`GET`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/GET), [`POST`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/POST), or a noun like [`OPTIONS`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/OPTIONS) or [`HEAD`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/HEAD) that defines the operation the client wants to perform. Typically, a client wants to fetch a resource (using `GET`) or post the value of an [HTML form](https://example.com/en-US/docs/Learn_web_development/Extensions/Forms) (using `POST`), though more operations may be needed in other cases.
-*   The path of the resource to fetch; the URL of the resource stripped from elements that are obvious from the context, for example without the [protocol](https://example.com/en-US/docs/Glossary/Protocol) (`http://`), the [domain](https://example.com/en-US/docs/Glossary/Domain) (here, `developer.mozilla.org`), or the TCP [port](https://example.com/en-US/docs/Glossary/Port) (here, `80`).
-*   The version of the HTTP protocol.
-*   Optional [headers](https://example.com/en-US/docs/Web/HTTP/Reference/Headers) that convey additional information for the servers.
-*   A body, for some methods like `POST`, similar to those in responses, which contain the resource sent.
+* An HTTP [method](https://example.com/en-US/docs/Web/HTTP/Reference/Methods), usually a verb like [`GET`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/GET), [`POST`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/POST), or a noun like [`OPTIONS`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/OPTIONS) or [`HEAD`](https://example.com/en-US/docs/Web/HTTP/Reference/Methods/HEAD) that defines the operation the client wants to perform. Typically, a client wants to fetch a resource (using `GET`) or post the value of an [HTML form](https://example.com/en-US/docs/Learn_web_development/Extensions/Forms) (using `POST`), though more operations may be needed in other cases.
+* The path of the resource to fetch; the URL of the resource stripped from elements that are obvious from the context, for example without the [protocol](https://example.com/en-US/docs/Glossary/Protocol) (`http://`), the [domain](https://example.com/en-US/docs/Glossary/Domain) (here, `developer.mozilla.org`), or the TCP [port](https://example.com/en-US/docs/Glossary/Port) (here, `80`).
+* The version of the HTTP protocol.
+* Optional [headers](https://example.com/en-US/docs/Web/HTTP/Reference/Headers) that convey additional information for the servers.
+* A body, for some methods like `POST`, similar to those in responses, which contain the resource sent.
 
 ### [Responses](#responses)
 
@@ -131,11 +131,11 @@ An example response:
 
 Responses consist of the following elements:
 
-*   The version of the HTTP protocol they follow.
-*   A [status code](https://example.com/en-US/docs/Web/HTTP/Reference/Status), indicating if the request was successful or not, and why.
-*   A status message, a non-authoritative short description of the status code.
-*   HTTP [headers](https://example.com/en-US/docs/Web/HTTP/Reference/Headers), like those for requests.
-*   Optionally, a body containing the fetched resource.
+* The version of the HTTP protocol they follow.
+* A [status code](https://example.com/en-US/docs/Web/HTTP/Reference/Status), indicating if the request was successful or not, and why.
+* A status message, a non-authoritative short description of the status code.
+* HTTP [headers](https://example.com/en-US/docs/Web/HTTP/Reference/Headers), like those for requests.
+* Optionally, a body containing the fetched resource.
 
 ## [APIs based on HTTP](#apis_based_on_http)
 
@@ -151,8 +151,8 @@ Though HTTP/2 adds some complexity by embedding HTTP messages in frames to impro
 
 ## [See also](#see_also)
 
-*   [Evolution of HTTP](https://example.com/en-US/docs/Web/HTTP/Guides/Evolution_of_HTTP)
-*   Glossary terms:
-    *   [HTTP](https://example.com/en-US/docs/Glossary/HTTP)
-    *   [HTTP/2](https://example.com/en-US/docs/Glossary/HTTP_2)
-    *   [QUIC](https://example.com/en-US/docs/Glossary/QUIC)
+* [Evolution of HTTP](https://example.com/en-US/docs/Web/HTTP/Guides/Evolution_of_HTTP)
+* Glossary terms:
+ * [HTTP](https://example.com/en-US/docs/Glossary/HTTP)
+ * [HTTP/2](https://example.com/en-US/docs/Glossary/HTTP_2)
+ * [QUIC](https://example.com/en-US/docs/Glossary/QUIC)

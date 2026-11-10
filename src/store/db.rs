@@ -1,5 +1,5 @@
 //! SQLite repository: WAL, one writer thread, a small read pool, and the v1
-//! migration. Every write goes through the writer actor, so the
+//! migration (). Every write goes through the writer actor, so the
 //! "single writer" rule is a property of the type system here rather than a
 //! convention.
 
@@ -14,7 +14,7 @@ use tokio::sync::oneshot;
 use crate::config::{FtsConfig, RetentionConfig};
 use crate::core::error::{Result, WidowError};
 
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 const SCHEMA_V1: &str = include_str!("schema_v1.sql");
 const SCHEMA_V2: &str = include_str!("schema_v2.sql");
@@ -26,25 +26,42 @@ const SCHEMA_V7: &str = include_str!("schema_v7.sql");
 const SCHEMA_V8: &str = include_str!("schema_v8.sql");
 const SCHEMA_V9: &str = include_str!("schema_v9.sql");
 const SCHEMA_V10: &str = include_str!("schema_v10.sql");
+const SCHEMA_V11: &str = include_str!("schema_v11.sql");
 
 pub(crate) fn fmt_time(value: DateTime<Utc>) -> String {
-    value.to_rfc3339_opts(SecondsFormat::Millis, true)
+ value.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 pub(super) fn parse_time(text: &str) -> rusqlite::Result<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(text)
-        .map(|value| value.with_timezone(&Utc))
-        .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-                0,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-            )
-        })
+ DateTime::parse_from_rfc3339(text)
+.map(|value| value.with_timezone(&Utc))
+.map_err(|error| {
+ rusqlite::Error::FromSqlConversionFailure(
+ 0,
+ rusqlite::types::Type::Text,
+ Box::new(error))
+ })
 }
 
 fn sql_err(error: rusqlite::Error) -> WidowError {
-    WidowError::Internal(format!("sqlite: {error}"))
+ WidowError::Internal(format!("sqlite: {error}"))
+}
+
+/// Parse a stored timestamp for the monotonic gates; an unparsable value is
+/// treated as absent, which opens the gate for the next write.
+pub(crate) fn parse_stored_time(text: Option<&str>) -> Option<DateTime<Utc>> {
+ text.and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+.map(|value| value.with_timezone(&Utc))
+}
+
+/// RFC3339 UTC seconds: the wire format every payload timestamp uses.
+pub fn rfc3339_secs(value: DateTime<Utc>) -> String {
+ value.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+/// Normalize a stored timestamp to the wire format; `None` when unparsable.
+pub fn stored_secs(text: &str) -> Option<String> {
+ parse_stored_time(Some(text)).map(rfc3339_secs)
 }
 
 // ---------------------------------------------------------------------------
@@ -53,204 +70,355 @@ fn sql_err(error: rusqlite::Error) -> WidowError {
 
 #[derive(Debug, Clone)]
 pub struct PageRecord {
-    pub id: i64,
-    pub url: String,
-    pub canonical_url: String,
-    pub etag: Option<String>,
-    pub last_modified: Option<String>,
-    pub content_type: Option<String>,
-    pub charset: Option<String>,
-    pub last_status: Option<i64>,
-    pub last_fetched: Option<String>,
-    pub raw_hash: Option<String>,
-    pub title: Option<String>,
-    pub lang: Option<String>,
-    /// v10: this page was stored from an authenticated acquisition.
-    pub authenticated: bool,
-    /// v10: the configured profile name that produced it (never a value).
-    pub auth_site: Option<String>,
+ pub id: i64,
+ pub url: String,
+ pub canonical_url: String,
+ pub etag: Option<String>,
+ pub last_modified: Option<String>,
+ pub content_type: Option<String>,
+ pub charset: Option<String>,
+ pub last_status: Option<i64>,
+ /// Success clock: the newest committed usable 200 or bound 304. A failed
+ /// attempt never moves it (schema v11).
+ pub last_fetched: Option<String>,
+ pub raw_hash: Option<String>,
+ pub title: Option<String>,
+ pub lang: Option<String>,
+ /// v10: this page was stored from an authenticated acquisition.
+ pub authenticated: bool,
+ /// v10: the configured profile name that produced it (never a value).
+ pub auth_site: Option<String>,
+ /// v11: increments once per committed usable 200; the write identity every
+ /// artifact sequence refers to.
+ pub write_seq: i64,
+ pub content_fetched_at: Option<String>,
+ pub content_validated_at: Option<String>,
+ pub content_write_seq: Option<i64>,
+ pub index_fetched_at: Option<String>,
+ pub index_validated_at: Option<String>,
+ pub index_write_seq: Option<i64>,
+ pub validators_write_seq: Option<i64>,
+ pub last_attempt_at: Option<String>,
+ /// `0` usable success (200 or bound 304), `1` terminal failure, `null`
+ /// unknown (no attempt, or an unbound 304).
+ pub last_attempt_failed: Option<i64>,
+}
+
+/// The page-level columns a served row's validation is derived from. Owned so a
+/// SQL mapping and a [`PageRecord`] can both build it.
+#[derive(Debug, Clone, Default)]
+pub struct ValidationFacts {
+ pub content_validated_at: Option<String>,
+ pub content_write_seq: Option<i64>,
+ pub index_validated_at: Option<String>,
+ pub index_write_seq: Option<i64>,
+}
+
+impl PageRecord {
+ pub fn validation_facts(&self) -> ValidationFacts {
+ ValidationFacts {
+ content_validated_at: self.content_validated_at.clone(),
+ content_write_seq: self.content_write_seq,
+ index_validated_at: self.index_validated_at.clone(),
+ index_write_seq: self.index_write_seq,
+ }
+ }
+
+ /// `last_attempt_failed` as the wire `bool | null`.
+ pub fn attempt_failed(&self) -> Option<bool> {
+ self.last_attempt_failed.map(|value| value != 0)
+ }
+}
+
+/// The four per-result facts (IMP-DEC-FRESHNESS-001), normalized to the wire
+/// format (RFC3339 UTC seconds).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RowFreshness {
+ pub fetched_at: Option<String>,
+ pub validated_at: Option<String>,
+ pub last_attempt_at: Option<String>,
+ pub last_attempt_failed: Option<bool>,
+}
+
+impl PageRecord {
+ /// Derive the facts for one served row. Capture is the row's own time;
+ /// validation follows the page write that row belongs to; attempts are
+ /// page-level. Nothing here compares content hashes.
+ pub fn freshness_for(
+ &self,
+ row_created_at: Option<DateTime<Utc>>,
+ row_write_seq: Option<i64>) -> RowFreshness {
+ let created_stored = row_created_at.map(fmt_time);
+ RowFreshness {
+ fetched_at: row_created_at.map(rfc3339_secs),
+ validated_at: validated_at_for(
+ row_write_seq,
+ created_stored.as_deref(),
+ &self.validation_facts())
+.as_deref()
+.and_then(stored_secs),
+ last_attempt_at: self.last_attempt_at.as_deref().and_then(stored_secs),
+ last_attempt_failed: self.attempt_failed(),
+ }
+ }
+}
+
+/// The one validation rule (IMP-DEC-FRESHNESS-002): a row is validated by the
+/// page write it belongs to, never by a content hash or by whatever the page
+/// looks like now.
+///
+/// - the row's write is the page-text write → that write's validation clock;
+/// - else it is the index write → the index validation clock;
+/// - else the row's own capture time is the only provable confirmation;
+/// - a row with no write sequence (pre-v11) proves nothing → `None`.
+pub fn validated_at_for(
+ row_write_seq: Option<i64>,
+ row_created_at: Option<&str>,
+ facts: &ValidationFacts) -> Option<String> {
+ let row_write_seq = row_write_seq?;
+ if Some(row_write_seq) == facts.content_write_seq {
+ return facts.content_validated_at.clone();
+ }
+ if Some(row_write_seq) == facts.index_write_seq {
+ return facts.index_validated_at.clone();
+ }
+ row_created_at.map(str::to_string)
 }
 
 #[derive(Debug, Clone)]
 pub struct BlobRow {
-    pub hash: String,
-    pub size: i64,
-    pub content_type: Option<String>,
-    pub created_at: DateTime<Utc>,
+ pub hash: String,
+ pub size: i64,
+ pub content_type: Option<String>,
+ pub created_at: DateTime<Utc>,
 }
 
 /// Content-addressed extraction spec (`profiles` row).
 #[derive(Debug, Clone)]
 pub struct ProfileRow {
-    pub hash: String,
-    /// `None` for inline specs; named profiles are out of v0.1.
-    pub name: Option<String>,
-    pub spec_json: String,
-    pub created_at: DateTime<Utc>,
+ pub hash: String,
+ /// `None` for inline specs; named profiles are out of.
+ pub name: Option<String>,
+ pub spec_json: String,
+ pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExtractionRow {
-    /// Content-addressed key of the extraction shape (mode for `fetch_page`).
-    pub profile_hash: String,
-    pub result_json: String,
-    pub result_hash: String,
-    pub record_count: i64,
-    pub created_at: DateTime<Utc>,
+ /// Content-addressed key of the extraction shape (mode for `fetch_page`).
+ pub profile_hash: String,
+ pub result_json: String,
+ pub result_hash: String,
+ pub record_count: i64,
+ pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FetchRecord {
-    pub url: String,
-    pub canonical_url: String,
-    pub url_hash: String,
-    pub site: String,
-    pub fetched_at: DateTime<Utc>,
-    pub status: Option<u16>,
-    pub content_type: Option<String>,
-    pub charset: Option<String>,
-    pub etag: Option<String>,
-    pub last_modified: Option<String>,
-    pub raw_hash: Option<String>,
-    pub text_hash: Option<String>,
-    pub title: Option<String>,
-    pub lang: Option<String>,
-    pub render_mode: String,
-    pub outcome: String,
-    pub duration_ms: u64,
-    pub mode: String,
-    pub bytes: Option<u64>,
-    pub error: Option<(String, String)>,
-    pub blob: Option<BlobRow>,
-    pub extraction: Option<ExtractionRow>,
-    /// Text this acquisition offers to `pages_fts`, and its write policy: the
-    /// delivered Markdown of `fetch_page`/crawl/monitor replaces the row, while
-    /// `extract` may only fill a page that has no indexed body (`IndexWrite`).
-    /// `None` on a 304 and on a failure, so the previous row is kept rather than
-    /// cleared. Capped by the caller at `[fts].max_index_chars`.
-    pub index_text: Option<IndexText>,
-    /// Upserted with the extraction so a spec is stored once.
-    pub profile: Option<ProfileRow>,
-    /// v10: label the page as authenticated (only when `[auth].persist`).
-    pub authenticated: bool,
-    /// v10: the configured profile name for the label.
-    pub auth_site: Option<String>,
+ pub url: String,
+ pub canonical_url: String,
+ pub url_hash: String,
+ pub site: String,
+ pub fetched_at: DateTime<Utc>,
+ pub status: Option<u16>,
+ pub content_type: Option<String>,
+ pub charset: Option<String>,
+ pub etag: Option<String>,
+ pub last_modified: Option<String>,
+ pub raw_hash: Option<String>,
+ pub text_hash: Option<String>,
+ pub title: Option<String>,
+ pub lang: Option<String>,
+ pub render_mode: String,
+ pub outcome: String,
+ pub duration_ms: u64,
+ pub mode: String,
+ pub bytes: Option<u64>,
+ pub error: Option<(String, String)>,
+ pub blob: Option<BlobRow>,
+ pub extraction: Option<ExtractionRow>,
+ /// Text this acquisition offers to `pages_fts`, and its write policy: the
+ /// delivered Markdown of `fetch_page`/crawl/monitor replaces the row, while
+ /// `extract` may only fill a page that has no indexed body (`IndexWrite`).
+ /// `None` on a 304 and on a failure, so the previous row is kept rather than
+ /// cleared. Capped by the caller at `[fts].max_index_chars`.
+ pub index_text: Option<IndexText>,
+ /// Upserted with the extraction so a spec is stored once.
+ pub profile: Option<ProfileRow>,
+ /// v10: label the page as authenticated (only when `[auth].persist`).
+ pub authenticated: bool,
+ /// v10: the configured profile name for the label.
+ pub auth_site: Option<String>,
+ /// v11: the `pages.validators_write_seq` observed by `conditional_for` and
+ /// actually sent as `If-None-Match`/`If-Modified-Since`. `Some` on a 304
+ /// record; the binding check compares it to the page inside the same
+ /// transaction.
+ pub sent_validators_seq: Option<i64>,
+ /// v11: on a 304, the extraction shape whose served row the caller returns.
+ /// The attribution read happens inside the record transaction; `None` when
+ /// the caller needs no attribution (a monitor check, `extract_rows`).
+ pub served_profile_hash: Option<String>,
+}
+
+/// Facts a bound 304 hands back from the recording transaction, so the response
+/// is built from the committed row rather than a later read.
+#[derive(Debug, Clone)]
+pub struct NotModifiedRecord {
+ /// The validators actually sent still belong to the page write: the attempt
+ /// is a page-level success.
+ pub bound: bool,
+ /// `bound` **and** the served row's own write is exactly the sequence that
+ /// was sent. Only then does the 304 validate the returned representation; a
+ /// row from another write stays unvalidated even when the page is bound.
+ pub served_validated: bool,
+ /// Completion time of this 304.
+ pub at: DateTime<Utc>,
+ /// The committed attempt pair for the page, read back from the same
+ /// transaction; both halves always travel together.
+ pub attempt_at: Option<DateTime<Utc>>,
+ pub attempt_failed: Option<bool>,
+ /// The extraction row that supplies the returned content, with its own
+ /// capture time and write sequence.
+ pub served: Option<ServedExtraction>,
+}
+
+/// One served extraction row as the 304 transaction saw it.
+#[derive(Debug, Clone)]
+pub struct ServedExtraction {
+ pub result_json: String,
+ pub created_at: DateTime<Utc>,
+ pub source_write_seq: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Recorded {
-    pub page_id: i64,
-    pub fetch_event_id: i64,
-    pub extraction_id: Option<i64>,
+ pub page_id: i64,
+ pub fetch_event_id: i64,
+ pub extraction_id: Option<i64>,
+}
+
+/// What one record produced beyond the row ids: the 304 attribution, when the
+/// record was a `not_modified`.
+#[derive(Debug, Clone)]
+pub struct RecordedOutcome {
+ pub ids: Recorded,
+ pub not_modified: Option<NotModifiedRecord>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CachedExtraction {
-    pub result_json: String,
-    pub created_at: DateTime<Utc>,
-    pub page: PageRecord,
+ pub result_json: String,
+ pub created_at: DateTime<Utc>,
+ /// v11: the page write this row belongs to (`extractions.source_write_seq`).
+ pub source_write_seq: Option<i64>,
+ pub page: PageRecord,
 }
 
 /// One acquisition's contribution to the page's full-text row, and how it may
-/// change an existing one (v0.5).
+/// change an existing one ( B01b).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexWrite {
-    /// Replace the indexed body with this acquisition's text. Used by the paths
-    /// that deliver the page itself: `fetch_page`, crawl and monitor.
-    Replace,
-    /// Keep an existing indexed body and write only when the page has none.
-    /// Used by `extract`: its text is a projection of the page, so it must never
-    /// hide the delivered Markdown from local search.
-    FillEmpty,
+ /// Replace the indexed body with this acquisition's text. Used by the paths
+ /// that deliver the page itself: `fetch_page`, crawl and monitor.
+ Replace,
+ /// Keep an existing indexed body and write only when the page has none.
+ /// Used by `extract`: its text is a projection of the page, so it must never
+ /// hide the delivered Markdown from local search.
+ FillEmpty,
 }
 
 /// The text an acquisition offers to the index, with its write policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexText {
-    pub body: String,
-    pub write: IndexWrite,
+ pub body: String,
+ pub write: IndexWrite,
 }
 
 impl IndexText {
-    /// Delivered page text: it replaces whatever the page indexed before.
-    pub fn replace(body: impl Into<String>) -> Self {
-        Self {
-            body: body.into(),
-            write: IndexWrite::Replace,
-        }
-    }
+ /// Delivered page text: it replaces whatever the page indexed before.
+ pub fn replace(body: impl Into<String>) -> Self {
+ Self {
+ body: body.into(),
+ write: IndexWrite::Replace,
+ }
+ }
 
-    /// Projected text: it is kept only when the page has no indexed body yet.
-    pub fn fill_empty(body: impl Into<String>) -> Self {
-        Self {
-            body: body.into(),
-            write: IndexWrite::FillEmpty,
-        }
-    }
+ /// Projected text: it is kept only when the page has no indexed body yet.
+ pub fn fill_empty(body: impl Into<String>) -> Self {
+ Self {
+ body: body.into(),
+ write: IndexWrite::FillEmpty,
+ }
+ }
 }
 
 /// One ranked hit from the local full-text index (`search_content`).
 #[derive(Debug, Clone)]
 pub struct ContentHitRow {
-    pub url: String,
-    pub canonical_url: String,
-    pub title: String,
-    pub snippet: String,
-    /// `-bm25`: higher is better (SQLite's bm25 is negative, smaller is better).
-    pub score: f64,
-    pub last_fetched: Option<String>,
-    pub render_mode: Option<String>,
+ pub url: String,
+ pub canonical_url: String,
+ pub title: String,
+ pub snippet: String,
+ /// `-bm25`: higher is better (SQLite's bm25 is negative, smaller is better).
+ pub score: f64,
+ /// Capture time of the indexed text (`pages.index_fetched_at`).
+ pub fetched_at: Option<String>,
+ /// Validation of the indexed write (`pages.index_validated_at`).
+ pub validated_at: Option<String>,
+ pub last_attempt_at: Option<String>,
+ pub last_attempt_failed: Option<i64>,
+ pub render_mode: Option<String>,
 }
 
 /// One bounded page of local hits plus the full match count.
 #[derive(Debug, Clone)]
 pub struct ContentHits {
-    pub rows: Vec<ContentHitRow>,
-    pub total: i64,
+ pub rows: Vec<ContentHitRow>,
+ pub total: i64,
 }
 
 #[derive(Debug, Clone)]
 pub struct HostRow {
-    pub host: String,
-    pub robots_fetched_at: Option<DateTime<Utc>>,
-    pub robots_status: Option<i64>,
-    pub robots_hash: Option<String>,
-    pub robots_body: Option<Vec<u8>>,
-    pub robots_expires_at: Option<DateTime<Utc>>,
-    pub next_allowed_at: Option<DateTime<Utc>>,
-    pub consecutive_failures: i64,
+ pub host: String,
+ pub robots_fetched_at: Option<DateTime<Utc>>,
+ pub robots_status: Option<i64>,
+ pub robots_hash: Option<String>,
+ pub robots_body: Option<Vec<u8>>,
+ pub robots_expires_at: Option<DateTime<Utc>>,
+ pub next_allowed_at: Option<DateTime<Utc>>,
+ pub consecutive_failures: i64,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct GcReport {
-    pub events_pruned: usize,
-    pub extractions_pruned: usize,
-    pub snapshots_pruned: usize,
-    pub blobs_pruned: usize,
-    pub webhook_deliveries_pruned: usize,
-    /// `auth_audit` rows older than `[auth].audit_days` (v0.8).
-    pub auth_audit_pruned: usize,
-    /// Stored authenticated pages older than `[auth].page_retention_days` (v0.9).
-    pub auth_pages_pruned: usize,
-    pub bytes_freed: u64,
-    /// Blob hashes whose rows were deleted; the caller removes the files.
-    pub removed_blobs: Vec<String>,
+ pub events_pruned: usize,
+ pub extractions_pruned: usize,
+ pub snapshots_pruned: usize,
+ pub blobs_pruned: usize,
+ pub webhook_deliveries_pruned: usize,
+ /// `auth_audit` rows older than `[auth].audit_days` ( A0).
+ pub auth_audit_pruned: usize,
+ /// Stored authenticated pages older than `[auth].page_retention_days` ( B5b).
+ pub auth_pages_pruned: usize,
+ pub bytes_freed: u64,
+ /// Blob hashes whose rows were deleted; the caller removes the files.
+ pub removed_blobs: Vec<String>,
 }
 
-/// One value-free authenticated-fetch audit row (v0.8). The fields are
+/// One value-free authenticated-fetch audit row ( A1). The fields are
 /// exactly the pinned columns: no reference, header value, cookie, path, query
 /// or client identifier has a place here.
 #[derive(Debug, Clone)]
 pub struct AuthAuditRow {
-    pub at: DateTime<Utc>,
-    pub site: String,
-    pub auth_id: String,
-    pub method: String,
-    pub host: String,
-    pub status: Option<u16>,
-    pub bytes: Option<u64>,
-    pub outcome: String,
-    pub resolution_ms: u64,
+ pub at: DateTime<Utc>,
+ pub site: String,
+ pub auth_id: String,
+ pub method: String,
+ pub host: String,
+ pub status: Option<u16>,
+ pub bytes: Option<u64>,
+ pub outcome: String,
+ pub resolution_ms: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -260,655 +428,921 @@ pub struct AuthAuditRow {
 type CustomWrite = dyn FnOnce(&mut Connection) -> rusqlite::Result<()> + Send;
 
 enum WriteOp {
-    /// A typed operation owned by another store module (`store::jobs`).
-    Custom(
-        Box<CustomWrite>,
-        oneshot::Sender<std::result::Result<(), String>>,
-    ),
-    RecordFetch(
-        Box<FetchRecord>,
-        oneshot::Sender<std::result::Result<Recorded, String>>,
-    ),
-    SaveHost(
-        Box<HostRow>,
-        oneshot::Sender<std::result::Result<(), String>>,
-    ),
-    Gc(
-        RetentionConfig,
-        u32,
-        u32,
-        DateTime<Utc>,
-        oneshot::Sender<std::result::Result<GcReport, String>>,
-    ),
-    AuthAudit(
-        Box<AuthAuditRow>,
-        oneshot::Sender<std::result::Result<(), String>>,
-    ),
+ /// A typed operation owned by another store module (`store::jobs`).
+ Custom(
+ Box<CustomWrite>,
+ oneshot::Sender<std::result::Result<(), String>>),
+ RecordFetch(
+ Box<FetchRecord>,
+ oneshot::Sender<std::result::Result<RecordedOutcome, String>>),
+ SaveHost(
+ Box<HostRow>,
+ oneshot::Sender<std::result::Result<(), String>>),
+ Gc(
+ RetentionConfig,
+ u32,
+ u32,
+ DateTime<Utc>,
+ oneshot::Sender<std::result::Result<GcReport, String>>),
+ AuthAudit(
+ Box<AuthAuditRow>,
+ oneshot::Sender<std::result::Result<(), String>>),
 }
 
 #[derive(Debug)]
 struct Writer {
-    // tokio's unbounded sender is Send + Sync, so the store can be shared across
-    // tasks; the receiving side is drained by a dedicated blocking thread.
-    tx: tokio::sync::mpsc::UnboundedSender<WriteOp>,
+ // tokio's unbounded sender is Send + Sync, so the store can be shared across
+ // tasks; the receiving side is drained by a dedicated blocking thread.
+ tx: tokio::sync::mpsc::UnboundedSender<WriteOp>,
 }
 
 impl Writer {
-    fn start(db_path: PathBuf) -> Result<(Self, std::thread::JoinHandle<()>)> {
-        let mut connection = open_writer(&db_path)?;
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<WriteOp>();
-        let handle = std::thread::Builder::new()
-            .name("sqlite-writer".to_string())
-            .spawn(move || {
-                while let Some(op) = rx.blocking_recv() {
-                    match op {
-                        WriteOp::Custom(operation, reply) => {
-                            let outcome = operation(&mut connection).map_err(|e| e.to_string());
-                            let _ = reply.send(outcome);
-                        }
-                        WriteOp::RecordFetch(record, reply) => {
-                            let _ = reply.send(
-                                record_fetch(&mut connection, &record).map_err(|e| e.to_string()),
-                            );
-                        }
-                        WriteOp::SaveHost(row, reply) => {
-                            let _ = reply
-                                .send(save_host(&mut connection, &row).map_err(|e| e.to_string()));
-                        }
-                        WriteOp::AuthAudit(row, reply) => {
-                            let _ = reply.send(
-                                record_auth_audit(&connection, &row).map_err(|e| e.to_string()),
-                            );
-                        }
-                        WriteOp::Gc(retention, auth_audit_days, auth_page_days, now, reply) => {
-                            let _ = reply.send(
-                                gc(
-                                    &mut connection,
-                                    now,
-                                    &retention,
-                                    auth_audit_days,
-                                    auth_page_days,
-                                )
-                                .map_err(|e| e.to_string()),
-                            );
-                        }
-                    }
-                }
-            })
-            .map_err(|error| {
-                WidowError::Internal(format!("cannot start sqlite writer: {error}"))
-            })?;
-        Ok((Self { tx }, handle))
-    }
+ fn start(db_path: PathBuf) -> Result<(Self, std::thread::JoinHandle<()>)> {
+ let mut connection = open_writer(&db_path)?;
+ let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<WriteOp>();
+ let handle = std::thread::Builder::new()
+.name("sqlite-writer".to_string())
+.spawn(move || {
+ while let Some(op) = rx.blocking_recv() {
+ match op {
+ WriteOp::Custom(operation, reply) => {
+ let outcome = operation(&mut connection).map_err(|e| e.to_string());
+ let _ = reply.send(outcome);
+ }
+ WriteOp::RecordFetch(record, reply) => {
+ let _ = reply.send(
+ record_fetch(&mut connection, &record).map_err(|e| e.to_string()));
+ }
+ WriteOp::SaveHost(row, reply) => {
+ let _ = reply
+.send(save_host(&mut connection, &row).map_err(|e| e.to_string()));
+ }
+ WriteOp::AuthAudit(row, reply) => {
+ let _ = reply.send(
+ record_auth_audit(&connection, &row).map_err(|e| e.to_string()));
+ }
+ WriteOp::Gc(retention, auth_audit_days, auth_page_days, now, reply) => {
+ let _ = reply.send(
+ gc(
+ &mut connection,
+ now,
+ &retention,
+ auth_audit_days,
+ auth_page_days)
+.map_err(|e| e.to_string()));
+ }
+ }
+ }
+ })
+.map_err(|error| {
+ WidowError::Internal(format!("cannot start sqlite writer: {error}"))
+ })?;
+ Ok((Self { tx }, handle))
+ }
 }
 
 fn open_writer(db_path: &Path) -> Result<Connection> {
-    let connection = Connection::open(db_path)
-        .map_err(|error| WidowError::Internal(format!("cannot open database: {error}")))?;
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(sql_err)?;
-    // journal_mode returns a row; query it rather than using execute_batch.
-    let mode: String = connection
-        .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-        .map_err(sql_err)?;
-    if !mode.eq_ignore_ascii_case("wal") {
-        return Err(WidowError::Internal(format!(
-            "database refused WAL mode (got `{mode}`)"
-        )));
-    }
-    connection
-        .execute_batch(
-            "PRAGMA synchronous=NORMAL;\n\
-             PRAGMA foreign_keys=ON;\n\
-             PRAGMA temp_store=MEMORY;",
-        )
-        .map_err(sql_err)?;
-    Ok(connection)
+ let connection = Connection::open(db_path)
+.map_err(|error| WidowError::Internal(format!("cannot open database: {error}")))?;
+ connection
+.busy_timeout(Duration::from_secs(5))
+.map_err(sql_err)?;
+ // journal_mode returns a row; query it rather than using execute_batch.
+ let mode: String = connection
+.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+.map_err(sql_err)?;
+ if !mode.eq_ignore_ascii_case("wal") {
+ return Err(WidowError::Internal(format!(
+ "database refused WAL mode (got `{mode}`)"
+)));
+ }
+ connection
+.execute_batch(
+ "PRAGMA synchronous=NORMAL;\n\
+ PRAGMA foreign_keys=ON;\n\
+ PRAGMA temp_store=MEMORY;")
+.map_err(sql_err)?;
+ Ok(connection)
 }
 
 fn migrate(connection: &mut Connection) -> Result<()> {
-    let version: i64 = connection
-        .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .map_err(sql_err)?;
-    if version > SCHEMA_VERSION {
-        return Err(WidowError::Internal(format!(
-            "database schema v{version} is newer than this binary (v{SCHEMA_VERSION}); downgrade is not supported"
-        )));
-    }
-    if version == 0 {
-        // auto_vacuum only takes effect before the first table exists; on a
-        // brand-new file a VACUUM applies it deterministically (the pragma is a
-        // no-op once pages exist, hence the re-read).
-        connection
-            .pragma_update(None, "auto_vacuum", "INCREMENTAL")
-            .map_err(sql_err)?;
-        let mut auto_vacuum: i64 = connection
-            .query_row("PRAGMA auto_vacuum", [], |row| row.get(0))
-            .map_err(sql_err)?;
-        if auto_vacuum != 2 {
-            connection.execute_batch("VACUUM;").map_err(sql_err)?;
-            auto_vacuum = connection
-                .query_row("PRAGMA auto_vacuum", [], |row| row.get(0))
-                .map_err(sql_err)?;
-        }
-        if auto_vacuum != 2 {
-            tracing::warn!(
-                auto_vacuum,
-                "database did not accept incremental auto-vacuum"
-            );
-        }
-    }
-    // Forward-only, one step per version so a v1 database upgrades in place.
-    let mut version = version;
-    while version < SCHEMA_VERSION {
-        let next = version + 1;
-        let script = match next {
-            1 => SCHEMA_V1,
-            2 => SCHEMA_V2,
-            3 => SCHEMA_V3,
-            4 => SCHEMA_V4,
-            5 => SCHEMA_V5,
-            6 => SCHEMA_V6,
-            7 => SCHEMA_V7,
-            8 => SCHEMA_V8,
-            9 => SCHEMA_V9,
-            10 => SCHEMA_V10,
-            other => {
-                return Err(WidowError::Internal(format!(
-                    "no migration script for schema v{other}"
-                )));
-            }
-        };
-        let transaction = connection.transaction().map_err(sql_err)?;
-        transaction.execute_batch(script).map_err(sql_err)?;
-        transaction
-            .pragma_update(None, "user_version", next)
-            .map_err(sql_err)?;
-        transaction.commit().map_err(sql_err)?;
-        version = next;
-    }
-    Ok(())
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.map_err(sql_err)?;
+ if version > SCHEMA_VERSION {
+ return Err(WidowError::Internal(format!(
+ "database schema v{version} is newer than this binary (v{SCHEMA_VERSION}); downgrade is not supported"
+)));
+ }
+ if version == 0 {
+ // auto_vacuum only takes effect before the first table exists; on a
+ // brand-new file a VACUUM applies it deterministically (the pragma is a
+ // no-op once pages exist, hence the re-read).
+ connection
+.pragma_update(None, "auto_vacuum", "INCREMENTAL")
+.map_err(sql_err)?;
+ let mut auto_vacuum: i64 = connection
+.query_row("PRAGMA auto_vacuum", [], |row| row.get(0))
+.map_err(sql_err)?;
+ if auto_vacuum != 2 {
+ connection.execute_batch("VACUUM;").map_err(sql_err)?;
+ auto_vacuum = connection
+.query_row("PRAGMA auto_vacuum", [], |row| row.get(0))
+.map_err(sql_err)?;
+ }
+ if auto_vacuum != 2 {
+ tracing::warn!(
+ auto_vacuum,
+ "database did not accept incremental auto-vacuum"
+);
+ }
+ }
+ // Forward-only, one step per version so a v1 database upgrades in place.
+ let mut version = version;
+ while version < SCHEMA_VERSION {
+ let next = version + 1;
+ let script = match next {
+ 1 => SCHEMA_V1,
+ 2 => SCHEMA_V2,
+ 3 => SCHEMA_V3,
+ 4 => SCHEMA_V4,
+ 5 => SCHEMA_V5,
+ 6 => SCHEMA_V6,
+ 7 => SCHEMA_V7,
+ 8 => SCHEMA_V8,
+ 9 => SCHEMA_V9,
+ 10 => SCHEMA_V10,
+ 11 => SCHEMA_V11,
+ other => {
+ return Err(WidowError::Internal(format!(
+ "no migration script for schema v{other}"
+)));
+ }
+ };
+ let transaction = connection.transaction().map_err(sql_err)?;
+ transaction.execute_batch(script).map_err(sql_err)?;
+ transaction
+.pragma_update(None, "user_version", next)
+.map_err(sql_err)?;
+ transaction.commit().map_err(sql_err)?;
+ version = next;
+ }
+ Ok(())
 }
 
 /// Insert or refresh the `blobs` row for bytes already written to the CAS.
-/// The `screenshots.hash` foreign key requires this row first; a screenshot
-/// insert calls both
+/// The `screenshots.hash` foreign key requires this row first; B1/B2 call both
 /// helpers inside one writer-actor closure.
 pub(crate) fn save_blob(
-    connection: &Connection,
-    hash: &str,
-    size: i64,
-    content_type: Option<&str>,
-    created_at: DateTime<Utc>,
-) -> rusqlite::Result<()> {
-    connection.execute(
-        "INSERT INTO blobs (hash, size, content_type, created_at, last_referenced_at)
-         VALUES (?1, ?2, ?3, ?4, ?4)
-         ON CONFLICT(hash) DO UPDATE SET last_referenced_at = excluded.last_referenced_at",
-        params![hash, size, content_type, fmt_time(created_at)],
-    )?;
-    Ok(())
+ connection: &Connection,
+ hash: &str,
+ size: i64,
+ content_type: Option<&str>,
+ created_at: DateTime<Utc>) -> rusqlite::Result<()> {
+ connection.execute(
+ "INSERT INTO blobs (hash, size, content_type, created_at, last_referenced_at)
+ VALUES (?1, ?2, ?3, ?4, ?4)
+ ON CONFLICT(hash) DO UPDATE SET last_referenced_at = excluded.last_referenced_at",
+ params![hash, size, content_type, fmt_time(created_at)])?;
+ Ok(())
 }
 
 /// Insert a screenshot reference row. The caller has already written the blob
-/// to the CAS and its `blobs` row; both paths call this through the writer
+/// to the CAS and its `blobs` row; lanes B1/B2 call this through the writer
 /// actor.
 // The signature mirrors the table columns; grouping it into a struct would be
 // a wider API change than the lanes need.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn save_screenshot(
-    connection: &Connection,
-    page_id: Option<i64>,
-    hash: &str,
-    format: &str,
-    width: Option<i64>,
-    height: Option<i64>,
-    source: &str,
-    captured_at: DateTime<Utc>,
-) -> rusqlite::Result<i64> {
-    connection.execute(
-        "INSERT INTO screenshots (page_id, hash, format, width, height, source, captured_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![
-            page_id,
-            hash,
-            format,
-            width,
-            height,
-            source,
-            fmt_time(captured_at)
-        ],
-    )?;
-    Ok(connection.last_insert_rowid())
+ connection: &Connection,
+ page_id: Option<i64>,
+ hash: &str,
+ format: &str,
+ width: Option<i64>,
+ height: Option<i64>,
+ source: &str,
+ captured_at: DateTime<Utc>) -> rusqlite::Result<i64> {
+ connection.execute(
+ "INSERT INTO screenshots (page_id, hash, format, width, height, source, captured_at)
+ VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+ params![
+ page_id,
+ hash,
+ format,
+ width,
+ height,
+ source,
+ fmt_time(captured_at)
+ ])?;
+ Ok(connection.last_insert_rowid())
 }
 
-fn record_fetch(connection: &mut Connection, record: &FetchRecord) -> rusqlite::Result<Recorded> {
-    let transaction = connection.transaction()?;
-    let fetched_at = fmt_time(record.fetched_at);
+/// The page columns the write matrix gates on, read once per record.
+struct ExistingPage {
+ last_attempt_at: Option<String>,
+ last_attempt_failed: Option<i64>,
+ last_fetched: Option<String>,
+ last_status: Option<i64>,
+ outcome: String,
+ render_mode: Option<String>,
+ raw_hash: Option<String>,
+ text_hash: Option<String>,
+ title: Option<String>,
+ lang: Option<String>,
+ content_type: Option<String>,
+ charset: Option<String>,
+ write_seq: i64,
+ content_fetched_at: Option<String>,
+ content_validated_at: Option<String>,
+ content_write_seq: Option<i64>,
+ index_fetched_at: Option<String>,
+ index_validated_at: Option<String>,
+ index_write_seq: Option<i64>,
+ validators_write_seq: Option<i64>,
+}
 
-    let page_id: i64 = transaction.query_row(
-        "INSERT INTO pages (
-             url, canonical_url, url_hash, site, first_seen, last_fetched, last_status,
-             etag, last_modified, content_type, charset, raw_hash, text_hash, title, lang,
-             render_mode, outcome, authenticated, auth_site
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                   ?17, ?18)
-         ON CONFLICT(url_hash) DO UPDATE SET
-             url = excluded.url,
-             canonical_url = excluded.canonical_url,
-             site = excluded.site,
-             last_fetched = excluded.last_fetched,
-             last_status = excluded.last_status,
-             etag = COALESCE(excluded.etag, pages.etag),
-             last_modified = COALESCE(excluded.last_modified, pages.last_modified),
-             content_type = COALESCE(excluded.content_type, pages.content_type),
-             charset = COALESCE(excluded.charset, pages.charset),
-             raw_hash = COALESCE(excluded.raw_hash, pages.raw_hash),
-             text_hash = COALESCE(excluded.text_hash, pages.text_hash),
-             title = COALESCE(excluded.title, pages.title),
-             lang = COALESCE(excluded.lang, pages.lang),
-             render_mode = excluded.render_mode,
-             outcome = excluded.outcome,
-             authenticated = excluded.authenticated,
-             auth_site = excluded.auth_site
-         RETURNING id",
-        params![
-            record.url,
-            record.canonical_url,
-            record.url_hash,
-            record.site,
-            fetched_at,
-            record.status.map(i64::from),
-            record.etag,
-            record.last_modified,
-            record.content_type,
-            record.charset,
-            record.raw_hash,
-            record.text_hash,
-            record.title,
-            record.lang,
-            record.render_mode,
-            record.outcome,
-            i64::from(record.authenticated),
-            record.auth_site,
-        ],
-        |row| row.get(0),
-    )?;
+/// Write one terminal record and its page-level facts (IMP-DEC-FRESHNESS-003).
+///
+/// One call produces exactly one terminal state. The attempt pair and the
+/// success facts are gated separately, both monotonically, so an out-of-order
+/// completion can neither pair a time with another attempt's outcome nor date a
+/// newer capture with an older one. Everything is one transaction: a caller that
+/// gets an error has no committed success, and its response is never built from
+/// a half-applied write.
+fn record_fetch(
+ connection: &mut Connection,
+ record: &FetchRecord) -> rusqlite::Result<RecordedOutcome> {
+ let transaction = connection.transaction()?;
+ let fetched_at = fmt_time(record.fetched_at);
 
-    // Local full-text index: one row per page, written with the page write so
-    // the index can never lag the stored content. A `None`
-    // `index_text` (304, failure) leaves the previous row alone; the policy on
-    // `IndexText` keeps an `extract` from replacing delivered page text.
-    if let Some(index_text) = &record.index_text {
-        match index_text.write {
-            IndexWrite::Replace => super::fts::upsert(&transaction, page_id, &index_text.body)?,
-            IndexWrite::FillEmpty => {
-                super::fts::fill_empty(&transaction, page_id, &index_text.body)?
-            }
-        }
-    }
+ let existing: Option<ExistingPage> = transaction
+.query_row(
+ "SELECT last_attempt_at, last_attempt_failed, last_fetched, last_status, outcome,
+ render_mode, write_seq, content_fetched_at, content_validated_at,
+ content_write_seq, index_fetched_at, index_validated_at, index_write_seq,
+ validators_write_seq, raw_hash, text_hash, title, lang, content_type, charset
+ FROM pages WHERE url_hash = ?1",
+ params![record.url_hash],
+ |row| {
+ Ok(ExistingPage {
+ last_attempt_at: row.get(0)?,
+ last_attempt_failed: row.get(1)?,
+ last_fetched: row.get(2)?,
+ last_status: row.get(3)?,
+ outcome: row.get(4)?,
+ render_mode: row.get(5)?,
+ write_seq: row.get(6)?,
+ content_fetched_at: row.get(7)?,
+ content_validated_at: row.get(8)?,
+ content_write_seq: row.get(9)?,
+ index_fetched_at: row.get(10)?,
+ index_validated_at: row.get(11)?,
+ index_write_seq: row.get(12)?,
+ validators_write_seq: row.get(13)?,
+ raw_hash: row.get(14)?,
+ text_hash: row.get(15)?,
+ title: row.get(16)?,
+ lang: row.get(17)?,
+ content_type: row.get(18)?,
+ charset: row.get(19)?,
+ })
+ })
+.optional()?;
+ let old = existing.as_ref();
 
-    let (error_kind, error_detail) = match &record.error {
-        Some((kind, detail)) => (Some(kind.clone()), Some(detail.clone())),
-        None => (None, None),
-    };
-    transaction.execute(
-        "INSERT INTO fetch_events (
-             page_id, started_at, duration_ms, http_status, mode, raw_hash, text_hash,
-             bytes, error_kind, error_detail
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![
-            page_id,
-            fmt_time(
-                record
-                    .fetched_at
-                    .checked_sub_signed(chrono::Duration::milliseconds(
-                        record.duration_ms.min(i64::MAX as u64) as i64
-                    ))
-                    .unwrap_or(record.fetched_at)
-            ),
-            record.duration_ms as i64,
-            record.status.map(i64::from),
-            record.mode,
-            record.raw_hash,
-            record.text_hash,
-            record.bytes.map(|value| value.min(i64::MAX as u64) as i64),
-            error_kind,
-            error_detail,
-        ],
-    )?;
-    let fetch_event_id = transaction.last_insert_rowid();
+ let is_ok = record.outcome == "ok";
+ let is_not_modified = record.outcome == "not_modified";
+ // A page-text write is one that supplies the delivered text (`text_hash`),
+ // independent of whether that write also indexes it: a persisted
+ // authenticated page with `index_authenticated = false` still has content
+ // capture/validation clocks, and an `extract` projection is not page text.
+ let page_text_write = record.text_hash.is_some();
+ // Only a 200 re-supplies validators: a 304 must leave the stored pair owned
+ // by the write named in `validators_write_seq`, or the next binding would
+ // compare a value no write produced.
+ let validators_supplied =
+ !is_not_modified && (record.etag.is_some() || record.last_modified.is_some());
 
-    if let Some(blob) = &record.blob {
-        transaction.execute(
-            "INSERT INTO blobs (hash, size, content_type, created_at, last_referenced_at)
-             VALUES (?1, ?2, ?3, ?4, ?4)
-             ON CONFLICT(hash) DO UPDATE SET last_referenced_at = excluded.last_referenced_at",
-            params![
-                blob.hash,
-                blob.size,
-                blob.content_type,
-                fmt_time(blob.created_at)
-            ],
-        )?;
-    }
+ let attempt_applies = old
+.and_then(|page| parse_stored_time(page.last_attempt_at.as_deref()))
+.is_none_or(|stored| record.fetched_at >= stored);
+ let success_applies = old
+.and_then(|page| parse_stored_time(page.last_fetched.as_deref()))
+.is_none_or(|stored| record.fetched_at >= stored);
 
-    if let Some(profile) = &record.profile {
-        transaction.execute(
-            "INSERT INTO profiles (hash, name, spec_json, created_at)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(hash) DO NOTHING",
-            params![
-                profile.hash,
-                profile.name,
-                profile.spec_json,
-                fmt_time(profile.created_at)
-            ],
-        )?;
-    }
+ // A 304 is bound only when the validators actually sent still belong to the
+ // write stored on the page — compared inside this transaction, so the
+ // attempt, the binding and the served row are one decision.
+ let bound = is_not_modified
+ && record.sent_validators_seq.is_some()
+ && record.sent_validators_seq == old.and_then(|page| page.validators_write_seq);
+ let content_304 =
+ bound && record.sent_validators_seq == old.and_then(|page| page.content_write_seq);
+ let index_304 =
+ bound && record.sent_validators_seq == old.and_then(|page| page.index_write_seq);
 
-    let extraction_id = match &record.extraction {
-        Some(extraction) => {
-            transaction.execute(
-                "INSERT INTO extractions (
-                     page_id, fetch_event_id, profile_hash, result_json, result_hash,
-                     record_count, created_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    page_id,
-                    fetch_event_id,
-                    extraction.profile_hash,
-                    extraction.result_json,
-                    extraction.result_hash,
-                    extraction.record_count,
-                    fmt_time(extraction.created_at),
-                ],
-            )?;
-            Some(transaction.last_insert_rowid())
-        }
-        None => None,
-    };
+ let attempt_failed: Option<i64> = if is_ok {
+ Some(0)
+ } else if record.outcome.starts_with("error:") {
+ Some(1)
+ } else if is_not_modified {
+ // An unbound 304 is a recorded attempt whose success class is unknown.
+ bound.then_some(0)
+ } else {
+ None
+ };
 
-    transaction.commit()?;
-    Ok(Recorded {
-        page_id,
-        fetch_event_id,
-        extraction_id,
-    })
+ let success_200 = is_ok && success_applies;
+ let write_seq = if success_200 {
+ old.map_or(1, |page| page.write_seq + 1)
+ } else {
+ old.map_or(0, |page| page.write_seq)
+ };
+ let (content_fetched_at, content_validated_at, content_write_seq) =
+ if success_200 && page_text_write {
+ (
+ Some(fetched_at.clone()),
+ Some(fetched_at.clone()),
+ Some(write_seq))
+ } else if content_304 && success_applies {
+ (
+ old.and_then(|page| page.content_fetched_at.clone()),
+ Some(fetched_at.clone()),
+ old.and_then(|page| page.content_write_seq))
+ } else {
+ (
+ old.and_then(|page| page.content_fetched_at.clone()),
+ old.and_then(|page| page.content_validated_at.clone()),
+ old.and_then(|page| page.content_write_seq))
+ };
+ let (index_fetched_at, index_validated_at, index_write_seq) = if index_304 && success_applies {
+ (
+ old.and_then(|page| page.index_fetched_at.clone()),
+ Some(fetched_at.clone()),
+ old.and_then(|page| page.index_write_seq))
+ } else {
+ (
+ old.and_then(|page| page.index_fetched_at.clone()),
+ old.and_then(|page| page.index_validated_at.clone()),
+ old.and_then(|page| page.index_write_seq))
+ };
+ // The success clock moves only for a usable 200 or a 304 bound to the write
+ // that produced the page text; an index-only or unbound 304 does not renew it.
+ let last_fetched = if success_200 || (content_304 && success_applies) {
+ Some(fetched_at.clone())
+ } else {
+ old.and_then(|page| page.last_fetched.clone())
+ };
+ let validators_write_seq = if success_200 && validators_supplied {
+ Some(write_seq)
+ } else {
+ old.and_then(|page| page.validators_write_seq)
+ };
+ // Both halves of the attempt pair are written together or not at all.
+ let (last_attempt_at, last_attempt_failed) = if attempt_applies {
+ (Some(fetched_at.clone()), attempt_failed)
+ } else {
+ (
+ old.and_then(|page| page.last_attempt_at.clone()),
+ old.and_then(|page| page.last_attempt_failed))
+ };
+ let outcome = if attempt_applies {
+ record.outcome.clone()
+ } else {
+ old.map_or_else(|| record.outcome.clone(), |page| page.outcome.clone())
+ };
+ let last_status = if attempt_applies {
+ record.status.map(i64::from)
+ } else {
+ old.and_then(|page| page.last_status)
+ };
+ // A failure, a 304 or a success the gate rejected never claims another
+ // write's render mode.
+ let render_mode = if success_200 {
+ record.render_mode.clone()
+ } else {
+ old.and_then(|page| page.render_mode.clone())
+.unwrap_or_else(|| record.render_mode.clone())
+ };
+ // A 304 and a success the gate rejected must not rewrite the stored success
+ // facts either: the row keeps what its recorded write produced.
+ // Only the write that actually applied supplies validators. A 304, a
+ // failure and a success the monotonic gate rejected all pass `None`, so
+ // COALESCE keeps the stored pair owned by `validators_write_seq`.
+ let (etag, last_modified) = if success_200 {
+ (record.etag.clone(), record.last_modified.clone())
+ } else {
+ (None, None)
+ };
+ let (raw_hash, text_hash, title, lang, content_type, charset) = if success_200 {
+ (
+ record.raw_hash.clone(),
+ record.text_hash.clone(),
+ record.title.clone(),
+ record.lang.clone(),
+ record.content_type.clone(),
+ record.charset.clone())
+ } else {
+ (
+ old.and_then(|page| page.raw_hash.clone()),
+ old.and_then(|page| page.text_hash.clone()),
+ old.and_then(|page| page.title.clone()),
+ old.and_then(|page| page.lang.clone()),
+ old.and_then(|page| page.content_type.clone()),
+ old.and_then(|page| page.charset.clone()))
+ };
+
+ let page_id: i64 = transaction.query_row(
+ "INSERT INTO pages (
+ url, canonical_url, url_hash, site, first_seen, last_fetched, last_status,
+ etag, last_modified, content_type, charset, raw_hash, text_hash, title, lang,
+ render_mode, outcome, authenticated, auth_site,
+ write_seq, content_fetched_at, content_validated_at, content_write_seq,
+ index_fetched_at, index_validated_at, index_write_seq, validators_write_seq,
+ last_attempt_at, last_attempt_failed
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+ ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)
+ ON CONFLICT(url_hash) DO UPDATE SET
+ url = excluded.url,
+ canonical_url = excluded.canonical_url,
+ site = excluded.site,
+ last_fetched = excluded.last_fetched,
+ last_status = excluded.last_status,
+ etag = COALESCE(excluded.etag, pages.etag),
+ last_modified = COALESCE(excluded.last_modified, pages.last_modified),
+ content_type = COALESCE(excluded.content_type, pages.content_type),
+ charset = COALESCE(excluded.charset, pages.charset),
+ raw_hash = COALESCE(excluded.raw_hash, pages.raw_hash),
+ text_hash = COALESCE(excluded.text_hash, pages.text_hash),
+ title = COALESCE(excluded.title, pages.title),
+ lang = COALESCE(excluded.lang, pages.lang),
+ render_mode = excluded.render_mode,
+ outcome = excluded.outcome,
+ authenticated = excluded.authenticated,
+ auth_site = excluded.auth_site,
+ write_seq = excluded.write_seq,
+ content_fetched_at = excluded.content_fetched_at,
+ content_validated_at = excluded.content_validated_at,
+ content_write_seq = excluded.content_write_seq,
+ index_fetched_at = excluded.index_fetched_at,
+ index_validated_at = excluded.index_validated_at,
+ index_write_seq = excluded.index_write_seq,
+ validators_write_seq = excluded.validators_write_seq,
+ last_attempt_at = excluded.last_attempt_at,
+ last_attempt_failed = excluded.last_attempt_failed
+ RETURNING id",
+ params![
+ record.url,
+ record.canonical_url,
+ record.url_hash,
+ record.site,
+ fetched_at,
+ last_fetched,
+ last_status,
+ etag,
+ last_modified,
+ content_type,
+ charset,
+ raw_hash,
+ text_hash,
+ title,
+ lang,
+ render_mode,
+ outcome,
+ i64::from(record.authenticated),
+ record.auth_site,
+ write_seq,
+ content_fetched_at,
+ content_validated_at,
+ content_write_seq,
+ index_fetched_at,
+ index_validated_at,
+ index_write_seq,
+ validators_write_seq,
+ last_attempt_at,
+ last_attempt_failed,
+ ],
+ |row| row.get(0))?;
+
+ // Local full-text index: one row per page, written with the page write so
+ // the index can never lag the stored content (). A `None`
+ // `index_text` (304, failure) leaves the previous row alone; the policy on
+ // `IndexText` keeps an `extract` from replacing delivered page text. A
+ // success the monotonic gate rejected writes nothing, including the index.
+ let index_written = if success_200 {
+ match &record.index_text {
+ Some(index_text) => match index_text.write {
+ IndexWrite::Replace => {
+ super::fts::upsert(&transaction, page_id, &index_text.body)?;
+ true
+ }
+ IndexWrite::FillEmpty => {
+ super::fts::fill_empty(&transaction, page_id, &index_text.body)?
+ }
+ },
+ None => false,
+ }
+ } else {
+ false
+ };
+ // Whether a `FillEmpty` actually wrote is only known after the upsert, so
+ // the index sequence and clocks land in the same transaction here.
+ if index_written && success_200 {
+ transaction.execute(
+ "UPDATE pages SET index_write_seq = ?2, index_fetched_at = ?3, index_validated_at = ?3
+ WHERE id = ?1",
+ params![page_id, write_seq, fetched_at])?;
+ }
+
+ let (error_kind, error_detail) = match &record.error {
+ Some((kind, detail)) => (Some(kind.clone()), Some(detail.clone())),
+ None => (None, None),
+ };
+ transaction.execute(
+ "INSERT INTO fetch_events (
+ page_id, started_at, duration_ms, http_status, mode, raw_hash, text_hash,
+ bytes, error_kind, error_detail
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+ params![
+ page_id,
+ fmt_time(
+ record
+.fetched_at
+.checked_sub_signed(chrono::Duration::milliseconds(
+ record.duration_ms.min(i64::MAX as u64) as i64
+))
+.unwrap_or(record.fetched_at)
+),
+ record.duration_ms as i64,
+ record.status.map(i64::from),
+ record.mode,
+ record.raw_hash,
+ record.text_hash,
+ record.bytes.map(|value| value.min(i64::MAX as u64) as i64),
+ error_kind,
+ error_detail,
+ ])?;
+ let fetch_event_id = transaction.last_insert_rowid();
+
+ if let Some(blob) = &record.blob
+ && success_200
+ {
+ transaction.execute(
+ "INSERT INTO blobs (hash, size, content_type, created_at, last_referenced_at)
+ VALUES (?1, ?2, ?3, ?4, ?4)
+ ON CONFLICT(hash) DO UPDATE SET last_referenced_at = excluded.last_referenced_at",
+ params![
+ blob.hash,
+ blob.size,
+ blob.content_type,
+ fmt_time(blob.created_at)
+ ])?;
+ }
+
+ if let Some(profile) = &record.profile {
+ transaction.execute(
+ "INSERT INTO profiles (hash, name, spec_json, created_at)
+ VALUES (?1, ?2, ?3, ?4)
+ ON CONFLICT(hash) DO NOTHING",
+ params![
+ profile.hash,
+ profile.name,
+ profile.spec_json,
+ fmt_time(profile.created_at)
+ ])?;
+ }
+
+ // A gated-out success writes no extraction row: its facts are older than
+ // the stored success and must not replace it.
+ let extraction_id = match &record.extraction {
+ Some(extraction) if success_200 => {
+ transaction.execute(
+ "INSERT INTO extractions (
+ page_id, fetch_event_id, profile_hash, result_json, result_hash,
+ record_count, created_at, source_write_seq
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+ params![
+ page_id,
+ fetch_event_id,
+ extraction.profile_hash,
+ extraction.result_json,
+ extraction.result_hash,
+ extraction.record_count,
+ fmt_time(extraction.created_at),
+ write_seq,
+ ])?;
+ Some(transaction.last_insert_rowid())
+ }
+ _ => None,
+ };
+
+ // The served row is read inside this transaction when the caller returns it,
+ // so the response is built from the same commit that recorded the attempt.
+ let served = match (is_not_modified, &record.served_profile_hash) {
+ (true, Some(profile_hash)) => transaction
+.query_row(
+ "SELECT e.result_json, e.created_at, e.source_write_seq
+ FROM extractions e JOIN pages p ON p.id = e.page_id
+ WHERE e.page_id = ?1 AND e.profile_hash = ?2 AND p.authenticated = 0
+ ORDER BY e.created_at DESC, e.id DESC
+ LIMIT 1",
+ params![page_id, profile_hash],
+ |row| {
+ Ok(ServedExtraction {
+ result_json: row.get(0)?,
+ created_at: parse_time(&row.get::<_, String>(1)?)?,
+ source_write_seq: row.get(2)?,
+ })
+ })
+.optional()?,
+ _ => None,
+ };
+ // The served-row verdict is computed here, from the same committed state:
+ // page-level binding alone must not validate a row another write produced.
+ let served_validated = bound
+ && record.sent_validators_seq.is_some()
+ && served.as_ref().and_then(|row| row.source_write_seq) == record.sent_validators_seq;
+ let not_modified = is_not_modified.then_some(NotModifiedRecord {
+ bound,
+ served_validated,
+ at: record.fetched_at,
+ attempt_at: parse_stored_time(last_attempt_at.as_deref()),
+ attempt_failed: last_attempt_failed.map(|value| value != 0),
+ served,
+ });
+
+ transaction.commit()?;
+ Ok(RecordedOutcome {
+ ids: Recorded {
+ page_id,
+ fetch_event_id,
+ extraction_id,
+ },
+ not_modified,
+ })
 }
 
 impl FetchRecord {
-    pub fn new(url: &str, canonical_url: &str, url_hash: &str) -> Self {
-        Self {
-            url: url.to_string(),
-            canonical_url: canonical_url.to_string(),
-            url_hash: url_hash.to_string(),
-            site: String::new(),
-            fetched_at: Utc::now(),
-            status: None,
-            content_type: None,
-            charset: None,
-            etag: None,
-            last_modified: None,
-            raw_hash: None,
-            text_hash: None,
-            title: None,
-            lang: None,
-            render_mode: "static".to_string(),
-            outcome: String::new(),
-            authenticated: false,
-            auth_site: None,
-            duration_ms: 0,
-            mode: "main".to_string(),
-            bytes: None,
-            error: None,
-            blob: None,
-            extraction: None,
-            index_text: None,
-            profile: None,
-        }
-    }
+ pub fn new(url: &str, canonical_url: &str, url_hash: &str) -> Self {
+ Self {
+ url: url.to_string(),
+ canonical_url: canonical_url.to_string(),
+ url_hash: url_hash.to_string(),
+ site: String::new(),
+ fetched_at: Utc::now(),
+ status: None,
+ content_type: None,
+ charset: None,
+ etag: None,
+ last_modified: None,
+ raw_hash: None,
+ text_hash: None,
+ title: None,
+ lang: None,
+ render_mode: "static".to_string(),
+ outcome: String::new(),
+ authenticated: false,
+ auth_site: None,
+ sent_validators_seq: None,
+ served_profile_hash: None,
+ duration_ms: 0,
+ mode: "main".to_string(),
+ bytes: None,
+ error: None,
+ blob: None,
+ extraction: None,
+ index_text: None,
+ profile: None,
+ }
+ }
 }
 
 fn row_to_host(row: &rusqlite::Row<'_>) -> rusqlite::Result<HostRow> {
-    let fetched_at: Option<String> = row.get(1)?;
-    let expires_at: Option<String> = row.get(5)?;
-    let next_allowed: Option<String> = row.get(6)?;
-    Ok(HostRow {
-        host: row.get(0)?,
-        robots_fetched_at: match fetched_at {
-            Some(text) => Some(parse_time(&text)?),
-            None => None,
-        },
-        robots_status: row.get(2)?,
-        robots_hash: row.get(3)?,
-        robots_body: row.get(4)?,
-        robots_expires_at: match expires_at {
-            Some(text) => Some(parse_time(&text)?),
-            None => None,
-        },
-        next_allowed_at: match next_allowed {
-            Some(text) => Some(parse_time(&text)?),
-            None => None,
-        },
-        consecutive_failures: row.get(7)?,
-    })
+ let fetched_at: Option<String> = row.get(1)?;
+ let expires_at: Option<String> = row.get(5)?;
+ let next_allowed: Option<String> = row.get(6)?;
+ Ok(HostRow {
+ host: row.get(0)?,
+ robots_fetched_at: match fetched_at {
+ Some(text) => Some(parse_time(&text)?),
+ None => None,
+ },
+ robots_status: row.get(2)?,
+ robots_hash: row.get(3)?,
+ robots_body: row.get(4)?,
+ robots_expires_at: match expires_at {
+ Some(text) => Some(parse_time(&text)?),
+ None => None,
+ },
+ next_allowed_at: match next_allowed {
+ Some(text) => Some(parse_time(&text)?),
+ None => None,
+ },
+ consecutive_failures: row.get(7)?,
+ })
 }
 
 fn save_host(connection: &mut Connection, row: &HostRow) -> rusqlite::Result<()> {
-    connection.execute(
-        "INSERT INTO hosts (
-             host, robots_fetched_at, robots_status, robots_hash, robots_body,
-             robots_expires_at, next_allowed_at, consecutive_failures
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-         ON CONFLICT(host) DO UPDATE SET
-             robots_fetched_at = excluded.robots_fetched_at,
-             robots_status = excluded.robots_status,
-             robots_hash = excluded.robots_hash,
-             robots_body = excluded.robots_body,
-             robots_expires_at = excluded.robots_expires_at,
-             next_allowed_at = COALESCE(excluded.next_allowed_at, hosts.next_allowed_at),
-             consecutive_failures = excluded.consecutive_failures",
-        params![
-            row.host,
-            row.robots_fetched_at.map(fmt_time),
-            row.robots_status,
-            row.robots_hash,
-            row.robots_body,
-            row.robots_expires_at.map(fmt_time),
-            row.next_allowed_at.map(fmt_time),
-            row.consecutive_failures,
-        ],
-    )?;
-    Ok(())
+ connection.execute(
+ "INSERT INTO hosts (
+ host, robots_fetched_at, robots_status, robots_hash, robots_body,
+ robots_expires_at, next_allowed_at, consecutive_failures
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+ ON CONFLICT(host) DO UPDATE SET
+ robots_fetched_at = excluded.robots_fetched_at,
+ robots_status = excluded.robots_status,
+ robots_hash = excluded.robots_hash,
+ robots_body = excluded.robots_body,
+ robots_expires_at = excluded.robots_expires_at,
+ next_allowed_at = COALESCE(excluded.next_allowed_at, hosts.next_allowed_at),
+ consecutive_failures = excluded.consecutive_failures",
+ params![
+ row.host,
+ row.robots_fetched_at.map(fmt_time),
+ row.robots_status,
+ row.robots_hash,
+ row.robots_body,
+ row.robots_expires_at.map(fmt_time),
+ row.next_allowed_at.map(fmt_time),
+ row.consecutive_failures,
+ ])?;
+ Ok(())
 }
 
 fn record_auth_audit(connection: &Connection, row: &AuthAuditRow) -> rusqlite::Result<()> {
-    connection.execute(
-        "INSERT INTO auth_audit
-             (at, site, auth_id, method, host, status, bytes, outcome, resolution_ms)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![
-            fmt_time(row.at),
-            row.site,
-            row.auth_id,
-            row.method,
-            row.host,
-            row.status.map(i64::from),
-            row.bytes.map(|bytes| bytes.min(i64::MAX as u64) as i64),
-            row.outcome,
-            row.resolution_ms.min(i64::MAX as u64) as i64,
-        ],
-    )?;
-    Ok(())
+ connection.execute(
+ "INSERT INTO auth_audit
+ (at, site, auth_id, method, host, status, bytes, outcome, resolution_ms)
+ VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+ params![
+ fmt_time(row.at),
+ row.site,
+ row.auth_id,
+ row.method,
+ row.host,
+ row.status.map(i64::from),
+ row.bytes.map(|bytes| bytes.min(i64::MAX as u64) as i64),
+ row.outcome,
+ row.resolution_ms.min(i64::MAX as u64) as i64,
+ ])?;
+ Ok(())
 }
 
 fn gc(
-    connection: &mut Connection,
-    now: DateTime<Utc>,
-    retention: &RetentionConfig,
-    auth_audit_days: u32,
-    auth_page_days: u32,
-) -> rusqlite::Result<GcReport> {
-    let transaction = connection.transaction()?;
-    let events_cutoff =
-        fmt_time(now - chrono::Duration::days(i64::from(retention.fetch_events_days)));
-    let extractions_cutoff =
-        fmt_time(now - chrono::Duration::days(i64::from(retention.extractions_days)));
-    // Screenshots are disposable debugging evidence: prune the rows first, so
-    // the blob reference set below no longer protects them. A blob that only a
-    // pruned screenshot referenced then ages out with the existing cutoff.
-    let screenshots_cutoff =
-        fmt_time(now - chrono::Duration::days(i64::from(retention.screenshots_days)));
-    let screenshots_pruned = transaction.execute(
-        "DELETE FROM screenshots WHERE captured_at < ?1",
-        params![screenshots_cutoff],
-    )?;
+ connection: &mut Connection,
+ now: DateTime<Utc>,
+ retention: &RetentionConfig,
+ auth_audit_days: u32,
+ auth_page_days: u32) -> rusqlite::Result<GcReport> {
+ let transaction = connection.transaction()?;
+ let events_cutoff =
+ fmt_time(now - chrono::Duration::days(i64::from(retention.fetch_events_days)));
+ let extractions_cutoff =
+ fmt_time(now - chrono::Duration::days(i64::from(retention.extractions_days)));
+ // Screenshots are disposable debugging evidence: prune the rows first, so
+ // the blob reference set below no longer protects them. A blob that only a
+ // pruned screenshot referenced then ages out with the existing cutoff.
+ let screenshots_cutoff =
+ fmt_time(now - chrono::Duration::days(i64::from(retention.screenshots_days)));
+ let screenshots_pruned = transaction.execute(
+ "DELETE FROM screenshots WHERE captured_at < ?1",
+ params![screenshots_cutoff])?;
 
-    // Authenticated-fetch audit rows follow `[auth].audit_days` (v0.8). The
-    // window is its own knob: it is not a content-retention policy.
-    let auth_audit_cutoff = fmt_time(now - chrono::Duration::days(i64::from(auth_audit_days)));
-    let auth_audit_pruned = transaction.execute(
-        "DELETE FROM auth_audit WHERE at < ?1",
-        params![auth_audit_cutoff],
-    )?;
+ // Authenticated-fetch audit rows follow `[auth].audit_days` ( A0). The
+ // window is its own knob: it is not a content-retention policy.
+ let auth_audit_cutoff = fmt_time(now - chrono::Duration::days(i64::from(auth_audit_days)));
+ let auth_audit_pruned = transaction.execute(
+ "DELETE FROM auth_audit WHERE at < ?1",
+ params![auth_audit_cutoff])?;
 
-    // Stored authenticated pages follow `[auth].page_retention_days` (v0.9):
-    // shorter than the public page window by design. The fetch/extraction rows
-    // cascade with the page; the blob reference set below keeps shared blobs.
-    let auth_page_cutoff = fmt_time(now - chrono::Duration::days(i64::from(auth_page_days)));
-    let auth_pages_pruned = transaction.execute(
-        "DELETE FROM pages
-         WHERE authenticated = 1
-           AND COALESCE(last_fetched, first_seen) < ?1",
-        params![auth_page_cutoff],
-    )?;
+ // Stored authenticated pages follow `[auth].page_retention_days` ( B5b):
+ // shorter than the public page window by design. The fetch/extraction rows
+ // cascade with the page; the blob reference set below keeps shared blobs.
+ let auth_page_cutoff = fmt_time(now - chrono::Duration::days(i64::from(auth_page_days)));
+ let auth_pages_pruned = transaction.execute(
+ "DELETE FROM pages
+ WHERE authenticated = 1
+ AND COALESCE(last_fetched, first_seen) < ?1",
+ params![auth_page_cutoff])?;
 
-    // Webhook history: delivered rows follow a short retention window; dead
-    // letters are kept longer for diagnosis. Pending rows are never pruned.
-    let delivered_cutoff =
-        fmt_time(now - chrono::Duration::days(i64::from(retention.webhook_deliveries_days)));
-    let dead_cutoff =
-        fmt_time(now - chrono::Duration::days(i64::from(retention.webhook_dead_days)));
-    let webhook_deliveries_pruned = transaction.execute(
-        "DELETE FROM webhook_deliveries
-         WHERE (status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < ?1)
-            OR (status = 'dead' AND created_at < ?2)",
-        params![delivered_cutoff, dead_cutoff],
-    )?;
+ // Webhook history: delivered rows follow a short retention window; dead
+ // letters are kept longer for diagnosis. Pending rows are never pruned.
+ let delivered_cutoff =
+ fmt_time(now - chrono::Duration::days(i64::from(retention.webhook_deliveries_days)));
+ let dead_cutoff =
+ fmt_time(now - chrono::Duration::days(i64::from(retention.webhook_dead_days)));
+ let webhook_deliveries_pruned = transaction.execute(
+ "DELETE FROM webhook_deliveries
+ WHERE (status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < ?1)
+ OR (status = 'dead' AND created_at < ?2)",
+ params![delivered_cutoff, dead_cutoff])?;
 
-    // Snapshots first: the extraction/fetch-event guards below read the rows
-    // that survive. Keep the newest N snapshots per monitor plus every change
-    // point and every snapshot a change row references.
-    let snapshots_pruned = transaction.execute(
-        "DELETE FROM snapshots
-         WHERE is_change_point = 0
-           AND id NOT IN (SELECT from_snapshot FROM changes)
-           AND id NOT IN (SELECT to_snapshot FROM changes)
-           AND id NOT IN (
-               SELECT id FROM (
-                   SELECT id,
-                          ROW_NUMBER() OVER (
-                              PARTITION BY monitor_id ORDER BY taken_at DESC, id DESC
-                          ) AS position
-                   FROM snapshots
-               ) WHERE position <= ?1
-           )",
-        params![retention.snapshots_per_monitor.min(i64::MAX as usize) as i64],
-    )?;
+ // Snapshots first: the extraction/fetch-event guards below read the rows
+ // that survive. Keep the newest N snapshots per monitor plus every change
+ // point and every snapshot a change row references ().
+ let snapshots_pruned = transaction.execute(
+ "DELETE FROM snapshots
+ WHERE is_change_point = 0
+ AND id NOT IN (SELECT from_snapshot FROM changes)
+ AND id NOT IN (SELECT to_snapshot FROM changes)
+ AND id NOT IN (
+ SELECT id FROM (
+ SELECT id,
+ ROW_NUMBER() OVER (
+ PARTITION BY monitor_id ORDER BY taken_at DESC, id DESC
+) AS position
+ FROM snapshots
+) WHERE position <= ?1
+)",
+ params![retention.snapshots_per_monitor.min(i64::MAX as usize) as i64])?;
 
-    // Extractions first: deleting an old fetch event cascades to its
-    // extraction, and an explicit statement gives an accurate count instead of
-    // relying on the cascade. A snapshot keeps the extraction/event that
-    // produced it alive.
-    let extractions_pruned = transaction.execute(
-        "DELETE FROM extractions WHERE created_at < ?1
-           AND fetch_event_id NOT IN (
-               SELECT fetch_event_id FROM snapshots WHERE fetch_event_id IS NOT NULL
-           )",
-        params![extractions_cutoff],
-    )?;
-    let events_pruned = transaction.execute(
-        "DELETE FROM fetch_events
-         WHERE started_at < ?1
-           AND id NOT IN (
-               SELECT fetch_event_id FROM snapshots WHERE fetch_event_id IS NOT NULL
-           )
-           AND id NOT IN (
-               SELECT newer.id FROM fetch_events AS newer
-               WHERE newer.page_id = fetch_events.page_id
-               ORDER BY newer.started_at DESC, newer.id DESC
-               LIMIT 1
-           )",
-        params![events_cutoff],
-    )?;
+ // Extractions first: deleting an old fetch event cascades to its
+ // extraction, and an explicit statement gives an accurate count instead of
+ // relying on the cascade. A snapshot keeps the extraction/event that
+ // produced it alive.
+ let extractions_pruned = transaction.execute(
+ "DELETE FROM extractions WHERE created_at < ?1
+ AND fetch_event_id NOT IN (
+ SELECT fetch_event_id FROM snapshots WHERE fetch_event_id IS NOT NULL
+)",
+ params![extractions_cutoff])?;
+ let events_pruned = transaction.execute(
+ "DELETE FROM fetch_events
+ WHERE started_at < ?1
+ AND id NOT IN (
+ SELECT fetch_event_id FROM snapshots WHERE fetch_event_id IS NOT NULL
+)
+ AND id NOT IN (
+ SELECT newer.id FROM fetch_events AS newer
+ WHERE newer.page_id = fetch_events.page_id
+ ORDER BY newer.started_at DESC, newer.id DESC
+ LIMIT 1
+)",
+ params![events_cutoff])?;
 
-    // A blob is retained when a page, a snapshot, a fetch event, an extraction
-    // or a screenshot still references it. `fetch_events.raw_hash` was a log-only
-    // field in; requires no dangling `raw_hash` in any row, so it is
-    // now a reference too (events age out with their blob).
-    let blobs_pruned = transaction.execute(
-        "DELETE FROM blobs
-         WHERE created_at < ?1
-           AND hash NOT IN (SELECT raw_hash FROM pages WHERE raw_hash IS NOT NULL)
-           AND hash NOT IN (SELECT raw_hash FROM fetch_events WHERE raw_hash IS NOT NULL)
-           AND hash NOT IN (SELECT raw_hash FROM snapshots)
-           AND hash NOT IN (SELECT normalized_hash FROM snapshots)
-           AND hash NOT IN (SELECT result_hash FROM snapshots WHERE result_hash IS NOT NULL)
-           AND hash NOT IN (SELECT hash FROM screenshots)",
-        params![extractions_cutoff],
-    )?;
+ // A blob is retained when a page, a snapshot, a fetch event, an extraction
+ // or a screenshot still references it. `fetch_events.raw_hash` was a log-only
+ // field in B05; B6-4 requires no dangling `raw_hash` in any row, so it is
+ // now a reference too (events age out with their blob).
+ let blobs_pruned = transaction.execute(
+ "DELETE FROM blobs
+ WHERE created_at < ?1
+ AND hash NOT IN (SELECT raw_hash FROM pages WHERE raw_hash IS NOT NULL)
+ AND hash NOT IN (SELECT raw_hash FROM fetch_events WHERE raw_hash IS NOT NULL)
+ AND hash NOT IN (SELECT raw_hash FROM snapshots)
+ AND hash NOT IN (SELECT normalized_hash FROM snapshots)
+ AND hash NOT IN (SELECT result_hash FROM snapshots WHERE result_hash IS NOT NULL)
+ AND hash NOT IN (SELECT hash FROM screenshots)",
+ params![extractions_cutoff])?;
 
-    // Budget enforcement: evict oldest unreferenced blobs until under budget.
-    let mut removed: Vec<String> = Vec::new();
-    let mut bytes_freed = 0u64;
-    let mut total: u64 =
-        transaction.query_row("SELECT COALESCE(SUM(size), 0) FROM blobs", [], |row| {
-            row.get::<_, i64>(0).map(|value| value.max(0) as u64)
-        })?;
-    if total > retention.max_blob_bytes {
-        let candidates: Vec<(String, i64)> = {
-            let mut statement = transaction.prepare(
-                "SELECT hash, size FROM blobs
-                 WHERE hash NOT IN (SELECT raw_hash FROM pages WHERE raw_hash IS NOT NULL)
-                   AND hash NOT IN (SELECT raw_hash FROM fetch_events WHERE raw_hash IS NOT NULL)
-                   AND hash NOT IN (SELECT raw_hash FROM snapshots)
-                   AND hash NOT IN (SELECT normalized_hash FROM snapshots)
-                   AND hash NOT IN (SELECT result_hash FROM snapshots WHERE result_hash IS NOT NULL)
-                   AND hash NOT IN (SELECT hash FROM screenshots)
-                 ORDER BY created_at ASC, hash ASC",
-            )?;
-            let rows = statement.query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            })?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()?
-        };
-        for (hash, size) in candidates {
-            if total <= retention.max_blob_bytes {
-                break;
-            }
-            transaction.execute("DELETE FROM blobs WHERE hash = ?1", params![hash])?;
-            total = total.saturating_sub(size.max(0) as u64);
-            bytes_freed += size.max(0) as u64;
-            removed.push(hash);
-        }
-    }
+ // Budget enforcement: evict oldest unreferenced blobs until under budget.
+ let mut removed: Vec<String> = Vec::new();
+ let mut bytes_freed = 0u64;
+ let mut total: u64 =
+ transaction.query_row("SELECT COALESCE(SUM(size), 0) FROM blobs", [], |row| {
+ row.get::<_, i64>(0).map(|value| value.max(0) as u64)
+ })?;
+ if total > retention.max_blob_bytes {
+ let candidates: Vec<(String, i64)> = {
+ let mut statement = transaction.prepare(
+ "SELECT hash, size FROM blobs
+ WHERE hash NOT IN (SELECT raw_hash FROM pages WHERE raw_hash IS NOT NULL)
+ AND hash NOT IN (SELECT raw_hash FROM fetch_events WHERE raw_hash IS NOT NULL)
+ AND hash NOT IN (SELECT raw_hash FROM snapshots)
+ AND hash NOT IN (SELECT normalized_hash FROM snapshots)
+ AND hash NOT IN (SELECT result_hash FROM snapshots WHERE result_hash IS NOT NULL)
+ AND hash NOT IN (SELECT hash FROM screenshots)
+ ORDER BY created_at ASC, hash ASC")?;
+ let rows = statement.query_map([], |row| {
+ Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+ })?;
+ rows.collect::<rusqlite::Result<Vec<_>>>()?
+ };
+ for (hash, size) in candidates {
+ if total <= retention.max_blob_bytes {
+ break;
+ }
+ transaction.execute("DELETE FROM blobs WHERE hash = ?1", params![hash])?;
+ total = total.saturating_sub(size.max(0) as u64);
+ bytes_freed += size.max(0) as u64;
+ removed.push(hash);
+ }
+ }
 
-    transaction.commit()?;
-    let _ = connection.execute_batch("PRAGMA incremental_vacuum(64);");
-    tracing::debug!(screenshots_pruned, "screenshot rows pruned");
-    Ok(GcReport {
-        events_pruned,
-        extractions_pruned,
-        snapshots_pruned,
-        blobs_pruned,
-        webhook_deliveries_pruned,
-        auth_audit_pruned,
-        auth_pages_pruned,
-        bytes_freed,
-        removed_blobs: removed,
-    })
+ transaction.commit()?;
+ let _ = connection.execute_batch("PRAGMA incremental_vacuum(64);");
+ tracing::debug!(screenshots_pruned, "screenshot rows pruned");
+ Ok(GcReport {
+ events_pruned,
+ extractions_pruned,
+ snapshots_pruned,
+ blobs_pruned,
+ webhook_deliveries_pruned,
+ auth_audit_pruned,
+ auth_pages_pruned,
+ bytes_freed,
+ removed_blobs: removed,
+ })
 }
 
 // ---------------------------------------------------------------------------
@@ -917,79 +1351,92 @@ fn gc(
 
 #[derive(Debug)]
 struct ReadPool {
-    connections: Mutex<Vec<Connection>>,
-    available: Condvar,
+ connections: Mutex<Vec<Connection>>,
+ available: Condvar,
 }
 
 impl ReadPool {
-    fn new(db_path: &Path, size: usize) -> Result<Self> {
-        let mut connections = Vec::with_capacity(size);
-        for _ in 0..size {
-            let connection = Connection::open(db_path).map_err(|error| {
-                WidowError::Internal(format!("cannot open read connection: {error}"))
-            })?;
-            connection
-                .busy_timeout(Duration::from_secs(5))
-                .map_err(sql_err)?;
-            connection
-                .execute_batch("PRAGMA query_only=ON;")
-                .map_err(sql_err)?;
-            connections.push(connection);
-        }
-        Ok(Self {
-            connections: Mutex::new(connections),
-            available: Condvar::new(),
-        })
-    }
+ fn new(db_path: &Path, size: usize) -> Result<Self> {
+ let mut connections = Vec::with_capacity(size);
+ for _ in 0..size {
+ let connection = Connection::open(db_path).map_err(|error| {
+ WidowError::Internal(format!("cannot open read connection: {error}"))
+ })?;
+ connection
+.busy_timeout(Duration::from_secs(5))
+.map_err(sql_err)?;
+ connection
+.execute_batch("PRAGMA query_only=ON;")
+.map_err(sql_err)?;
+ connections.push(connection);
+ }
+ Ok(Self {
+ connections: Mutex::new(connections),
+ available: Condvar::new(),
+ })
+ }
 
-    fn with<T>(&self, operation: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Result<T> {
-        let mut guard = self
-            .connections
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let connection = loop {
-            if let Some(connection) = guard.pop() {
-                break connection;
-            }
-            guard = self
-                .available
-                .wait(guard)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-        };
-        drop(guard);
-        let result = operation(&connection);
-        let mut guard = self
-            .connections
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        guard.push(connection);
-        self.available.notify_one();
-        result.map_err(sql_err)
-    }
+ fn with<T>(&self, operation: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Result<T> {
+ let mut guard = self
+.connections
+.lock()
+.unwrap_or_else(|poisoned| poisoned.into_inner());
+ let connection = loop {
+ if let Some(connection) = guard.pop() {
+ break connection;
+ }
+ guard = self
+.available
+.wait(guard)
+.unwrap_or_else(|poisoned| poisoned.into_inner());
+ };
+ drop(guard);
+ let result = operation(&connection);
+ let mut guard = self
+.connections
+.lock()
+.unwrap_or_else(|poisoned| poisoned.into_inner());
+ guard.push(connection);
+ self.available.notify_one();
+ result.map_err(sql_err)
+ }
 }
 
 fn row_to_page(row: &rusqlite::Row<'_>) -> rusqlite::Result<PageRecord> {
-    Ok(PageRecord {
-        id: row.get(0)?,
-        url: row.get(1)?,
-        canonical_url: row.get(2)?,
-        etag: row.get(3)?,
-        last_modified: row.get(4)?,
-        content_type: row.get(5)?,
-        charset: row.get(6)?,
-        last_status: row.get(7)?,
-        last_fetched: row.get(8)?,
-        raw_hash: row.get(9)?,
-        title: row.get(10)?,
-        lang: row.get(11)?,
-        authenticated: row.get::<_, i64>(12)? != 0,
-        auth_site: row.get(13)?,
-    })
+ Ok(PageRecord {
+ id: row.get(0)?,
+ url: row.get(1)?,
+ canonical_url: row.get(2)?,
+ etag: row.get(3)?,
+ last_modified: row.get(4)?,
+ content_type: row.get(5)?,
+ charset: row.get(6)?,
+ last_status: row.get(7)?,
+ last_fetched: row.get(8)?,
+ raw_hash: row.get(9)?,
+ title: row.get(10)?,
+ lang: row.get(11)?,
+ authenticated: row.get::<_, i64>(12)? != 0,
+ auth_site: row.get(13)?,
+ write_seq: row.get(14)?,
+ content_fetched_at: row.get(15)?,
+ content_validated_at: row.get(16)?,
+ content_write_seq: row.get(17)?,
+ index_fetched_at: row.get(18)?,
+ index_validated_at: row.get(19)?,
+ index_write_seq: row.get(20)?,
+ validators_write_seq: row.get(21)?,
+ last_attempt_at: row.get(22)?,
+ last_attempt_failed: row.get(23)?,
+ })
 }
 
 const PAGE_COLUMNS: &str = "p.id, p.url, p.canonical_url, p.etag, p.last_modified, p.content_type, \
-                            p.charset, p.last_status, p.last_fetched, p.raw_hash, p.title, p.lang, \
-                            p.authenticated, p.auth_site";
+ p.charset, p.last_status, p.last_fetched, p.raw_hash, p.title, p.lang, \
+ p.authenticated, p.auth_site, p.write_seq, p.content_fetched_at, \
+ p.content_validated_at, p.content_write_seq, p.index_fetched_at, \
+ p.index_validated_at, p.index_write_seq, p.validators_write_seq, \
+ p.last_attempt_at, p.last_attempt_failed";
 
 // ---------------------------------------------------------------------------
 // Database
@@ -997,2101 +1444,2264 @@ const PAGE_COLUMNS: &str = "p.id, p.url, p.canonical_url, p.etag, p.last_modifie
 
 #[derive(Debug)]
 pub struct Database {
-    writer: Writer,
-    readers: Arc<ReadPool>,
-    _writer_thread: std::thread::JoinHandle<()>,
+ writer: Writer,
+ readers: Arc<ReadPool>,
+ _writer_thread: std::thread::JoinHandle<()>,
 }
 
 impl Database {
-    /// Run a write closure on the single writer connection.
-    pub(crate) async fn write<F>(&self, operation: F) -> Result<()>
-    where
-        F: FnOnce(&mut Connection) -> rusqlite::Result<()> + Send + 'static,
-    {
-        let (reply, response) = oneshot::channel();
-        self.writer
-            .tx
-            .send(WriteOp::Custom(Box::new(operation), reply))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        response
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)
-    }
+ /// Run a write closure on the single writer connection.
+ pub(crate) async fn write<F>(&self, operation: F) -> Result<()>
+ where
+ F: FnOnce(&mut Connection) -> rusqlite::Result<()> + Send + 'static,
+ {
+ let (reply, response) = oneshot::channel();
+ self.writer
+.tx
+.send(WriteOp::Custom(Box::new(operation), reply))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ response
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)
+ }
 
-    /// Run a write closure that returns a value. The value is sent back from the
-    /// writer thread; a SQLite error is returned as the write error.
-    pub(crate) async fn write_with<T, F>(&self, operation: F) -> Result<T>
-    where
-        F: FnOnce(&mut Connection) -> rusqlite::Result<T> + Send + 'static,
-        T: Send + 'static,
-    {
-        let (value_tx, value_rx) = oneshot::channel::<T>();
-        let (done_tx, done_rx) = oneshot::channel::<std::result::Result<(), String>>();
-        let op = move |connection: &mut Connection| match operation(connection) {
-            Ok(value) => {
-                let _ = value_tx.send(value);
-                Ok(())
-            }
-            Err(error) => Err(error),
-        };
-        self.writer
-            .tx
-            .send(WriteOp::Custom(Box::new(op), done_tx))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        done_rx
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)?;
-        value_rx
-            .await
-            .map_err(|_| WidowError::Internal("writer did not return a value".to_string()))
-    }
+ /// Run a write closure that returns a value. The value is sent back from the
+ /// writer thread; a SQLite error is returned as the write error.
+ pub(crate) async fn write_with<T, F>(&self, operation: F) -> Result<T>
+ where
+ F: FnOnce(&mut Connection) -> rusqlite::Result<T> + Send + 'static,
+ T: Send + 'static,
+ {
+ let (value_tx, value_rx) = oneshot::channel::<T>();
+ let (done_tx, done_rx) = oneshot::channel::<std::result::Result<(), String>>();
+ let op = move |connection: &mut Connection| match operation(connection) {
+ Ok(value) => {
+ let _ = value_tx.send(value);
+ Ok(())
+ }
+ Err(error) => Err(error),
+ };
+ self.writer
+.tx
+.send(WriteOp::Custom(Box::new(op), done_tx))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ done_rx
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)?;
+ value_rx
+.await
+.map_err(|_| WidowError::Internal("writer did not return a value".to_string()))
+ }
 
-    /// Run a read closure on a pooled read connection.
-    pub(crate) async fn read<T, F>(&self, operation: F) -> Result<T>
-    where
-        F: FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
-        T: Send + 'static,
-    {
-        let readers = Arc::clone(&self.readers);
-        tokio::task::spawn_blocking(move || readers.with(operation))
-            .await
-            .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ /// Run a read closure on a pooled read connection.
+ pub(crate) async fn read<T, F>(&self, operation: F) -> Result<T>
+ where
+ F: FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
+ T: Send + 'static,
+ {
+ let readers = Arc::clone(&self.readers);
+ tokio::task::spawn_blocking(move || readers.with(operation))
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    pub fn open(
-        db_path: &Path,
-        read_connections: usize,
-        fts: &FtsConfig,
-        index_authenticated: bool,
-    ) -> Result<Self> {
-        let mut connection = open_writer(db_path)?;
-        migrate(&mut connection)?;
-        // The v6 backfill runs on the writer connection before any reader or
-        // the writer thread exists, so no concurrent write can interleave.
-        super::fts::backfill(&mut connection, fts.max_index_chars, index_authenticated)
-            .map_err(sql_err)?;
-        drop(connection);
-        let readers = Arc::new(ReadPool::new(db_path, read_connections)?);
-        let (writer, handle) = Writer::start(db_path.to_path_buf())?;
-        Ok(Self {
-            writer,
-            readers,
-            _writer_thread: handle,
-        })
-    }
+ pub fn open(
+ db_path: &Path,
+ read_connections: usize,
+ fts: &FtsConfig,
+ index_authenticated: bool) -> Result<Self> {
+ let mut connection = open_writer(db_path)?;
+ migrate(&mut connection)?;
+ // The v6 backfill runs on the writer connection before any reader or
+ // the writer thread exists, so no concurrent write can interleave.
+ super::fts::backfill(&mut connection, fts.max_index_chars, index_authenticated)
+.map_err(sql_err)?;
+ drop(connection);
+ let readers = Arc::new(ReadPool::new(db_path, read_connections)?);
+ let (writer, handle) = Writer::start(db_path.to_path_buf())?;
+ Ok(Self {
+ writer,
+ readers,
+ _writer_thread: handle,
+ })
+ }
 
-    pub async fn page(&self, url_hash: &str) -> Result<Option<PageRecord>> {
-        let readers = Arc::clone(&self.readers);
-        let hash = url_hash.to_string();
-        tokio::task::spawn_blocking(move || {
-            readers.with(|connection| {
-                connection
-                    .query_row(
-                        &format!(
-                            "SELECT {PAGE_COLUMNS} FROM pages p\n                             WHERE p.url_hash = ?1 AND p.authenticated = 0"
-                        ),
-                        params![hash],
-                        row_to_page,
-                    )
-                    .optional()
-            })
-        })
-        .await
-        .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ pub async fn page(&self, url_hash: &str) -> Result<Option<PageRecord>> {
+ let readers = Arc::clone(&self.readers);
+ let hash = url_hash.to_string();
+ tokio::task::spawn_blocking(move || {
+ readers.with(|connection| {
+ connection
+.query_row(
+ &format!(
+ "SELECT {PAGE_COLUMNS} FROM pages p\n WHERE p.url_hash = ?1 AND p.authenticated = 0"
+),
+ params![hash],
+ row_to_page)
+.optional()
+ })
+ })
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    /// One blob row by hash (`blob_get`). Read-only.
-    pub async fn blob(&self, hash: &str) -> Result<Option<BlobRow>> {
-        let hash = hash.to_string();
-        self.read(move |connection| {
-            connection
-                .query_row(
-                    "SELECT hash, size, content_type, created_at FROM blobs WHERE hash = ?1",
-                    params![hash],
-                    |row| {
-                        Ok(BlobRow {
-                            hash: row.get(0)?,
-                            size: row.get(1)?,
-                            content_type: row.get(2)?,
-                            created_at: parse_time(&row.get::<_, String>(3)?)?,
-                        })
-                    },
-                )
-                .optional()
-        })
-        .await
-    }
+ /// One blob row by hash (`blob_get`). Read-only.
+ pub async fn blob(&self, hash: &str) -> Result<Option<BlobRow>> {
+ let hash = hash.to_string();
+ self.read(move |connection| {
+ connection
+.query_row(
+ "SELECT hash, size, content_type, created_at FROM blobs WHERE hash = ?1",
+ params![hash],
+ |row| {
+ Ok(BlobRow {
+ hash: row.get(0)?,
+ size: row.get(1)?,
+ content_type: row.get(2)?,
+ created_at: parse_time(&row.get::<_, String>(3)?)?,
+ })
+ })
+.optional()
+ })
+.await
+ }
 
-    /// Bounded reference names for one blob hash: `screenshot:<id>`,
-    /// `page:<id>`, `fetch_event:<id>`, `extraction:<id>`, `snapshot:<id>`.
-    /// The list is context for `blob_get`, never a retention decision.
-    pub async fn blob_references(&self, hash: &str, limit: usize) -> Result<Vec<String>> {
-        let hash = hash.to_string();
-        let limit = limit.min(i64::MAX as usize) as i64;
-        self.read(move |connection| {
-            let mut statement = connection.prepare(
-                "SELECT ref FROM (
-                     SELECT 'screenshot:' || id AS ref FROM screenshots WHERE hash = ?1
-                     UNION ALL
-                     SELECT 'page:' || id FROM pages WHERE raw_hash = ?1 OR text_hash = ?1
-                     UNION ALL
-                     SELECT 'fetch_event:' || id FROM fetch_events WHERE raw_hash = ?1
-                     UNION ALL
-                     SELECT 'extraction:' || id FROM extractions WHERE result_hash = ?1
-                     UNION ALL
-                     SELECT 'snapshot:' || id FROM snapshots
-                         WHERE normalized_hash = ?1 OR result_hash = ?1
-                 )
-                 ORDER BY ref
-                 LIMIT ?2",
-            )?;
-            let rows = statement.query_map(params![hash, limit], |row| row.get(0))?;
-            rows.collect::<rusqlite::Result<Vec<String>>>()
-        })
-        .await
-    }
+ /// Bounded reference names for one blob hash: `screenshot:<id>`,
+ /// `page:<id>`, `fetch_event:<id>`, `extraction:<id>`, `snapshot:<id>`.
+ /// The list is context for `blob_get`, never a retention decision.
+ pub async fn blob_references(&self, hash: &str, limit: usize) -> Result<Vec<String>> {
+ let hash = hash.to_string();
+ let limit = limit.min(i64::MAX as usize) as i64;
+ self.read(move |connection| {
+ let mut statement = connection.prepare(
+ "SELECT ref FROM (
+ SELECT 'screenshot:' || id AS ref FROM screenshots WHERE hash = ?1
+ UNION ALL
+ SELECT 'page:' || id FROM pages WHERE raw_hash = ?1 OR text_hash = ?1
+ UNION ALL
+ SELECT 'fetch_event:' || id FROM fetch_events WHERE raw_hash = ?1
+ UNION ALL
+ SELECT 'extraction:' || id FROM extractions WHERE result_hash = ?1
+ UNION ALL
+ SELECT 'snapshot:' || id FROM snapshots
+ WHERE normalized_hash = ?1 OR result_hash = ?1
+)
+ ORDER BY ref
+ LIMIT ?2")?;
+ let rows = statement.query_map(params![hash, limit], |row| row.get(0))?;
+ rows.collect::<rusqlite::Result<Vec<String>>>()
+ })
+.await
+ }
 
-    pub async fn cached_extraction(
-        &self,
-        url_hash: &str,
-        profile_hash: &str,
-    ) -> Result<Option<CachedExtraction>> {
-        let readers = Arc::clone(&self.readers);
-        let url_hash = url_hash.to_string();
-        let profile_hash = profile_hash.to_string();
-        tokio::task::spawn_blocking(move || {
-            readers.with(|connection| {
-                connection
-                    .query_row(
-                        &format!(
-                            "SELECT e.result_json, e.created_at, {PAGE_COLUMNS}
-                             FROM extractions e JOIN pages p ON p.id = e.page_id
-                             WHERE p.url_hash = ?1 AND e.profile_hash = ?2
-                               AND p.authenticated = 0
-                             ORDER BY e.created_at DESC, e.id DESC
-                             LIMIT 1"
-                        ),
-                        params![url_hash, profile_hash],
-                        |row| {
-                            Ok(CachedExtraction {
-                                result_json: row.get(0)?,
-                                created_at: parse_time(&row.get::<_, String>(1)?)?,
-                                page: row_to_page_at(row, 2)?,
-                            })
-                        },
-                    )
-                    .optional()
-            })
-        })
-        .await
-        .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ pub async fn cached_extraction(
+ &self,
+ url_hash: &str,
+ profile_hash: &str) -> Result<Option<CachedExtraction>> {
+ let readers = Arc::clone(&self.readers);
+ let url_hash = url_hash.to_string();
+ let profile_hash = profile_hash.to_string();
+ tokio::task::spawn_blocking(move || {
+ readers.with(|connection| {
+ connection
+.query_row(
+ &format!(
+ "SELECT e.result_json, e.created_at, e.source_write_seq, {PAGE_COLUMNS}
+ FROM extractions e JOIN pages p ON p.id = e.page_id
+ WHERE p.url_hash = ?1 AND e.profile_hash = ?2
+ AND p.authenticated = 0
+ ORDER BY e.created_at DESC, e.id DESC
+ LIMIT 1"
+),
+ params![url_hash, profile_hash],
+ |row| {
+ Ok(CachedExtraction {
+ result_json: row.get(0)?,
+ created_at: parse_time(&row.get::<_, String>(1)?)?,
+ source_write_seq: row.get(2)?,
+ page: row_to_page_at(row, 3)?,
+ })
+ })
+.optional()
+ })
+ })
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    /// Run one local full-text query over `pages_fts` (`search_content`).
-    ///
-    /// The caller supplies an already-built FTS5 expression; nothing here
-    /// interprets caller text, so no query can reach the engine half-escaped.
-    /// `limit` is applied to the ranked rows; `total` is the full match count
-    /// over the same MATCH, so truncation is reported against the real total.
-    pub async fn search_content(&self, match_expr: String, limit: usize) -> Result<ContentHits> {
-        let readers = Arc::clone(&self.readers);
-        tokio::task::spawn_blocking(move || {
-            readers.with(|connection| {
-                let total: i64 = connection.query_row(
-                    "SELECT COUNT(*) FROM pages_fts WHERE pages_fts MATCH ?1",
-                    params![match_expr],
-                    |row| row.get(0),
-                )?;
-                let mut statement = connection.prepare(
-                    "SELECT p.url,
-                            p.canonical_url,
-                            COALESCE(p.title, ''),
-                            snippet(pages_fts, 1, '', '', ' … ', 24),
-                            -bm25(pages_fts, 4.0, 1.0) AS score,
-                            p.last_fetched,
-                            p.render_mode
-                     FROM pages_fts JOIN pages p ON p.id = pages_fts.rowid
-                     WHERE pages_fts MATCH ?1
-                     ORDER BY score DESC, p.id ASC
-                     LIMIT ?2",
-                )?;
-                let rows = statement
-                    .query_map(params![match_expr, limit as i64], |row| {
-                        Ok(ContentHitRow {
-                            url: row.get(0)?,
-                            canonical_url: row.get(1)?,
-                            title: row.get(2)?,
-                            snippet: row.get(3)?,
-                            score: row.get(4)?,
-                            last_fetched: row.get(5)?,
-                            render_mode: row.get(6)?,
-                        })
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
-                Ok(ContentHits { rows, total })
-            })
-        })
-        .await
-        .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ /// Run one local full-text query over `pages_fts` (`search_content`).
+ ///
+ /// The caller supplies an already-built FTS5 expression; nothing here
+ /// interprets caller text, so no query can reach the engine half-escaped.
+ /// `limit` is applied to the ranked rows; `total` is the full match count
+ /// over the same MATCH, so truncation is reported against the real total.
+ pub async fn search_content(&self, match_expr: String, limit: usize) -> Result<ContentHits> {
+ let readers = Arc::clone(&self.readers);
+ tokio::task::spawn_blocking(move || {
+ readers.with(|connection| {
+ let total: i64 = connection.query_row(
+ "SELECT COUNT(*) FROM pages_fts WHERE pages_fts MATCH ?1",
+ params![match_expr],
+ |row| row.get(0))?;
+ let mut statement = connection.prepare(
+ "SELECT p.url,
+ p.canonical_url,
+ COALESCE(p.title, ''),
+ snippet(pages_fts, 1, '', '', ' … ', 24),
+ -bm25(pages_fts, 4.0, 1.0) AS score,
+ p.index_fetched_at,
+ p.index_validated_at,
+ p.last_attempt_at,
+ p.last_attempt_failed,
+ p.render_mode
+ FROM pages_fts JOIN pages p ON p.id = pages_fts.rowid
+ WHERE pages_fts MATCH ?1
+ ORDER BY score DESC, p.id ASC
+ LIMIT ?2")?;
+ let rows = statement
+.query_map(params![match_expr, limit as i64], |row| {
+ Ok(ContentHitRow {
+ url: row.get(0)?,
+ canonical_url: row.get(1)?,
+ title: row.get(2)?,
+ snippet: row.get(3)?,
+ score: row.get(4)?,
+ fetched_at: row.get(5)?,
+ validated_at: row.get(6)?,
+ last_attempt_at: row.get(7)?,
+ last_attempt_failed: row.get(8)?,
+ render_mode: row.get(9)?,
+ })
+ })?
+.collect::<rusqlite::Result<Vec<_>>>()?;
+ Ok(ContentHits { rows, total })
+ })
+ })
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    pub async fn host(&self, host: &str) -> Result<Option<HostRow>> {
-        let readers = Arc::clone(&self.readers);
-        let host = host.to_string();
-        tokio::task::spawn_blocking(move || {
-            readers.with(|connection| {
-                connection
-                    .query_row(
-                        "SELECT host, robots_fetched_at, robots_status, robots_hash, robots_body,
-                                robots_expires_at, next_allowed_at, consecutive_failures
-                         FROM hosts WHERE host = ?1",
-                        params![host],
-                        row_to_host,
-                    )
-                    .optional()
-            })
-        })
-        .await
-        .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ pub async fn host(&self, host: &str) -> Result<Option<HostRow>> {
+ let readers = Arc::clone(&self.readers);
+ let host = host.to_string();
+ tokio::task::spawn_blocking(move || {
+ readers.with(|connection| {
+ connection
+.query_row(
+ "SELECT host, robots_fetched_at, robots_status, robots_hash, robots_body,
+ robots_expires_at, next_allowed_at, consecutive_failures
+ FROM hosts WHERE host = ?1",
+ params![host],
+ row_to_host)
+.optional()
+ })
+ })
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    /// One page of the robots cache in host order (`after` is the last host of
-    /// the previous page). Read-only; the caller never fetches from here.
-    pub async fn hosts_page(&self, after: Option<String>, limit: usize) -> Result<Vec<HostRow>> {
-        let readers = Arc::clone(&self.readers);
-        tokio::task::spawn_blocking(move || {
-            readers.with(|connection| {
-                let mut statement = connection.prepare(
-                    "SELECT host, robots_fetched_at, robots_status, robots_hash, robots_body,
-                            robots_expires_at, next_allowed_at, consecutive_failures
-                     FROM hosts
-                     WHERE (?1 IS NULL OR host > ?1)
-                     ORDER BY host LIMIT ?2",
-                )?;
-                let rows = statement.query_map(
-                    params![after, limit.min(i64::MAX as usize) as i64],
-                    row_to_host,
-                )?;
-                rows.collect()
-            })
-        })
-        .await
-        .map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
-    }
+ /// One page of the robots cache in host order (`after` is the last host of
+ /// the previous page). Read-only; the caller never fetches from here.
+ pub async fn hosts_page(&self, after: Option<String>, limit: usize) -> Result<Vec<HostRow>> {
+ let readers = Arc::clone(&self.readers);
+ tokio::task::spawn_blocking(move || {
+ readers.with(|connection| {
+ let mut statement = connection.prepare(
+ "SELECT host, robots_fetched_at, robots_status, robots_hash, robots_body,
+ robots_expires_at, next_allowed_at, consecutive_failures
+ FROM hosts
+ WHERE (?1 IS NULL OR host > ?1)
+ ORDER BY host LIMIT ?2")?;
+ let rows = statement.query_map(
+ params![after, limit.min(i64::MAX as usize) as i64],
+ row_to_host)?;
+ rows.collect()
+ })
+ })
+.await
+.map_err(|error| WidowError::Internal(format!("read task failed: {error}")))?
+ }
 
-    pub async fn record_fetch(&self, record: FetchRecord) -> Result<Recorded> {
-        let (reply, response) = oneshot::channel();
-        self.writer
-            .tx
-            .send(WriteOp::RecordFetch(Box::new(record), reply))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        response
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)
-    }
+ pub async fn record_fetch(&self, record: FetchRecord) -> Result<RecordedOutcome> {
+ let (reply, response) = oneshot::channel();
+ self.writer
+.tx
+.send(WriteOp::RecordFetch(Box::new(record), reply))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ response
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)
+ }
 
-    pub async fn save_host(&self, row: HostRow) -> Result<()> {
-        let (reply, response) = oneshot::channel();
-        self.writer
-            .tx
-            .send(WriteOp::SaveHost(Box::new(row), reply))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        response
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)
-    }
+ pub async fn save_host(&self, row: HostRow) -> Result<()> {
+ let (reply, response) = oneshot::channel();
+ self.writer
+.tx
+.send(WriteOp::SaveHost(Box::new(row), reply))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ response
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)
+ }
 
-    /// Write exactly one audit row for an authenticated fetch attempt.
-    pub async fn record_auth_audit(&self, row: AuthAuditRow) -> Result<()> {
-        let (reply, response) = oneshot::channel();
-        self.writer
-            .tx
-            .send(WriteOp::AuthAudit(Box::new(row), reply))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        response
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)
-    }
+ /// Write exactly one audit row for an authenticated fetch attempt.
+ pub async fn record_auth_audit(&self, row: AuthAuditRow) -> Result<()> {
+ let (reply, response) = oneshot::channel();
+ self.writer
+.tx
+.send(WriteOp::AuthAudit(Box::new(row), reply))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ response
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)
+ }
 
-    pub async fn gc(
-        &self,
-        retention: RetentionConfig,
-        auth_audit_days: u32,
-        auth_page_days: u32,
-    ) -> Result<GcReport> {
-        let (reply, response) = oneshot::channel();
-        self.writer
-            .tx
-            .send(WriteOp::Gc(
-                retention,
-                auth_audit_days,
-                auth_page_days,
-                Utc::now(),
-                reply,
-            ))
-            .map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
-        response
-            .await
-            .map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
-            .map_err(WidowError::Internal)
-    }
+ pub async fn gc(
+ &self,
+ retention: RetentionConfig,
+ auth_audit_days: u32,
+ auth_page_days: u32) -> Result<GcReport> {
+ let (reply, response) = oneshot::channel();
+ self.writer
+.tx
+.send(WriteOp::Gc(
+ retention,
+ auth_audit_days,
+ auth_page_days,
+ Utc::now(),
+ reply))
+.map_err(|_| WidowError::Internal("sqlite writer stopped".to_string()))?;
+ response
+.await
+.map_err(|_| WidowError::Internal("sqlite writer dropped the request".to_string()))?
+.map_err(WidowError::Internal)
+ }
 }
 
 fn row_to_page_at(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<PageRecord> {
-    Ok(PageRecord {
-        id: row.get(offset)?,
-        url: row.get(offset + 1)?,
-        canonical_url: row.get(offset + 2)?,
-        etag: row.get(offset + 3)?,
-        last_modified: row.get(offset + 4)?,
-        content_type: row.get(offset + 5)?,
-        charset: row.get(offset + 6)?,
-        last_status: row.get(offset + 7)?,
-        last_fetched: row.get(offset + 8)?,
-        raw_hash: row.get(offset + 9)?,
-        title: row.get(offset + 10)?,
-        lang: row.get(offset + 11)?,
-        authenticated: row.get::<_, i64>(offset + 12)? != 0,
-        auth_site: row.get(offset + 13)?,
-    })
+ Ok(PageRecord {
+ id: row.get(offset)?,
+ url: row.get(offset + 1)?,
+ canonical_url: row.get(offset + 2)?,
+ etag: row.get(offset + 3)?,
+ last_modified: row.get(offset + 4)?,
+ content_type: row.get(offset + 5)?,
+ charset: row.get(offset + 6)?,
+ last_status: row.get(offset + 7)?,
+ last_fetched: row.get(offset + 8)?,
+ raw_hash: row.get(offset + 9)?,
+ title: row.get(offset + 10)?,
+ lang: row.get(offset + 11)?,
+ authenticated: row.get::<_, i64>(offset + 12)? != 0,
+ auth_site: row.get(offset + 13)?,
+ write_seq: row.get(offset + 14)?,
+ content_fetched_at: row.get(offset + 15)?,
+ content_validated_at: row.get(offset + 16)?,
+ content_write_seq: row.get(offset + 17)?,
+ index_fetched_at: row.get(offset + 18)?,
+ index_validated_at: row.get(offset + 19)?,
+ index_write_seq: row.get(offset + 20)?,
+ validators_write_seq: row.get(offset + 21)?,
+ last_attempt_at: row.get(offset + 22)?,
+ last_attempt_failed: row.get(offset + 23)?,
+ })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    fn record(url: &str, outcome: &str) -> FetchRecord {
-        let mut record =
-            FetchRecord::new(url, url, &crate::core::url::content_hash(url.as_bytes()));
-        record.site = "example.com".to_string();
-        record.status = Some(200);
-        record.content_type = Some("text/html".to_string());
-        record.charset = Some("UTF-8".to_string());
-        record.title = Some("Title".to_string());
-        record.lang = Some("en".to_string());
-        record.outcome = outcome.to_string();
-        record.duration_ms = 12;
-        record.bytes = Some(10);
-        record
-    }
-
-    #[test]
-    fn schema_v5_is_additive_only() {
-        let mut statements = 0;
-        for line in include_str!("schema_v5.sql").lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with("--") {
-                continue;
-            }
-            assert!(
-                line.starts_with("ALTER TABLE monitors ADD COLUMN"),
-                "v5 must only add a nullable column: {line}"
-            );
-            statements += 1;
-        }
-        assert_eq!(statements, 1);
-    }
-
-    #[tokio::test]
-    async fn a_v4_database_upgrades_in_place_to_the_current_version() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v4.db");
-        let now = fmt_time(Utc::now());
-        {
-            let connection = Connection::open(&path).unwrap();
-            connection.execute_batch(SCHEMA_V1).unwrap();
-            connection.execute_batch(SCHEMA_V2).unwrap();
-            connection.execute_batch(SCHEMA_V3).unwrap();
-            connection.execute_batch(SCHEMA_V4).unwrap();
-            connection.pragma_update(None, "user_version", 4).unwrap();
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                     VALUES ('https://example.com/old', 'https://example.com/old', ?1, ?2, 'ok')",
-                    params!["h".repeat(64), now],
-                )
-                .unwrap();
-            let page_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
-                     VALUES (?1, ?2, 0, 'monitor')",
-                    params![page_id, now],
-                )
-                .unwrap();
-            let event_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO jobs (id, kind, spec_json, state, created_at, counters_json)
-                     VALUES ('job-1', 'monitor_check', '{\"force\":false}', 'done', ?1, '{}')",
-                    params![now],
-                )
-                .unwrap();
-            connection
-                .execute(
-                    "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
-                     VALUES ('https://example.com/a', 'main', 3600, ?1, ?1)",
-                    params![now],
-                )
-                .unwrap();
-            let monitor_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO monitors (url, mode, interval_s, active, created_at, next_due_at)
-                     VALUES ('https://example.com/b', 'main', 3600, 0, ?1, ?1)",
-                    params![now],
-                )
-                .unwrap();
-            let mut snapshot_ids = Vec::new();
-            for index in 0..2 {
-                connection
-                    .execute(
-                        "INSERT INTO snapshots (monitor_id, taken_at, fetch_event_id,
-                                                normalized_hash, raw_hash)
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
-                        params![
-                            monitor_id,
-                            now,
-                            event_id,
-                            format!("n{index}").repeat(32),
-                            format!("r{index}").repeat(32)
-                        ],
-                    )
-                    .unwrap();
-                snapshot_ids.push(connection.last_insert_rowid());
-            }
-            connection
-                .execute(
-                    "INSERT INTO changes (monitor_id, from_snapshot, to_snapshot, detected_at,
-                                          kind, stats_json, diff_text)
-                     VALUES (?1, ?2, ?3, ?4, 'substantive', '{}', 'diff')",
-                    params![monitor_id, snapshot_ids[0], snapshot_ids[1], now],
-                )
-                .unwrap();
-        }
-
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        for (table, expected) in [
-            ("monitors", 2_i64),
-            ("snapshots", 2),
-            ("changes", 1),
-            ("pages", 1),
-            ("fetch_events", 1),
-            ("jobs", 1),
-        ] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, expected, "{table} rows survive v4 -> v5");
-        }
-        let null_labels: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM monitors WHERE label IS NULL",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(null_labels, 2, "every pre-v5 monitor is unlabeled");
-        let fk_violations: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(fk_violations, 0, "foreign keys stay intact");
-        drop(connection);
-        drop(db);
-
-        // A second open of the already-current database is a no-op.
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let monitors: i64 = connection
-            .query_row("SELECT COUNT(*) FROM monitors", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(monitors, 2, "the second open changes no rows");
-        drop(connection);
-        drop(db);
-    }
-
-    #[tokio::test]
-    async fn a_v2_database_upgrades_in_place_to_the_current_version() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("upgrade.db");
-        {
-            let connection = Connection::open(&path).unwrap();
-            connection.execute_batch(SCHEMA_V1).unwrap();
-            connection.execute_batch(SCHEMA_V2).unwrap();
-            connection.pragma_update(None, "user_version", 2).unwrap();
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                     VALUES ('https://example.com/old', 'https://example.com/old', ?1, ?2, 'ok')",
-                    params!["h".repeat(64), fmt_time(Utc::now())],
-                )
-                .unwrap();
-        }
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let pages: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(pages, 1, "v1 data survives the v2 -> v3 upgrade");
-        let monitors: i64 = connection
-            .query_row("SELECT COUNT(*) FROM monitors", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(monitors, 0, "the monitoring tables were created");
-        let render_mode = connection
-            .prepare("PRAGMA table_info(snapshots)")
-            .unwrap()
-            .query_map([], |row| row.get::<_, String>(1))
-            .unwrap()
-            .flatten()
-            .any(|column| column == "render_mode");
-        assert!(render_mode, "v4 adds snapshots.render_mode");
-        let label = connection
-            .prepare("PRAGMA table_info(monitors)")
-            .unwrap()
-            .query_map([], |row| row.get::<_, String>(1))
-            .unwrap()
-            .flatten()
-            .any(|column| column == "label");
-        assert!(label, "v5 adds monitors.label");
-        drop(db);
-    }
-
-    #[tokio::test]
-    async fn records_pages_and_events_idempotently() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            2,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let first = db
-            .record_fetch(record("https://example.com/a", "ok"))
-            .await
-            .unwrap();
-        let second = db
-            .record_fetch(record("https://example.com/a", "ok"))
-            .await
-            .unwrap();
-        assert_eq!(first.page_id, second.page_id);
-        assert_ne!(first.fetch_event_id, second.fetch_event_id);
-        let page = db
-            .page(&crate::core::url::content_hash(b"https://example.com/a"))
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(page.url, "https://example.com/a");
-        assert_eq!(page.last_status, Some(200));
-    }
-
-    #[tokio::test]
-    async fn gc_keeps_the_latest_event_per_page_and_evicts_over_budget_blobs() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            2,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let mut old = record("https://example.com/a", "ok");
-        old.fetched_at = Utc::now() - chrono::Duration::days(90);
-        old.text_hash = Some("a".repeat(64));
-        let old_extraction = ExtractionRow {
-            profile_hash: "p".repeat(64),
-            result_json: "{}".to_string(),
-            result_hash: "r".repeat(64),
-            record_count: 1,
-            created_at: Utc::now() - chrono::Duration::days(90),
-        };
-        old.extraction = Some(old_extraction);
-        old.blob = Some(BlobRow {
-            hash: "b".repeat(64),
-            size: 100,
-            content_type: Some("text/html".to_string()),
-            created_at: Utc::now() - chrono::Duration::days(90),
-        });
-        db.record_fetch(old).await.unwrap();
-        db.record_fetch(record("https://example.com/a", "ok"))
-            .await
-            .unwrap();
-
-        let retention = RetentionConfig {
-            max_blob_bytes: 1,
-            ..RetentionConfig::default()
-        };
-        let report = db.gc(retention, 90, 7).await.unwrap();
-        assert_eq!(report.extractions_pruned, 1);
-        assert_eq!(report.blobs_pruned, 1);
-        // The most recent event per page survives even though it is old.
-        assert_eq!(report.events_pruned, 1);
-    }
-
-    // -----------------------------------------------------------------------
-    // v0.6 — schema v7: recipes/recipe_versions/screenshots + retention
-    // -----------------------------------------------------------------------
-
-    fn write_v6_fixture(path: &Path) {
-        let connection = Connection::open(path).unwrap();
-        for script in [
-            SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6,
-        ] {
-            connection.execute_batch(script).unwrap();
-        }
-        connection.pragma_update(None, "user_version", 6).unwrap();
-        let now = fmt_time(Utc::now());
-        connection
-            .execute(
-                "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                 VALUES ('https://example.com/v6', 'https://example.com/v6', ?1, ?2, 'ok')",
-                params!["a".repeat(64), now],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO blobs (hash, size, created_at, last_referenced_at)
-                 VALUES (?1, 10, ?2, ?2)",
-                params!["b".repeat(64), now],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO pages_fts (rowid, title, body) VALUES (1, 'title', 'body text')",
-                [],
-            )
-            .unwrap();
-    }
-
-    #[test]
-    fn a_v6_database_upgrades_to_the_current_version_additively() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v6.db");
-        write_v6_fixture(&path);
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        for (table, expected) in [
-            ("pages", 1_i64),
-            ("blobs", 1),
-            ("pages_fts", 1),
-            ("recipes", 0),
-            ("recipe_versions", 0),
-            ("screenshots", 0),
-            ("embeddings", 0),
-            ("embedding_state", 0),
-            ("monitor_webhooks", 0),
-            ("webhook_deliveries", 0),
-        ] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, expected, "{table} after v6 -> v7");
-        }
-        for index in [
-            "recipe_versions_profile",
-            "screenshots_page",
-            "screenshots_hash",
-        ] {
-            let count: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
-                    params![index],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(count, 1, "index {index} exists");
-        }
-        let fk_violations: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(fk_violations, 0, "foreign keys stay intact");
-        drop(connection);
-
-        // A second open of the already-current database is a no-op.
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let pages: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(pages, 1, "the second open changes no rows");
-    }
-
-    #[test]
-    fn a_newer_schema_is_refused_by_the_version_guard() {
-        // A v6 binary meeting a v7 database hits the same guard (it compares the
-        // file's user_version with its own SCHEMA_VERSION); this test pins the
-        // guard itself rather than requiring the old binary.
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("future.db");
-        Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        {
-            let connection = Connection::open(&path).unwrap();
-            connection
-                .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
-                .unwrap();
-        }
-        let error = Database::open(&path, 1, &FtsConfig::default(), false).unwrap_err();
-        let message = error.to_string();
-        assert!(
-            message.contains("newer than this binary"),
-            "unexpected guard message: {message}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // v0.7 — schema v8: embeddings, embedding_state, monitor_webhooks,
-    // webhook_deliveries
-    // -----------------------------------------------------------------------
-
-    fn write_v7_fixture(path: &Path) -> (i64, i64, i64) {
-        let connection = Connection::open(path).unwrap();
-        for script in [
-            SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
-        ] {
-            connection.execute_batch(script).unwrap();
-        }
-        connection.pragma_update(None, "user_version", 7).unwrap();
-        let now = fmt_time(Utc::now());
-        connection
-            .execute(
-                "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                 VALUES ('https://example.com/v7', 'https://example.com/v7', ?1, ?2, 'ok')",
-                params!["c".repeat(64), now],
-            )
-            .unwrap();
-        let page_id = connection.last_insert_rowid();
-        connection
-            .execute(
-                "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
-                 VALUES ('https://example.com/m', 'main', 3600, ?1, ?1)",
-                params![now],
-            )
-            .unwrap();
-        let monitor_id = connection.last_insert_rowid();
-        let mut snapshot_ids = Vec::new();
-        for index in 0..2 {
-            connection
-                .execute(
-                    "INSERT INTO snapshots (monitor_id, taken_at, normalized_hash, raw_hash)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    params![
-                        monitor_id,
-                        now,
-                        format!("n{index}").repeat(32),
-                        format!("r{index}").repeat(32)
-                    ],
-                )
-                .unwrap();
-            snapshot_ids.push(connection.last_insert_rowid());
-        }
-        connection
-            .execute(
-                "INSERT INTO changes (monitor_id, from_snapshot, to_snapshot, detected_at,
-                                      kind, stats_json, diff_text)
-                 VALUES (?1, ?2, ?3, ?4, 'substantive', '{}', 'diff')",
-                params![monitor_id, snapshot_ids[0], snapshot_ids[1], now],
-            )
-            .unwrap();
-        let change_id = connection.last_insert_rowid();
-        (page_id, monitor_id, change_id)
-    }
-
-    #[test]
-    fn a_v7_database_upgrades_additively_and_reopens_as_a_no_op() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v7.db");
-        write_v7_fixture(&path);
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        for (table, expected) in [
-            ("pages", 1_i64),
-            ("monitors", 1),
-            ("snapshots", 2),
-            ("changes", 1),
-            ("embeddings", 0),
-            ("embedding_state", 0),
-            ("monitor_webhooks", 0),
-            ("webhook_deliveries", 0),
-            ("auth_audit", 0),
-        ] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, expected, "{table} after the migration chain");
-        }
-        for index in [
-            "embeddings_model_page",
-            "embedding_state_model",
-            "webhook_deliveries_due",
-            "webhook_deliveries_change",
-        ] {
-            let count: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
-                    params![index],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(count, 1, "index {index} exists");
-        }
-        let fk_violations: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(fk_violations, 0, "foreign keys stay intact");
-        drop(connection);
-
-        // A second open of the already-current database is a no-op.
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let pages: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(pages, 1, "the second open changes no rows");
-    }
-
-    #[test]
-    fn v8_rows_cascade_and_reject_malformed_vectors() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v8-cascade.db");
-        write_v7_fixture(&path);
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-
-        let connection = Connection::open(&path).unwrap();
-        connection.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
-        let (page_id, monitor_id, change_id) = {
-            let page: i64 = connection
-                .query_row("SELECT id FROM pages LIMIT 1", [], |row| row.get(0))
-                .unwrap();
-            let monitor: i64 = connection
-                .query_row("SELECT id FROM monitors LIMIT 1", [], |row| row.get(0))
-                .unwrap();
-            let change: i64 = connection
-                .query_row("SELECT id FROM changes LIMIT 1", [], |row| row.get(0))
-                .unwrap();
-            (page, monitor, change)
-        };
-        let now = fmt_time(Utc::now());
-        let vector = vec![0_u8; 8];
-        connection
-            .execute(
-                "INSERT INTO embeddings (page_id, model, chunk_index, source_hash, chunk_hash,
-                                         start_char, end_char, dim, vector, created_at)
-                 VALUES (?1, 'minilm-l6-v2-q', 0, ?2, ?3, 0, 10, 2, ?4, ?5)",
-                params![page_id, "s".repeat(64), "h".repeat(64), vector, now],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO embedding_state (page_id, model, source_hash, chunks, embedded_at)
-                 VALUES (?1, 'minilm-l6-v2-q', ?2, 1, ?3)",
-                params![page_id, "s".repeat(64), now],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO monitor_webhooks (monitor_id, target, created_at)
-                 VALUES (?1, 'ops', ?2)",
-                params![monitor_id, now],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO webhook_deliveries (change_id, monitor_id, target, status,
-                                                 attempts, next_attempt_at, created_at)
-                 VALUES (?1, ?2, 'ops', 'pending', 0, ?3, ?3)",
-                params![change_id, monitor_id, now],
-            )
-            .unwrap();
-
-        // The UNIQUE(change_id, target) and the vector-length CHECK are real.
-        let duplicate = connection.execute(
-            "INSERT INTO webhook_deliveries (change_id, monitor_id, target, status,
-                                             attempts, next_attempt_at, created_at)
-             VALUES (?1, ?2, 'ops', 'pending', 0, ?3, ?3)",
-            params![change_id, monitor_id, now],
-        );
-        assert!(duplicate.is_err(), "one delivery per (change, target)");
-        let short_vector = connection.execute(
-            "INSERT INTO embeddings (page_id, model, chunk_index, source_hash, chunk_hash,
-                                     start_char, end_char, dim, vector, created_at)
-             VALUES (?1, 'minilm-l6-v2-q', 1, ?2, ?3, 0, 10, 2, ?4, ?5)",
-            params![page_id, "s".repeat(64), "h".repeat(64), vec![0_u8; 4], now],
-        );
-        assert!(short_vector.is_err(), "length(vector) must be dim * 4");
-
-        // A page delete cascades to its vectors and state.
-        connection
-            .execute("DELETE FROM pages WHERE id = ?1", params![page_id])
-            .unwrap();
-        for table in ["embeddings", "embedding_state"] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, 0, "{table} cascades with the page");
-        }
-        let deliveries: i64 = connection
-            .query_row("SELECT COUNT(*) FROM webhook_deliveries", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(deliveries, 1, "a page delete leaves deliveries alone");
-
-        // A monitor delete cascades to its attachments, changes and deliveries.
-        connection
-            .execute("DELETE FROM monitors WHERE id = ?1", params![monitor_id])
-            .unwrap();
-        for table in ["monitor_webhooks", "webhook_deliveries"] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, 0, "{table} cascades with the monitor");
-        }
-    }
-
-    fn insert_blob(connection: &Connection, hash: &str, size: i64, created_at: &str) {
-        connection
-            .execute(
-                "INSERT INTO blobs (hash, size, created_at, last_referenced_at)
-                 VALUES (?1, ?2, ?3, ?3)",
-                params![hash, size, created_at],
-            )
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn gc_prunes_aged_screenshots_and_keeps_referenced_ones() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("gc-screenshots.db");
-        Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-
-        let now = Utc::now();
-        let old = fmt_time(now - chrono::Duration::days(90));
-        let mut connection = Connection::open(&path).unwrap();
-        connection
-            .execute(
-                "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                 VALUES ('https://example.com/a', 'https://example.com/a', ?1, ?2, 'ok')",
-                params!["p".repeat(64), fmt_time(now)],
-            )
-            .unwrap();
-        let page_id = connection.last_insert_rowid();
-        for hash in ["recent", "aged", "orphan"] {
-            insert_blob(&connection, &hash.repeat(64)[..64], 100, &old);
-        }
-        // A recent screenshot row and one older than the screenshot window.
-        save_screenshot(
-            &connection,
-            Some(page_id),
-            &"recent".repeat(64)[..64],
-            "png",
-            Some(10),
-            Some(10),
-            "screenshot",
-            now,
-        )
-        .unwrap();
-        save_screenshot(
-            &connection,
-            Some(page_id),
-            &"aged".repeat(64)[..64],
-            "png",
-            Some(10),
-            Some(10),
-            "interaction",
-            now - chrono::Duration::days(60),
-        )
-        .unwrap();
-
-        let retention = RetentionConfig {
-            screenshots_days: 30,
-            extractions_days: 30,
-            max_blob_bytes: 20 * 1024 * 1024 * 1024,
-            ..RetentionConfig::default()
-        };
-        let report = gc(&mut connection, now, &retention, 90, 7).unwrap();
-        assert_eq!(report.blobs_pruned, 2, "aged and orphan blobs pruned");
-        let screenshots: i64 = connection
-            .query_row("SELECT COUNT(*) FROM screenshots", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(screenshots, 1, "only the recent screenshot row survives");
-        for hash in ["recent", "aged", "orphan"] {
-            let key = &hash.repeat(64)[..64];
-            let count: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM blobs WHERE hash = ?1",
-                    params![key],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            if hash == "recent" {
-                assert_eq!(count, 1, "a referenced screenshot blob is retained");
-            } else {
-                assert_eq!(count, 0, "{hash} blob pruned");
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn gc_budget_does_not_evict_a_referenced_screenshot_blob() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("gc-budget.db");
-        Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let now = Utc::now();
-        let old = fmt_time(now - chrono::Duration::days(90));
-        let mut connection = Connection::open(&path).unwrap();
-        connection
-            .execute(
-                "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                 VALUES ('https://example.com/a', 'https://example.com/a', ?1, ?2, 'ok')",
-                params!["q".repeat(64), fmt_time(now)],
-            )
-            .unwrap();
-        let page_id = connection.last_insert_rowid();
-        insert_blob(&connection, &"keep".repeat(16), 100, &old);
-        insert_blob(&connection, &"evict".repeat(13)[..64], 100, &old);
-        save_screenshot(
-            &connection,
-            Some(page_id),
-            &"keep".repeat(16),
-            "png",
-            None,
-            None,
-            "screenshot",
-            now,
-        )
-        .unwrap();
-        let retention = RetentionConfig {
-            max_blob_bytes: 1,
-            ..RetentionConfig::default()
-        };
-        let report = gc(&mut connection, now, &retention, 90, 7).unwrap();
-        assert_eq!(
-            report.blobs_pruned, 1,
-            "only the unreferenced blob is evicted"
-        );
-        let kept: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM blobs WHERE hash = ?1",
-                params![&"keep".repeat(16)],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            kept, 1,
-            "the screenshot-referenced blob survives the budget"
-        );
-    }
-
-    #[tokio::test]
-    async fn cached_extraction_is_keyed_by_profile() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            2,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let mut record = record("https://example.com/a", "ok");
-        record.extraction = Some(ExtractionRow {
-            profile_hash: "p".repeat(64),
-            result_json: "{\"markdown_chars\":1}".to_string(),
-            result_hash: "r".repeat(64),
-            record_count: 1,
-            created_at: Utc::now(),
-        });
-        db.record_fetch(record).await.unwrap();
-        let hash = crate::core::url::content_hash(b"https://example.com/a");
-        let hit = db
-            .cached_extraction(&hash, &"p".repeat(64))
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(hit.result_json, "{\"markdown_chars\":1}");
-        assert!(
-            db.cached_extraction(&hash, &"z".repeat(64))
-                .await
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[tokio::test]
-    async fn hosts_round_trip() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            2,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        assert!(db.host("example.com").await.unwrap().is_none());
-        db.save_host(HostRow {
-            host: "example.com".to_string(),
-            robots_fetched_at: Some(Utc::now()),
-            robots_status: Some(200),
-            robots_hash: Some("h".repeat(64)),
-            robots_body: Some(b"User-agent: *\nDisallow: /private\n".to_vec()),
-            robots_expires_at: Some(Utc::now() + chrono::Duration::hours(1)),
-            next_allowed_at: None,
-            consecutive_failures: 1,
-        })
-        .await
-        .unwrap();
-        let row = db.host("example.com").await.unwrap().unwrap();
-        assert_eq!(row.robots_status, Some(200));
-        assert_eq!(row.consecutive_failures, 1);
-        assert_eq!(row.robots_body.unwrap().len(), 33);
-    }
-
-    // -----------------------------------------------------------------------
-    // v0.5 Lane B — schema v6: the full-text index and its one-time backfill
-    // -----------------------------------------------------------------------
-
-    /// A v5 database holding one page per stored shape the backfill understands.
-    fn write_v5_fixture(path: &Path) {
-        let now = fmt_time(Utc::now());
-        let connection = Connection::open(path).unwrap();
-        for script in [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5] {
-            connection.execute_batch(script).unwrap();
-        }
-        connection.pragma_update(None, "user_version", 5).unwrap();
-
-        fn insert_page(connection: &Connection, url: &str, title: &str, now: &str) -> i64 {
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
-                                        title, outcome)
-                     VALUES (?1, ?1, ?2, ?3, ?3, ?4, 'ok')",
-                    params![
-                        url,
-                        crate::core::url::content_hash(url.as_bytes()),
-                        now,
-                        title
-                    ],
-                )
-                .unwrap();
-            connection.last_insert_rowid()
-        }
-        fn insert_extraction(connection: &Connection, page_id: i64, result_json: &str, now: &str) {
-            connection
-                .execute(
-                    "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
-                     VALUES (?1, ?2, 0, 'main')",
-                    params![page_id, now],
-                )
-                .unwrap();
-            let event_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_json,
-                                              result_hash, record_count, created_at)
-                     VALUES (?1, ?2, NULL, ?3, 'result-hash', 1, ?4)",
-                    params![page_id, event_id, result_json, now],
-                )
-                .unwrap();
-        }
-
-        let markdown = insert_page(
-            &connection,
-            "https://example.com/markdown",
-            "Markdown Page",
-            &now,
-        );
-        insert_extraction(
-            &connection,
-            markdown,
-            r#"{"payload":{"url":"https://example.com/markdown"},"markdown":"the lighthouse keeper counted forty-one gulls"}"#,
-            &now,
-        );
-        let records = insert_page(
-            &connection,
-            "https://example.com/records",
-            "Records Page",
-            &now,
-        );
-        insert_extraction(
-            &connection,
-            records,
-            r#"{"url":"https://example.com/records","records":[{"title":"First item","price":"€10.00"}],"record_count":1}"#,
-            &now,
-        );
-        // A monitor-only page: its extraction is a bare records array, which the
-        // backfill deliberately does not parse (title-only until the next check).
-        let monitor = insert_page(
-            &connection,
-            "https://example.com/monitor",
-            "Monitor Page",
-            &now,
-        );
-        insert_extraction(&connection, monitor, r#"[{"value":"monitored"}]"#, &now);
-    }
-
-    #[tokio::test]
-    async fn a_v5_database_migrates_to_v6_and_backfills_every_page_once() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v5.db");
-        write_v5_fixture(&path);
-
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let pages: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-            .unwrap();
-        let indexed: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(pages, 3, "the migration preserves the page rows");
-        assert_eq!(indexed, pages, "one index row per page");
-
-        // Every page has a row: the markdown shape, the records shape, and the
-        // unparsed monitor shape (title only).
-        let body_of = |url: &str| -> String {
-            connection
-                .query_row(
-                    "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid WHERE p.url = ?1",
-                    params![url],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        assert!(body_of("https://example.com/markdown").contains("lighthouse keeper"));
-        assert!(body_of("https://example.com/records").contains("First item"));
-        assert_eq!(body_of("https://example.com/monitor"), "");
-        let title_hit: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM pages_fts WHERE pages_fts MATCH '\"Monitor\"'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(title_hit, 1, "a title-only page is still findable by title");
-
-        let marker: String = connection
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'fts_backfill_v6'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(marker, "3");
-        drop(connection);
-        drop(db);
-
-        // A second open is a no-op: the marker short-circuits the backfill.
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let indexed: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(indexed, 3);
-
-        // Crash-before-marker recovery: clearing the marker re-runs the backfill,
-        // and the upserts are idempotent (no duplicates, same bodies).
-        connection
-            .execute("DELETE FROM meta WHERE key = 'fts_backfill_v6'", [])
-            .unwrap();
-        drop(connection);
-        drop(db);
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let indexed: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(
-            indexed, 3,
-            "the re-run replaces rows, it does not duplicate them"
-        );
-        let marker: String = connection
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'fts_backfill_v6'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(marker, "3");
-        drop(connection);
-        drop(db);
-    }
-
-    #[tokio::test]
-    async fn the_backfill_respects_the_index_cap_and_keeps_utf8_valid() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v5.db");
-        write_v5_fixture(&path);
-
-        let fts = FtsConfig {
-            max_index_chars: 8,
-            ..FtsConfig::default()
-        };
-        let db = Database::open(&path, 1, &fts, false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let body: String = connection
-            .query_row(
-                "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
-                 WHERE p.url = 'https://example.com/markdown'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            body.chars().count(),
-            8,
-            "the cap is applied at a char boundary"
-        );
-        assert!(body.is_char_boundary(body.len()));
-        drop(db);
-    }
-
-    #[tokio::test]
-    async fn record_fetch_replaces_the_index_row_and_keeps_it_on_a_304_or_failure() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let url = "https://example.com/a";
-
-        let mut first = record(url, "ok");
-        first.index_text = Some(IndexText::replace("first body text"));
-        db.record_fetch(first).await.unwrap();
-        let hits = db.search_content("\"body\"".to_string(), 10).await.unwrap();
-        assert_eq!(hits.rows.len(), 1);
-        assert!(hits.rows[0].snippet.contains("body"));
-
-        // A newer acquisition replaces the row: still one row, new text.
-        let mut second = record(url, "ok");
-        second.title = Some("Second title".to_string());
-        second.index_text = Some(IndexText::replace("replacement words"));
-        db.record_fetch(second).await.unwrap();
-        let rows: i64 = db
-            .read(|connection| {
-                connection.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-            })
-            .await
-            .unwrap();
-        assert_eq!(
-            rows, 1,
-            "the upsert replaces the page row, it does not duplicate it"
-        );
-        let hits = db.search_content("\"body\"".to_string(), 10).await.unwrap();
-        assert_eq!(hits.total, 0, "the old body is gone");
-        let hits = db
-            .search_content("\"replacement\"".to_string(), 10)
-            .await
-            .unwrap();
-        assert_eq!(hits.rows.len(), 1);
-        assert_eq!(hits.rows[0].title, "Second title");
-
-        // A 304 and a failure carry no `index_text`: the row is kept.
-        let mut not_modified = record(url, "not_modified");
-        not_modified.status = Some(304);
-        db.record_fetch(not_modified).await.unwrap();
-        let mut failed = record(url, "error:http_error");
-        failed.status = Some(500);
-        failed.error = Some(("http_error".to_string(), "boom".to_string()));
-        db.record_fetch(failed).await.unwrap();
-        let hits = db
-            .search_content("\"replacement\"".to_string(), 10)
-            .await
-            .unwrap();
-        assert_eq!(
-            hits.rows.len(),
-            1,
-            "a 304 or a failure never clears the index"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_page_with_an_empty_body_is_still_indexed_by_title() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let mut page = record("https://example.com/title-only", "ok");
-        page.title = Some("Title Only Page".to_string());
-        page.index_text = Some(IndexText::replace(""));
-        db.record_fetch(page).await.unwrap();
-
-        let hits = db.search_content("title".to_string(), 10).await.unwrap();
-        assert_eq!(hits.rows.len(), 1);
-        assert_eq!(hits.rows[0].title, "Title Only Page");
-        assert_eq!(
-            hits.rows[0].snippet, "",
-            "an empty body yields an empty snippet"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // v0.5 — index write policy: delivered page text vs projected records
-    // -----------------------------------------------------------------------
-
-    async fn indexed_body(db: &Database, url_hash: &str) -> Option<String> {
-        let hash = url_hash.to_string();
-        db.read(move |connection| {
-            connection
-                .query_row(
-                    "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
-                     WHERE p.url_hash = ?1",
-                    params![hash],
-                    |row| row.get(0),
-                )
-                .optional()
-        })
-        .await
-        .unwrap()
-    }
-
-    async fn index_rows(db: &Database) -> i64 {
-        db.read(|connection| {
-            connection.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-        })
-        .await
-        .unwrap()
-    }
-
-    #[tokio::test]
-    async fn an_extract_never_replaces_indexed_page_text() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let url = "https://example.com/page";
-        let hash = crate::core::url::content_hash(url.as_bytes());
-
-        // A page acquisition delivers the page text.
-        let mut page = record(url, "ok");
-        page.index_text = Some(IndexText::replace("the delivered page text"));
-        db.record_fetch(page).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("the delivered page text")
-        );
-
-        // A later `extract` of the same URL offers only a projection. It must
-        // not replace the page text (the defect), and it adds no row.
-        let mut extract = record(url, "ok");
-        extract.mode = "extract".to_string();
-        extract.index_text = Some(IndexText::fill_empty("one projected field"));
-        db.record_fetch(extract).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("the delivered page text"),
-            "an extract must not hide the delivered text from local search"
-        );
-        assert_eq!(index_rows(&db).await, 1);
-        assert_eq!(
-            db.search_content("\"delivered\"".to_string(), 10)
-                .await
-                .unwrap()
-                .total,
-            1
-        );
-        assert_eq!(
-            db.search_content("\"projected\"".to_string(), 10)
-                .await
-                .unwrap()
-                .total,
-            0,
-            "the discarded projection is not in the index"
-        );
-
-        // A newer page acquisition still replaces it.
-        let mut newer = record(url, "ok");
-        newer.index_text = Some(IndexText::replace("the newer page text"));
-        db.record_fetch(newer).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("the newer page text")
-        );
-        assert_eq!(index_rows(&db).await, 1);
-    }
-
-    #[tokio::test]
-    async fn an_extract_fills_a_page_that_has_no_indexed_body_and_a_page_acquisition_replaces_it() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let url = "https://example.com/extract-first";
-        let hash = crate::core::url::content_hash(url.as_bytes());
-
-        // Extract first: the page has no row, so the projection fills it.
-        let mut extract = record(url, "ok");
-        extract.mode = "extract".to_string();
-        extract.index_text = Some(IndexText::fill_empty("first projected text"));
-        db.record_fetch(extract).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("first projected text")
-        );
-
-        // A second projection cannot overwrite the first.
-        let mut again = record(url, "ok");
-        again.mode = "extract".to_string();
-        again.index_text = Some(IndexText::fill_empty("second projected text"));
-        db.record_fetch(again).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("first projected text")
-        );
-
-        // The page acquisition replaces it.
-        let mut page = record(url, "ok");
-        page.index_text = Some(IndexText::replace("the delivered page text"));
-        db.record_fetch(page).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("the delivered page text")
-        );
-        assert_eq!(index_rows(&db).await, 1);
-    }
-
-    #[tokio::test]
-    async fn an_extract_with_no_text_leaves_a_title_only_row_and_a_later_projection_fills_it() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let url = "https://example.com/records-only";
-        let hash = crate::core::url::content_hash(url.as_bytes());
-
-        // Numbers and booleans are not text: the record text is empty.
-        let mut extract = record(url, "ok");
-        extract.title = Some("Records Only".to_string());
-        extract.mode = "extract".to_string();
-        extract.index_text = Some(IndexText::fill_empty(""));
-        db.record_fetch(extract).await.unwrap();
-        assert_eq!(indexed_body(&db, &hash).await.as_deref(), Some(""));
-        assert_eq!(
-            db.search_content("\"Records\"".to_string(), 10)
-                .await
-                .unwrap()
-                .total,
-            1,
-            "the title is still indexed"
-        );
-
-        // An empty body counts as "no indexed body": a later projection fills it.
-        let mut second = record(url, "ok");
-        second.mode = "extract".to_string();
-        second.index_text = Some(IndexText::fill_empty("later projected text"));
-        db.record_fetch(second).await.unwrap();
-        assert_eq!(
-            indexed_body(&db, &hash).await.as_deref(),
-            Some("later projected text")
-        );
-    }
-
-    #[tokio::test]
-    async fn mixed_writes_keep_exactly_one_index_row_per_page() {
-        let temp = tempfile::tempdir().unwrap();
-        let db = Database::open(
-            &temp.path().join("test.db"),
-            1,
-            &FtsConfig::default(),
-            false,
-        )
-        .unwrap();
-        let urls = [
-            "https://example.com/a",
-            "https://example.com/b",
-            "https://example.com/c",
-        ];
-        for (index, url) in urls.iter().enumerate() {
-            let mut page = record(url, "ok");
-            page.index_text = Some(IndexText::replace(format!("page {index} text")));
-            db.record_fetch(page).await.unwrap();
-            let mut extract = record(url, "ok");
-            extract.mode = "extract".to_string();
-            extract.index_text = Some(IndexText::fill_empty(format!("record {index} text")));
-            db.record_fetch(extract).await.unwrap();
-        }
-        let pages: i64 = db
-            .read(|connection| {
-                connection.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-            })
-            .await
-            .unwrap();
-        assert_eq!(pages, 3);
-        assert_eq!(index_rows(&db).await, pages, "one index row per page");
-        for url in urls {
-            let hash = crate::core::url::content_hash(url.as_bytes());
-            assert!(
-                indexed_body(&db, &hash).await.unwrap().contains("page"),
-                "{url} keeps its delivered text"
-            );
-        }
-    }
-
-    /// Two pages whose newest extraction is not the one that carries Markdown.
-    fn write_v5_preference_fixture(path: &Path) {
-        let connection = Connection::open(path).unwrap();
-        for script in [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5] {
-            connection.execute_batch(script).unwrap();
-        }
-        connection.pragma_update(None, "user_version", 5).unwrap();
-
-        let insert_page = |url: &str, title: &str| -> i64 {
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
-                                        title, outcome)
-                     VALUES (?1, ?1, ?2, '2026-10-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z',
-                             ?3, 'ok')",
-                    params![url, crate::core::url::content_hash(url.as_bytes()), title],
-                )
-                .unwrap();
-            connection.last_insert_rowid()
-        };
-        let insert_extraction = |page_id: i64, result_json: &str, at: &str| {
-            connection
-                .execute(
-                    "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
-                     VALUES (?1, ?2, 0, 'main')",
-                    params![page_id, at],
-                )
-                .unwrap();
-            let event_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_json,
-                                              result_hash, record_count, created_at)
-                     VALUES (?1, ?2, NULL, ?3, 'result-hash', 1, ?4)",
-                    params![page_id, event_id, result_json, at],
-                )
-                .unwrap();
-        };
-
-        // The delivered Markdown is older; a later extract of the same page is
-        // newer. The backfill must still index the Markdown.
-        let older_markdown = insert_page("https://example.com/older-markdown", "Older Markdown");
-        insert_extraction(
-            older_markdown,
-            r#"{"payload":{"url":"https://example.com/older-markdown"},"markdown":"delivered article body about herons"}"#,
-            "2026-10-01T00:00:00.000Z",
-        );
-        insert_extraction(
-            older_markdown,
-            r#"{"records":[{"label":"projection only"}],"record_count":1}"#,
-            "2026-10-03T00:00:00.000Z",
-        );
-
-        // The reverse order: the Markdown is the newest, so both rules agree.
-        let newer_markdown = insert_page("https://example.com/newer-markdown", "Newer Markdown");
-        insert_extraction(
-            newer_markdown,
-            r#"{"records":[{"label":"projection only"}],"record_count":1}"#,
-            "2026-10-01T00:00:00.000Z",
-        );
-        insert_extraction(
-            newer_markdown,
-            r#"{"payload":{"url":"https://example.com/newer-markdown"},"markdown":"delivered article body about otters"}"#,
-            "2026-10-03T00:00:00.000Z",
-        );
-    }
-
-    #[tokio::test]
-    async fn the_backfill_prefers_stored_markdown_over_a_later_projection() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v5-preference.db");
-        write_v5_preference_fixture(&path);
-
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        let body_of = |url: &str| -> String {
-            connection
-                .query_row(
-                    "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
-                     WHERE p.url = ?1",
-                    params![url],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        assert_eq!(
-            body_of("https://example.com/older-markdown"),
-            "delivered article body about herons",
-            "the older delivered Markdown wins over a newer record projection"
-        );
-        assert_eq!(
-            body_of("https://example.com/newer-markdown"),
-            "delivered article body about otters"
-        );
-        let indexed: i64 = connection
-            .query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(indexed, 2);
-        drop(connection);
-        drop(db);
-    }
-
-    // -----------------------------------------------------------------------
-    // v0.8 — schema v9: auth_audit (additive) and its GC window
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn a_v8_database_upgrades_to_the_head_schema_additively_and_reopens_as_a_no_op() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("v8.db");
-        {
-            let connection = Connection::open(&path).unwrap();
-            for script in [
-                SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
-                SCHEMA_V8,
-            ] {
-                connection.execute_batch(script).unwrap();
-            }
-            connection.pragma_update(None, "user_version", 8).unwrap();
-            let now = fmt_time(Utc::now());
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
-                     VALUES ('https://example.com/v8', 'https://example.com/v8', ?1, ?2, 'ok')",
-                    params!["d".repeat(64), now],
-                )
-                .unwrap();
-            connection
-                .execute(
-                    "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
-                     VALUES ('https://example.com/m', 'main', 3600, ?1, ?1)",
-                    params![now],
-                )
-                .unwrap();
-        }
-
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-
-        let connection = Connection::open(&path).unwrap();
-        let version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION, "the binary migrates to the head");
-        for (table, expected) in [("pages", 1_i64), ("monitors", 1), ("auth_audit", 0)] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, expected, "{table} rows after the head migration");
-        }
-        // v10 defaults: the pre-v10 page is unauthenticated.
-        let labelled: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM pages WHERE authenticated <> 0 OR auth_site IS NOT NULL",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(labelled, 0);
-        let columns: Vec<String> = connection
-            .prepare("PRAGMA table_info(auth_audit)")
-            .unwrap()
-            .query_map([], |row| row.get::<_, String>(1))
-            .unwrap()
-            .flatten()
-            .collect();
-        assert_eq!(
-            columns,
-            vec![
-                "id",
-                "at",
-                "site",
-                "auth_id",
-                "method",
-                "host",
-                "status",
-                "bytes",
-                "outcome",
-                "resolution_ms"
-            ],
-            "auth_audit carries exactly the  fields"
-        );
-        let indexes: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master
-                 WHERE type = 'index' AND name IN ('auth_audit_at', 'auth_audit_site_at')",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(indexes, 2);
-        drop(connection);
-
-        // Reopening is a no-op: the migration is guarded by user_version.
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-    }
-
-    fn auth_sites(path: &Path) -> Vec<String> {
-        let connection = Connection::open(path).unwrap();
-        connection
-            .prepare("SELECT site FROM auth_audit ORDER BY at")
-            .unwrap()
-            .query_map([], |row| row.get::<_, String>(0))
-            .unwrap()
-            .flatten()
-            .collect()
-    }
-
-    #[tokio::test]
-    async fn gc_prunes_auth_audit_rows_outside_the_audit_window() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("audit.db");
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        drop(db);
-
-        let now = Utc::now();
-        {
-            let connection = Connection::open(&path).unwrap();
-            for (at, site) in [
-                (now - chrono::Duration::days(120), "old"),
-                (now - chrono::Duration::days(31), "borderline"),
-                (now - chrono::Duration::days(2), "recent"),
-            ] {
-                connection
-                    .execute(
-                        "INSERT INTO auth_audit
-                             (at, site, auth_id, method, host, status, bytes, outcome, resolution_ms)
-                         VALUES (?1, ?2, 'github.com', 'GET', 'github.com', 200, 128, 'ok', 12)",
-                        params![fmt_time(at), site],
-                    )
-                    .unwrap();
-            }
-        }
-
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let report = db.gc(RetentionConfig::default(), 90, 7).await.unwrap();
-        assert_eq!(report.auth_audit_pruned, 1, "{report:?}");
-        assert_eq!(auth_sites(&path), vec!["borderline", "recent"]);
-
-        // The window is the operator's `[auth].audit_days`, not a fixed constant.
-        let report = db.gc(RetentionConfig::default(), 30, 7).await.unwrap();
-        assert_eq!(report.auth_audit_pruned, 1, "{report:?}");
-        assert_eq!(auth_sites(&path), vec!["recent"]);
-    }
+ use super::*;
+
+ fn record(url: &str, outcome: &str) -> FetchRecord {
+ let mut record =
+ FetchRecord::new(url, url, &crate::core::url::content_hash(url.as_bytes()));
+ record.site = "example.com".to_string();
+ record.status = Some(200);
+ record.content_type = Some("text/html".to_string());
+ record.charset = Some("UTF-8".to_string());
+ record.title = Some("Title".to_string());
+ record.lang = Some("en".to_string());
+ record.outcome = outcome.to_string();
+ record.duration_ms = 12;
+ record.bytes = Some(10);
+ record
+ }
+
+ #[test]
+ fn schema_v5_is_additive_only() {
+ let mut statements = 0;
+ for line in include_str!("schema_v5.sql").lines() {
+ let line = line.trim();
+ if line.is_empty() || line.starts_with("--") {
+ continue;
+ }
+ assert!(
+ line.starts_with("ALTER TABLE monitors ADD COLUMN"),
+ "v5 must only add a nullable column: {line}"
+);
+ statements += 1;
+ }
+ assert_eq!(statements, 1);
+ }
+
+ #[tokio::test]
+ async fn a_v4_database_upgrades_in_place_to_the_current_version() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v4.db");
+ let now = fmt_time(Utc::now());
+ {
+ let connection = Connection::open(&path).unwrap();
+ connection.execute_batch(SCHEMA_V1).unwrap();
+ connection.execute_batch(SCHEMA_V2).unwrap();
+ connection.execute_batch(SCHEMA_V3).unwrap();
+ connection.execute_batch(SCHEMA_V4).unwrap();
+ connection.pragma_update(None, "user_version", 4).unwrap();
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/old', 'https://example.com/old', ?1, ?2, 'ok')",
+ params!["h".repeat(64), now])
+.unwrap();
+ let page_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
+ VALUES (?1, ?2, 0, 'monitor')",
+ params![page_id, now])
+.unwrap();
+ let event_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO jobs (id, kind, spec_json, state, created_at, counters_json)
+ VALUES ('job-1', 'monitor_check', '{\"force\":false}', 'done', ?1, '{}')",
+ params![now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
+ VALUES ('https://example.com/a', 'main', 3600, ?1, ?1)",
+ params![now])
+.unwrap();
+ let monitor_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO monitors (url, mode, interval_s, active, created_at, next_due_at)
+ VALUES ('https://example.com/b', 'main', 3600, 0, ?1, ?1)",
+ params![now])
+.unwrap();
+ let mut snapshot_ids = Vec::new();
+ for index in 0..2 {
+ connection
+.execute(
+ "INSERT INTO snapshots (monitor_id, taken_at, fetch_event_id,
+ normalized_hash, raw_hash)
+ VALUES (?1, ?2, ?3, ?4, ?5)",
+ params![
+ monitor_id,
+ now,
+ event_id,
+ format!("n{index}").repeat(32),
+ format!("r{index}").repeat(32)
+ ])
+.unwrap();
+ snapshot_ids.push(connection.last_insert_rowid());
+ }
+ connection
+.execute(
+ "INSERT INTO changes (monitor_id, from_snapshot, to_snapshot, detected_at,
+ kind, stats_json, diff_text)
+ VALUES (?1, ?2, ?3, ?4, 'substantive', '{}', 'diff')",
+ params![monitor_id, snapshot_ids[0], snapshot_ids[1], now])
+.unwrap();
+ }
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ for (table, expected) in [
+ ("monitors", 2_i64),
+ ("snapshots", 2),
+ ("changes", 1),
+ ("pages", 1),
+ ("fetch_events", 1),
+ ("jobs", 1),
+ ] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, expected, "{table} rows survive v4 -> v5");
+ }
+ let null_labels: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM monitors WHERE label IS NULL",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(null_labels, 2, "every pre-v5 monitor is unlabeled");
+ let fk_violations: i64 = connection
+.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(fk_violations, 0, "foreign keys stay intact");
+ drop(connection);
+ drop(db);
+
+ // A second open of the already-current database is a no-op.
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ let monitors: i64 = connection
+.query_row("SELECT COUNT(*) FROM monitors", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(monitors, 2, "the second open changes no rows");
+ drop(connection);
+ drop(db);
+ }
+
+ #[tokio::test]
+ async fn a_v2_database_upgrades_in_place_to_the_current_version() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("upgrade.db");
+ {
+ let connection = Connection::open(&path).unwrap();
+ connection.execute_batch(SCHEMA_V1).unwrap();
+ connection.execute_batch(SCHEMA_V2).unwrap();
+ connection.pragma_update(None, "user_version", 2).unwrap();
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/old', 'https://example.com/old', ?1, ?2, 'ok')",
+ params!["h".repeat(64), fmt_time(Utc::now())])
+.unwrap();
+ }
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ let pages: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(pages, 1, "v1 data survives the v2 -> v3 upgrade");
+ let monitors: i64 = connection
+.query_row("SELECT COUNT(*) FROM monitors", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(monitors, 0, "the monitoring tables were created");
+ let render_mode = connection
+.prepare("PRAGMA table_info(snapshots)")
+.unwrap()
+.query_map([], |row| row.get::<_, String>(1))
+.unwrap()
+.flatten()
+.any(|column| column == "render_mode");
+ assert!(render_mode, "v4 adds snapshots.render_mode");
+ let label = connection
+.prepare("PRAGMA table_info(monitors)")
+.unwrap()
+.query_map([], |row| row.get::<_, String>(1))
+.unwrap()
+.flatten()
+.any(|column| column == "label");
+ assert!(label, "v5 adds monitors.label");
+ drop(db);
+ }
+
+ #[tokio::test]
+ async fn records_pages_and_events_idempotently() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 2,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let first = db
+.record_fetch(record("https://example.com/a", "ok"))
+.await
+.unwrap();
+ let second = db
+.record_fetch(record("https://example.com/a", "ok"))
+.await
+.unwrap();
+ assert_eq!(first.ids.page_id, second.ids.page_id);
+ assert_ne!(first.ids.fetch_event_id, second.ids.fetch_event_id);
+ let page = db
+.page(&crate::core::url::content_hash(b"https://example.com/a"))
+.await
+.unwrap()
+.unwrap();
+ assert_eq!(page.url, "https://example.com/a");
+ assert_eq!(page.last_status, Some(200));
+ }
+
+ #[tokio::test]
+ async fn gc_keeps_the_latest_event_per_page_and_evicts_over_budget_blobs() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 2,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let mut old = record("https://example.com/a", "ok");
+ old.fetched_at = Utc::now() - chrono::Duration::days(90);
+ old.text_hash = Some("a".repeat(64));
+ let old_extraction = ExtractionRow {
+ profile_hash: "p".repeat(64),
+ result_json: "{}".to_string(),
+ result_hash: "r".repeat(64),
+ record_count: 1,
+ created_at: Utc::now() - chrono::Duration::days(90),
+ };
+ old.extraction = Some(old_extraction);
+ old.blob = Some(BlobRow {
+ hash: "b".repeat(64),
+ size: 100,
+ content_type: Some("text/html".to_string()),
+ created_at: Utc::now() - chrono::Duration::days(90),
+ });
+ db.record_fetch(old).await.unwrap();
+ db.record_fetch(record("https://example.com/a", "ok"))
+.await
+.unwrap();
+
+ let retention = RetentionConfig {
+ max_blob_bytes: 1,
+..RetentionConfig::default()
+ };
+ let report = db.gc(retention, 90, 7).await.unwrap();
+ assert_eq!(report.extractions_pruned, 1);
+ assert_eq!(report.blobs_pruned, 1);
+ // The most recent event per page survives even though it is old.
+ assert_eq!(report.events_pruned, 1);
+ }
+
+ // -----------------------------------------------------------------------
+ // P0 — schema v7: recipes/recipe_versions/screenshots + retention
+ // -----------------------------------------------------------------------
+
+ fn write_v6_fixture(path: &Path) {
+ let connection = Connection::open(path).unwrap();
+ for script in [
+ SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6,
+ ] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 6).unwrap();
+ let now = fmt_time(Utc::now());
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/v6', 'https://example.com/v6', ?1, ?2, 'ok')",
+ params!["a".repeat(64), now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO blobs (hash, size, created_at, last_referenced_at)
+ VALUES (?1, 10, ?2, ?2)",
+ params!["b".repeat(64), now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO pages_fts (rowid, title, body) VALUES (1, 'title', 'body text')",
+ [])
+.unwrap();
+ }
+
+ #[test]
+ fn a_v6_database_upgrades_to_the_current_version_additively() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v6.db");
+ write_v6_fixture(&path);
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ for (table, expected) in [
+ ("pages", 1_i64),
+ ("blobs", 1),
+ ("pages_fts", 1),
+ ("recipes", 0),
+ ("recipe_versions", 0),
+ ("screenshots", 0),
+ ("embeddings", 0),
+ ("embedding_state", 0),
+ ("monitor_webhooks", 0),
+ ("webhook_deliveries", 0),
+ ] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, expected, "{table} after v6 -> v7");
+ }
+ for index in [
+ "recipe_versions_profile",
+ "screenshots_page",
+ "screenshots_hash",
+ ] {
+ let count: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+ params![index],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(count, 1, "index {index} exists");
+ }
+ let fk_violations: i64 = connection
+.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(fk_violations, 0, "foreign keys stay intact");
+ drop(connection);
+
+ // A second open of the already-current database is a no-op.
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ let pages: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(pages, 1, "the second open changes no rows");
+ }
+
+ #[test]
+ fn a_newer_schema_is_refused_by_the_version_guard() {
+ // A v6 binary meeting a v7 database hits the same guard (it compares the
+ // file's user_version with its own SCHEMA_VERSION); this test pins the
+ // guard itself rather than requiring the old binary.
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("future.db");
+ Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ {
+ let connection = Connection::open(&path).unwrap();
+ connection
+.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+.unwrap();
+ }
+ let error = Database::open(&path, 1, &FtsConfig::default(), false).unwrap_err();
+ let message = error.to_string();
+ assert!(
+ message.contains("newer than this binary"),
+ "unexpected guard message: {message}"
+);
+ }
+
+ // -----------------------------------------------------------------------
+ // P0 — schema v8: embeddings, embedding_state, monitor_webhooks,
+ // webhook_deliveries
+ // -----------------------------------------------------------------------
+
+ fn write_v7_fixture(path: &Path) -> (i64, i64, i64) {
+ let connection = Connection::open(path).unwrap();
+ for script in [
+ SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
+ ] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 7).unwrap();
+ let now = fmt_time(Utc::now());
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/v7', 'https://example.com/v7', ?1, ?2, 'ok')",
+ params!["c".repeat(64), now])
+.unwrap();
+ let page_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
+ VALUES ('https://example.com/m', 'main', 3600, ?1, ?1)",
+ params![now])
+.unwrap();
+ let monitor_id = connection.last_insert_rowid();
+ let mut snapshot_ids = Vec::new();
+ for index in 0..2 {
+ connection
+.execute(
+ "INSERT INTO snapshots (monitor_id, taken_at, normalized_hash, raw_hash)
+ VALUES (?1, ?2, ?3, ?4)",
+ params![
+ monitor_id,
+ now,
+ format!("n{index}").repeat(32),
+ format!("r{index}").repeat(32)
+ ])
+.unwrap();
+ snapshot_ids.push(connection.last_insert_rowid());
+ }
+ connection
+.execute(
+ "INSERT INTO changes (monitor_id, from_snapshot, to_snapshot, detected_at,
+ kind, stats_json, diff_text)
+ VALUES (?1, ?2, ?3, ?4, 'substantive', '{}', 'diff')",
+ params![monitor_id, snapshot_ids[0], snapshot_ids[1], now])
+.unwrap();
+ let change_id = connection.last_insert_rowid();
+ (page_id, monitor_id, change_id)
+ }
+
+ #[test]
+ fn a_v7_database_upgrades_additively_and_reopens_as_a_no_op() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v7.db");
+ write_v7_fixture(&path);
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ for (table, expected) in [
+ ("pages", 1_i64),
+ ("monitors", 1),
+ ("snapshots", 2),
+ ("changes", 1),
+ ("embeddings", 0),
+ ("embedding_state", 0),
+ ("monitor_webhooks", 0),
+ ("webhook_deliveries", 0),
+ ("auth_audit", 0),
+ ] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, expected, "{table} after the migration chain");
+ }
+ for index in [
+ "embeddings_model_page",
+ "embedding_state_model",
+ "webhook_deliveries_due",
+ "webhook_deliveries_change",
+ ] {
+ let count: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+ params![index],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(count, 1, "index {index} exists");
+ }
+ let fk_violations: i64 = connection
+.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(fk_violations, 0, "foreign keys stay intact");
+ drop(connection);
+
+ // A second open of the already-current database is a no-op.
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ let pages: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(pages, 1, "the second open changes no rows");
+ }
+
+ #[test]
+ fn v8_rows_cascade_and_reject_malformed_vectors() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v8-cascade.db");
+ write_v7_fixture(&path);
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+
+ let connection = Connection::open(&path).unwrap();
+ connection.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+ let (page_id, monitor_id, change_id) = {
+ let page: i64 = connection
+.query_row("SELECT id FROM pages LIMIT 1", [], |row| row.get(0))
+.unwrap();
+ let monitor: i64 = connection
+.query_row("SELECT id FROM monitors LIMIT 1", [], |row| row.get(0))
+.unwrap();
+ let change: i64 = connection
+.query_row("SELECT id FROM changes LIMIT 1", [], |row| row.get(0))
+.unwrap();
+ (page, monitor, change)
+ };
+ let now = fmt_time(Utc::now());
+ let vector = vec![0_u8; 8];
+ connection
+.execute(
+ "INSERT INTO embeddings (page_id, model, chunk_index, source_hash, chunk_hash,
+ start_char, end_char, dim, vector, created_at)
+ VALUES (?1, 'minilm-l6-v2-q', 0, ?2, ?3, 0, 10, 2, ?4, ?5)",
+ params![page_id, "s".repeat(64), "h".repeat(64), vector, now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO embedding_state (page_id, model, source_hash, chunks, embedded_at)
+ VALUES (?1, 'minilm-l6-v2-q', ?2, 1, ?3)",
+ params![page_id, "s".repeat(64), now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO monitor_webhooks (monitor_id, target, created_at)
+ VALUES (?1, 'ops', ?2)",
+ params![monitor_id, now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO webhook_deliveries (change_id, monitor_id, target, status,
+ attempts, next_attempt_at, created_at)
+ VALUES (?1, ?2, 'ops', 'pending', 0, ?3, ?3)",
+ params![change_id, monitor_id, now])
+.unwrap();
+
+ // The UNIQUE(change_id, target) and the vector-length CHECK are real.
+ let duplicate = connection.execute(
+ "INSERT INTO webhook_deliveries (change_id, monitor_id, target, status,
+ attempts, next_attempt_at, created_at)
+ VALUES (?1, ?2, 'ops', 'pending', 0, ?3, ?3)",
+ params![change_id, monitor_id, now]);
+ assert!(duplicate.is_err(), "one delivery per (change, target)");
+ let short_vector = connection.execute(
+ "INSERT INTO embeddings (page_id, model, chunk_index, source_hash, chunk_hash,
+ start_char, end_char, dim, vector, created_at)
+ VALUES (?1, 'minilm-l6-v2-q', 1, ?2, ?3, 0, 10, 2, ?4, ?5)",
+ params![page_id, "s".repeat(64), "h".repeat(64), vec![0_u8; 4], now]);
+ assert!(short_vector.is_err(), "length(vector) must be dim * 4");
+
+ // A page delete cascades to its vectors and state.
+ connection
+.execute("DELETE FROM pages WHERE id = ?1", params![page_id])
+.unwrap();
+ for table in ["embeddings", "embedding_state"] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, 0, "{table} cascades with the page");
+ }
+ let deliveries: i64 = connection
+.query_row("SELECT COUNT(*) FROM webhook_deliveries", [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(deliveries, 1, "a page delete leaves deliveries alone");
+
+ // A monitor delete cascades to its attachments, changes and deliveries.
+ connection
+.execute("DELETE FROM monitors WHERE id = ?1", params![monitor_id])
+.unwrap();
+ for table in ["monitor_webhooks", "webhook_deliveries"] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, 0, "{table} cascades with the monitor");
+ }
+ }
+
+ fn insert_blob(connection: &Connection, hash: &str, size: i64, created_at: &str) {
+ connection
+.execute(
+ "INSERT INTO blobs (hash, size, created_at, last_referenced_at)
+ VALUES (?1, ?2, ?3, ?3)",
+ params![hash, size, created_at])
+.unwrap();
+ }
+
+ #[tokio::test]
+ async fn gc_prunes_aged_screenshots_and_keeps_referenced_ones() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("gc-screenshots.db");
+ Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+
+ let now = Utc::now();
+ let old = fmt_time(now - chrono::Duration::days(90));
+ let mut connection = Connection::open(&path).unwrap();
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/a', 'https://example.com/a', ?1, ?2, 'ok')",
+ params!["p".repeat(64), fmt_time(now)])
+.unwrap();
+ let page_id = connection.last_insert_rowid();
+ for hash in ["recent", "aged", "orphan"] {
+ insert_blob(&connection, &hash.repeat(64)[..64], 100, &old);
+ }
+ // A recent screenshot row and one older than the screenshot window.
+ save_screenshot(
+ &connection,
+ Some(page_id),
+ &"recent".repeat(64)[..64],
+ "png",
+ Some(10),
+ Some(10),
+ "screenshot",
+ now)
+.unwrap();
+ save_screenshot(
+ &connection,
+ Some(page_id),
+ &"aged".repeat(64)[..64],
+ "png",
+ Some(10),
+ Some(10),
+ "interaction",
+ now - chrono::Duration::days(60))
+.unwrap();
+
+ let retention = RetentionConfig {
+ screenshots_days: 30,
+ extractions_days: 30,
+ max_blob_bytes: 20 * 1024 * 1024 * 1024,
+..RetentionConfig::default()
+ };
+ let report = gc(&mut connection, now, &retention, 90, 7).unwrap();
+ assert_eq!(report.blobs_pruned, 2, "aged and orphan blobs pruned");
+ let screenshots: i64 = connection
+.query_row("SELECT COUNT(*) FROM screenshots", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(screenshots, 1, "only the recent screenshot row survives");
+ for hash in ["recent", "aged", "orphan"] {
+ let key = &hash.repeat(64)[..64];
+ let count: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM blobs WHERE hash = ?1",
+ params![key],
+ |row| row.get(0))
+.unwrap();
+ if hash == "recent" {
+ assert_eq!(count, 1, "a referenced screenshot blob is retained");
+ } else {
+ assert_eq!(count, 0, "{hash} blob pruned");
+ }
+ }
+ }
+
+ #[tokio::test]
+ async fn gc_budget_does_not_evict_a_referenced_screenshot_blob() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("gc-budget.db");
+ Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let now = Utc::now();
+ let old = fmt_time(now - chrono::Duration::days(90));
+ let mut connection = Connection::open(&path).unwrap();
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/a', 'https://example.com/a', ?1, ?2, 'ok')",
+ params!["q".repeat(64), fmt_time(now)])
+.unwrap();
+ let page_id = connection.last_insert_rowid();
+ insert_blob(&connection, &"keep".repeat(16), 100, &old);
+ insert_blob(&connection, &"evict".repeat(13)[..64], 100, &old);
+ save_screenshot(
+ &connection,
+ Some(page_id),
+ &"keep".repeat(16),
+ "png",
+ None,
+ None,
+ "screenshot",
+ now)
+.unwrap();
+ let retention = RetentionConfig {
+ max_blob_bytes: 1,
+..RetentionConfig::default()
+ };
+ let report = gc(&mut connection, now, &retention, 90, 7).unwrap();
+ assert_eq!(
+ report.blobs_pruned, 1,
+ "only the unreferenced blob is evicted"
+);
+ let kept: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM blobs WHERE hash = ?1",
+ params![&"keep".repeat(16)],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(
+ kept, 1,
+ "the screenshot-referenced blob survives the budget"
+);
+ }
+
+ #[tokio::test]
+ async fn cached_extraction_is_keyed_by_profile() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 2,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let mut record = record("https://example.com/a", "ok");
+ record.extraction = Some(ExtractionRow {
+ profile_hash: "p".repeat(64),
+ result_json: "{\"markdown_chars\":1}".to_string(),
+ result_hash: "r".repeat(64),
+ record_count: 1,
+ created_at: Utc::now(),
+ });
+ db.record_fetch(record).await.unwrap();
+ let hash = crate::core::url::content_hash(b"https://example.com/a");
+ let hit = db
+.cached_extraction(&hash, &"p".repeat(64))
+.await
+.unwrap()
+.unwrap();
+ assert_eq!(hit.result_json, "{\"markdown_chars\":1}");
+ assert!(
+ db.cached_extraction(&hash, &"z".repeat(64))
+.await
+.unwrap()
+.is_none()
+);
+ }
+
+ #[tokio::test]
+ async fn hosts_round_trip() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 2,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ assert!(db.host("example.com").await.unwrap().is_none());
+ db.save_host(HostRow {
+ host: "example.com".to_string(),
+ robots_fetched_at: Some(Utc::now()),
+ robots_status: Some(200),
+ robots_hash: Some("h".repeat(64)),
+ robots_body: Some(b"User-agent: *\nDisallow: /private\n".to_vec()),
+ robots_expires_at: Some(Utc::now() + chrono::Duration::hours(1)),
+ next_allowed_at: None,
+ consecutive_failures: 1,
+ })
+.await
+.unwrap();
+ let row = db.host("example.com").await.unwrap().unwrap();
+ assert_eq!(row.robots_status, Some(200));
+ assert_eq!(row.consecutive_failures, 1);
+ assert_eq!(row.robots_body.unwrap().len(), 33);
+ }
+
+ // -----------------------------------------------------------------------
+ // Lane B — schema v6: the full-text index and its one-time backfill
+ // -----------------------------------------------------------------------
+
+ /// A v5 database holding one page per stored shape the backfill understands.
+ fn write_v5_fixture(path: &Path) {
+ let now = fmt_time(Utc::now());
+ let connection = Connection::open(path).unwrap();
+ for script in [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 5).unwrap();
+
+ fn insert_page(connection: &Connection, url: &str, title: &str, now: &str) -> i64 {
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
+ title, outcome)
+ VALUES (?1, ?1, ?2, ?3, ?3, ?4, 'ok')",
+ params![
+ url,
+ crate::core::url::content_hash(url.as_bytes()),
+ now,
+ title
+ ])
+.unwrap();
+ connection.last_insert_rowid()
+ }
+ fn insert_extraction(connection: &Connection, page_id: i64, result_json: &str, now: &str) {
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
+ VALUES (?1, ?2, 0, 'main')",
+ params![page_id, now])
+.unwrap();
+ let event_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_json,
+ result_hash, record_count, created_at)
+ VALUES (?1, ?2, NULL, ?3, 'result-hash', 1, ?4)",
+ params![page_id, event_id, result_json, now])
+.unwrap();
+ }
+
+ let markdown = insert_page(
+ &connection,
+ "https://example.com/markdown",
+ "Markdown Page",
+ &now);
+ insert_extraction(
+ &connection,
+ markdown,
+ r#"{"payload":{"url":"https://example.com/markdown"},"markdown":"the lighthouse keeper counted forty-one gulls"}"#,
+ &now);
+ let records = insert_page(
+ &connection,
+ "https://example.com/records",
+ "Records Page",
+ &now);
+ insert_extraction(
+ &connection,
+ records,
+ r#"{"url":"https://example.com/records","records":[{"title":"First item","price":"€10.00"}],"record_count":1}"#,
+ &now);
+ // A monitor-only page: its extraction is a bare records array, which the
+ // backfill deliberately does not parse (title-only until the next check).
+ let monitor = insert_page(
+ &connection,
+ "https://example.com/monitor",
+ "Monitor Page",
+ &now);
+ insert_extraction(&connection, monitor, r#"[{"value":"monitored"}]"#, &now);
+ }
+
+ #[tokio::test]
+ async fn a_v5_database_migrates_to_v6_and_backfills_every_page_once() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v5.db");
+ write_v5_fixture(&path);
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ let pages: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+.unwrap();
+ let indexed: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(pages, 3, "the migration preserves the page rows");
+ assert_eq!(indexed, pages, "one index row per page");
+
+ // Every page has a row: the markdown shape, the records shape, and the
+ // unparsed monitor shape (title only).
+ let body_of = |url: &str| -> String {
+ connection
+.query_row(
+ "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid WHERE p.url = ?1",
+ params![url],
+ |row| row.get(0))
+.unwrap()
+ };
+ assert!(body_of("https://example.com/markdown").contains("lighthouse keeper"));
+ assert!(body_of("https://example.com/records").contains("First item"));
+ assert_eq!(body_of("https://example.com/monitor"), "");
+ let title_hit: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM pages_fts WHERE pages_fts MATCH '\"Monitor\"'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(title_hit, 1, "a title-only page is still findable by title");
+
+ let marker: String = connection
+.query_row(
+ "SELECT value FROM meta WHERE key = 'fts_backfill_v6'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(marker, "3");
+ drop(connection);
+ drop(db);
+
+ // A second open is a no-op: the marker short-circuits the backfill.
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let indexed: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(indexed, 3);
+
+ // Crash-before-marker recovery: clearing the marker re-runs the backfill,
+ // and the upserts are idempotent (no duplicates, same bodies).
+ connection
+.execute("DELETE FROM meta WHERE key = 'fts_backfill_v6'", [])
+.unwrap();
+ drop(connection);
+ drop(db);
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let indexed: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(
+ indexed, 3,
+ "the re-run replaces rows, it does not duplicate them"
+);
+ let marker: String = connection
+.query_row(
+ "SELECT value FROM meta WHERE key = 'fts_backfill_v6'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(marker, "3");
+ drop(connection);
+ drop(db);
+ }
+
+ #[tokio::test]
+ async fn the_backfill_respects_the_index_cap_and_keeps_utf8_valid() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v5.db");
+ write_v5_fixture(&path);
+
+ let fts = FtsConfig {
+ max_index_chars: 8,
+..FtsConfig::default()
+ };
+ let db = Database::open(&path, 1, &fts, false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let body: String = connection
+.query_row(
+ "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
+ WHERE p.url = 'https://example.com/markdown'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(
+ body.chars().count(),
+ 8,
+ "the cap is applied at a char boundary"
+);
+ assert!(body.is_char_boundary(body.len()));
+ drop(db);
+ }
+
+ #[tokio::test]
+ async fn record_fetch_replaces_the_index_row_and_keeps_it_on_a_304_or_failure() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let url = "https://example.com/a";
+
+ let mut first = record(url, "ok");
+ first.index_text = Some(IndexText::replace("first body text"));
+ db.record_fetch(first).await.unwrap();
+ let hits = db.search_content("\"body\"".to_string(), 10).await.unwrap();
+ assert_eq!(hits.rows.len(), 1);
+ assert!(hits.rows[0].snippet.contains("body"));
+
+ // A newer acquisition replaces the row: still one row, new text.
+ let mut second = record(url, "ok");
+ second.title = Some("Second title".to_string());
+ second.index_text = Some(IndexText::replace("replacement words"));
+ db.record_fetch(second).await.unwrap();
+ let rows: i64 = db
+.read(|connection| {
+ connection.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+ })
+.await
+.unwrap();
+ assert_eq!(
+ rows, 1,
+ "the upsert replaces the page row, it does not duplicate it"
+);
+ let hits = db.search_content("\"body\"".to_string(), 10).await.unwrap();
+ assert_eq!(hits.total, 0, "the old body is gone");
+ let hits = db
+.search_content("\"replacement\"".to_string(), 10)
+.await
+.unwrap();
+ assert_eq!(hits.rows.len(), 1);
+ assert_eq!(hits.rows[0].title, "Second title");
+
+ // A 304 and a failure carry no `index_text`: the row is kept.
+ let mut not_modified = record(url, "not_modified");
+ not_modified.status = Some(304);
+ db.record_fetch(not_modified).await.unwrap();
+ let mut failed = record(url, "error:http_error");
+ failed.status = Some(500);
+ failed.error = Some(("http_error".to_string(), "boom".to_string()));
+ db.record_fetch(failed).await.unwrap();
+ let hits = db
+.search_content("\"replacement\"".to_string(), 10)
+.await
+.unwrap();
+ assert_eq!(
+ hits.rows.len(),
+ 1,
+ "a 304 or a failure never clears the index"
+);
+ }
+
+ #[tokio::test]
+ async fn a_page_with_an_empty_body_is_still_indexed_by_title() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let mut page = record("https://example.com/title-only", "ok");
+ page.title = Some("Title Only Page".to_string());
+ page.index_text = Some(IndexText::replace(""));
+ db.record_fetch(page).await.unwrap();
+
+ let hits = db.search_content("title".to_string(), 10).await.unwrap();
+ assert_eq!(hits.rows.len(), 1);
+ assert_eq!(hits.rows[0].title, "Title Only Page");
+ assert_eq!(
+ hits.rows[0].snippet, "",
+ "an empty body yields an empty snippet"
+);
+ }
+
+ // -----------------------------------------------------------------------
+ // B01b — index write policy: delivered page text vs projected records
+ // -----------------------------------------------------------------------
+
+ async fn indexed_body(db: &Database, url_hash: &str) -> Option<String> {
+ let hash = url_hash.to_string();
+ db.read(move |connection| {
+ connection
+.query_row(
+ "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
+ WHERE p.url_hash = ?1",
+ params![hash],
+ |row| row.get(0))
+.optional()
+ })
+.await
+.unwrap()
+ }
+
+ async fn index_rows(db: &Database) -> i64 {
+ db.read(|connection| {
+ connection.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+ })
+.await
+.unwrap()
+ }
+
+ #[tokio::test]
+ async fn an_extract_never_replaces_indexed_page_text() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let url = "https://example.com/page";
+ let hash = crate::core::url::content_hash(url.as_bytes());
+
+ // A page acquisition delivers the page text.
+ let mut page = record(url, "ok");
+ page.index_text = Some(IndexText::replace("the delivered page text"));
+ db.record_fetch(page).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("the delivered page text")
+);
+
+ // A later `extract` of the same URL offers only a projection. It must
+ // not replace the page text (the B01b defect), and it adds no row.
+ let mut extract = record(url, "ok");
+ extract.mode = "extract".to_string();
+ extract.index_text = Some(IndexText::fill_empty("one projected field"));
+ db.record_fetch(extract).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("the delivered page text"),
+ "an extract must not hide the delivered text from local search"
+);
+ assert_eq!(index_rows(&db).await, 1);
+ assert_eq!(
+ db.search_content("\"delivered\"".to_string(), 10)
+.await
+.unwrap()
+.total,
+ 1
+);
+ assert_eq!(
+ db.search_content("\"projected\"".to_string(), 10)
+.await
+.unwrap()
+.total,
+ 0,
+ "the discarded projection is not in the index"
+);
+
+ // A newer page acquisition still replaces it.
+ let mut newer = record(url, "ok");
+ newer.index_text = Some(IndexText::replace("the newer page text"));
+ db.record_fetch(newer).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("the newer page text")
+);
+ assert_eq!(index_rows(&db).await, 1);
+ }
+
+ #[tokio::test]
+ async fn an_extract_fills_a_page_that_has_no_indexed_body_and_a_page_acquisition_replaces_it() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let url = "https://example.com/extract-first";
+ let hash = crate::core::url::content_hash(url.as_bytes());
+
+ // Extract first: the page has no row, so the projection fills it.
+ let mut extract = record(url, "ok");
+ extract.mode = "extract".to_string();
+ extract.index_text = Some(IndexText::fill_empty("first projected text"));
+ db.record_fetch(extract).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("first projected text")
+);
+
+ // A second projection cannot overwrite the first.
+ let mut again = record(url, "ok");
+ again.mode = "extract".to_string();
+ again.index_text = Some(IndexText::fill_empty("second projected text"));
+ db.record_fetch(again).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("first projected text")
+);
+
+ // The page acquisition replaces it.
+ let mut page = record(url, "ok");
+ page.index_text = Some(IndexText::replace("the delivered page text"));
+ db.record_fetch(page).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("the delivered page text")
+);
+ assert_eq!(index_rows(&db).await, 1);
+ }
+
+ #[tokio::test]
+ async fn an_extract_with_no_text_leaves_a_title_only_row_and_a_later_projection_fills_it() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let url = "https://example.com/records-only";
+ let hash = crate::core::url::content_hash(url.as_bytes());
+
+ // Numbers and booleans are not text: the record text is empty.
+ let mut extract = record(url, "ok");
+ extract.title = Some("Records Only".to_string());
+ extract.mode = "extract".to_string();
+ extract.index_text = Some(IndexText::fill_empty(""));
+ db.record_fetch(extract).await.unwrap();
+ assert_eq!(indexed_body(&db, &hash).await.as_deref(), Some(""));
+ assert_eq!(
+ db.search_content("\"Records\"".to_string(), 10)
+.await
+.unwrap()
+.total,
+ 1,
+ "the title is still indexed"
+);
+
+ // An empty body counts as "no indexed body": a later projection fills it.
+ let mut second = record(url, "ok");
+ second.mode = "extract".to_string();
+ second.index_text = Some(IndexText::fill_empty("later projected text"));
+ db.record_fetch(second).await.unwrap();
+ assert_eq!(
+ indexed_body(&db, &hash).await.as_deref(),
+ Some("later projected text")
+);
+ }
+
+ #[tokio::test]
+ async fn mixed_writes_keep_exactly_one_index_row_per_page() {
+ let temp = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &temp.path().join("test.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let urls = [
+ "https://example.com/a",
+ "https://example.com/b",
+ "https://example.com/c",
+ ];
+ for (index, url) in urls.iter().enumerate() {
+ let mut page = record(url, "ok");
+ page.index_text = Some(IndexText::replace(format!("page {index} text")));
+ db.record_fetch(page).await.unwrap();
+ let mut extract = record(url, "ok");
+ extract.mode = "extract".to_string();
+ extract.index_text = Some(IndexText::fill_empty(format!("record {index} text")));
+ db.record_fetch(extract).await.unwrap();
+ }
+ let pages: i64 = db
+.read(|connection| {
+ connection.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+ })
+.await
+.unwrap();
+ assert_eq!(pages, 3);
+ assert_eq!(index_rows(&db).await, pages, "one index row per page");
+ for url in urls {
+ let hash = crate::core::url::content_hash(url.as_bytes());
+ assert!(
+ indexed_body(&db, &hash).await.unwrap().contains("page"),
+ "{url} keeps its delivered text"
+);
+ }
+ }
+
+ /// Two pages whose newest extraction is not the one that carries Markdown.
+ fn write_v5_preference_fixture(path: &Path) {
+ let connection = Connection::open(path).unwrap();
+ for script in [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 5).unwrap();
+
+ let insert_page = |url: &str, title: &str| -> i64 {
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
+ title, outcome)
+ VALUES (?1, ?1, ?2, '2026-10-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z',
+ ?3, 'ok')",
+ params![url, crate::core::url::content_hash(url.as_bytes()), title])
+.unwrap();
+ connection.last_insert_rowid()
+ };
+ let insert_extraction = |page_id: i64, result_json: &str, at: &str| {
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
+ VALUES (?1, ?2, 0, 'main')",
+ params![page_id, at])
+.unwrap();
+ let event_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_json,
+ result_hash, record_count, created_at)
+ VALUES (?1, ?2, NULL, ?3, 'result-hash', 1, ?4)",
+ params![page_id, event_id, result_json, at])
+.unwrap();
+ };
+
+ // The delivered Markdown is older; a later extract of the same page is
+ // newer. The backfill must still index the Markdown.
+ let older_markdown = insert_page("https://example.com/older-markdown", "Older Markdown");
+ insert_extraction(
+ older_markdown,
+ r#"{"payload":{"url":"https://example.com/older-markdown"},"markdown":"delivered article body about herons"}"#,
+ "2026-10-01T00:00:00.000Z");
+ insert_extraction(
+ older_markdown,
+ r#"{"records":[{"label":"projection only"}],"record_count":1}"#,
+ "2026-10-03T00:00:00.000Z");
+
+ // The reverse order: the Markdown is the newest, so both rules agree.
+ let newer_markdown = insert_page("https://example.com/newer-markdown", "Newer Markdown");
+ insert_extraction(
+ newer_markdown,
+ r#"{"records":[{"label":"projection only"}],"record_count":1}"#,
+ "2026-10-01T00:00:00.000Z");
+ insert_extraction(
+ newer_markdown,
+ r#"{"payload":{"url":"https://example.com/newer-markdown"},"markdown":"delivered article body about otters"}"#,
+ "2026-10-03T00:00:00.000Z");
+ }
+
+ #[tokio::test]
+ async fn the_backfill_prefers_stored_markdown_over_a_later_projection() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v5-preference.db");
+ write_v5_preference_fixture(&path);
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+ let body_of = |url: &str| -> String {
+ connection
+.query_row(
+ "SELECT f.body FROM pages_fts f JOIN pages p ON p.id = f.rowid
+ WHERE p.url = ?1",
+ params![url],
+ |row| row.get(0))
+.unwrap()
+ };
+ assert_eq!(
+ body_of("https://example.com/older-markdown"),
+ "delivered article body about herons",
+ "the older delivered Markdown wins over a newer record projection"
+);
+ assert_eq!(
+ body_of("https://example.com/newer-markdown"),
+ "delivered article body about otters"
+);
+ let indexed: i64 = connection
+.query_row("SELECT COUNT(*) FROM pages_fts", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(indexed, 2);
+ drop(connection);
+ drop(db);
+ }
+
+ // -----------------------------------------------------------------------
+ // A0 — schema v9: auth_audit (additive) and its GC window
+ // -----------------------------------------------------------------------
+
+ #[test]
+ fn a_v8_database_upgrades_to_the_head_schema_additively_and_reopens_as_a_no_op() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("v8.db");
+ {
+ let connection = Connection::open(&path).unwrap();
+ for script in [
+ SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
+ SCHEMA_V8,
+ ] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 8).unwrap();
+ let now = fmt_time(Utc::now());
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, outcome)
+ VALUES ('https://example.com/v8', 'https://example.com/v8', ?1, ?2, 'ok')",
+ params!["d".repeat(64), now])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO monitors (url, mode, interval_s, created_at, next_due_at)
+ VALUES ('https://example.com/m', 'main', 3600, ?1, ?1)",
+ params![now])
+.unwrap();
+ }
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+
+ let connection = Connection::open(&path).unwrap();
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION, "the binary migrates to the head");
+ for (table, expected) in [("pages", 1_i64), ("monitors", 1), ("auth_audit", 0)] {
+ let count: i64 = connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap();
+ assert_eq!(count, expected, "{table} rows after the head migration");
+ }
+ // v10 defaults: the pre-v10 page is unauthenticated.
+ let labelled: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM pages WHERE authenticated <> 0 OR auth_site IS NOT NULL",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(labelled, 0);
+ let columns: Vec<String> = connection
+.prepare("PRAGMA table_info(auth_audit)")
+.unwrap()
+.query_map([], |row| row.get::<_, String>(1))
+.unwrap()
+.flatten()
+.collect();
+ assert_eq!(
+ columns,
+ vec![
+ "id",
+ "at",
+ "site",
+ "auth_id",
+ "method",
+ "host",
+ "status",
+ "bytes",
+ "outcome",
+ "resolution_ms"
+ ],
+ "auth_audit carries exactly the fields"
+);
+ let indexes: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM sqlite_master
+ WHERE type = 'index' AND name IN ('auth_audit_at', 'auth_audit_site_at')",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(indexes, 2);
+ drop(connection);
+
+ // Reopening is a no-op: the migration is guarded by user_version.
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+ }
+
+ fn auth_sites(path: &Path) -> Vec<String> {
+ let connection = Connection::open(path).unwrap();
+ connection
+.prepare("SELECT site FROM auth_audit ORDER BY at")
+.unwrap()
+.query_map([], |row| row.get::<_, String>(0))
+.unwrap()
+.flatten()
+.collect()
+ }
+
+ #[tokio::test]
+ async fn gc_prunes_auth_audit_rows_outside_the_audit_window() {
+ let temp = tempfile::tempdir().unwrap();
+ let path = temp.path().join("audit.db");
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ drop(db);
+
+ let now = Utc::now();
+ {
+ let connection = Connection::open(&path).unwrap();
+ for (at, site) in [
+ (now - chrono::Duration::days(120), "old"),
+ (now - chrono::Duration::days(31), "borderline"),
+ (now - chrono::Duration::days(2), "recent"),
+ ] {
+ connection
+.execute(
+ "INSERT INTO auth_audit
+ (at, site, auth_id, method, host, status, bytes, outcome, resolution_ms)
+ VALUES (?1, ?2, 'github.com', 'GET', 'github.com', 200, 128, 'ok', 12)",
+ params![fmt_time(at), site])
+.unwrap();
+ }
+ }
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let report = db.gc(RetentionConfig::default(), 90, 7).await.unwrap();
+ assert_eq!(report.auth_audit_pruned, 1, "{report:?}");
+ assert_eq!(auth_sites(&path), vec!["borderline", "recent"]);
+
+ // The window is the operator's `[auth].audit_days`, not a fixed constant.
+ let report = db.gc(RetentionConfig::default(), 30, 7).await.unwrap();
+ assert_eq!(report.auth_audit_pruned, 1, "{report:?}");
+ assert_eq!(auth_sites(&path), vec!["recent"]);
+ }
 }
 
 #[cfg(test)]
 mod v10_drill {
-    use super::*;
+ use super::*;
 
-    /// Build a real v9 file by applying the v1..v9 scripts in order (exactly what
-    /// a pre-upgrade binary left on disk), seed it, then open it with the current
-    /// binary.
-    fn v9_file(path: &Path) {
-        let connection = open_writer(path).unwrap();
-        for script in [
-            SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8,
-            SCHEMA_V9,
-        ] {
-            connection.execute_batch(script).unwrap();
-        }
-        connection.pragma_update(None, "user_version", 9).unwrap();
-        let now = fmt_time(Utc::now());
-        for (index, url) in ["https://example.com/a", "https://example.com/b"]
-            .iter()
-            .enumerate()
-        {
-            connection
-                .execute(
-                    "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
-                                        outcome)
-                     VALUES (?1, ?1, ?2, ?3, ?3, 'ok')",
-                    params![url, format!("{index:064}"), now],
-                )
-                .unwrap();
-            let page_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
-                     VALUES (?1, ?2, 0, 'static')",
-                    params![page_id, now],
-                )
-                .unwrap();
-            let event_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_hash,
-                                              result_json, record_count, created_at)
-                     VALUES (?1, ?2, 'p', ?3, '{\"markdown\":\"x\"}', 1, ?4)",
-                    params![page_id, event_id, format!("{:064}", index + 9), now],
-                )
-                .unwrap();
-        }
-        // A v9 file has no `authenticated` column.
-        let has_column: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name = 'authenticated'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(has_column, 0);
-    }
+ /// Build a real v9 file by applying the v1..v9 scripts in order (exactly what
+ /// a pre-upgrade binary left on disk), seed it, then open it with the current
+ /// binary.
+ fn v9_file(path: &Path) {
+ let connection = open_writer(path).unwrap();
+ for script in [
+ SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8,
+ SCHEMA_V9,
+ ] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 9).unwrap();
+ let now = fmt_time(Utc::now());
+ for (index, url) in ["https://example.com/a", "https://example.com/b"]
+.iter()
+.enumerate()
+ {
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched,
+ outcome)
+ VALUES (?1, ?1, ?2, ?3, ?3, 'ok')",
+ params![url, format!("{index:064}"), now])
+.unwrap();
+ let page_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, mode)
+ VALUES (?1, ?2, 0, 'static')",
+ params![page_id, now])
+.unwrap();
+ let event_id = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO extractions (page_id, fetch_event_id, profile_hash, result_hash,
+ result_json, record_count, created_at)
+ VALUES (?1, ?2, 'p', ?3, '{\"markdown\":\"x\"}', 1, ?4)",
+ params![page_id, event_id, format!("{:064}", index + 9), now])
+.unwrap();
+ }
+ // A v9 file has no `authenticated` column.
+ let has_column: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name = 'authenticated'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(has_column, 0);
+ }
 
-    fn counts(connection: &Connection) -> (i64, i64, i64) {
-        (
-            connection
-                .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
-                .unwrap(),
-            connection
-                .query_row("SELECT COUNT(*) FROM fetch_events", [], |row| row.get(0))
-                .unwrap(),
-            connection
-                .query_row("SELECT COUNT(*) FROM extractions", [], |row| row.get(0))
-                .unwrap(),
-        )
-    }
+ fn counts(connection: &Connection) -> (i64, i64, i64) {
+ (
+ connection
+.query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
+.unwrap(),
+ connection
+.query_row("SELECT COUNT(*) FROM fetch_events", [], |row| row.get(0))
+.unwrap(),
+ connection
+.query_row("SELECT COUNT(*) FROM extractions", [], |row| row.get(0))
+.unwrap())
+ }
 
-    #[test]
-    fn v9_to_v10_preserves_every_count_and_defaults_the_labels() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v9.db");
-        v9_file(&path);
-        {
-            let connection = open_writer(&path).unwrap();
-            assert_eq!(counts(&connection), (2, 2, 2));
-        }
+ #[test]
+ fn v9_to_v10_preserves_every_count_and_defaults_the_labels() {
+ let dir = tempfile::tempdir().unwrap();
+ let path = dir.path().join("v9.db");
+ v9_file(&path);
+ {
+ let connection = open_writer(&path).unwrap();
+ assert_eq!(counts(&connection), (2, 2, 2));
+ }
 
-        let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
-        let connection = open_writer(&path).unwrap();
-        assert_eq!(
-            connection
-                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_VERSION
-        );
-        assert_eq!(counts(&connection), (2, 2, 2), "counts preserved");
-        // Every pre-v10 page is unauthenticated by construction.
-        let labelled: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM pages WHERE authenticated <> 0 OR auth_site IS NOT NULL",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(labelled, 0);
-        // The v10 index exists.
-        let has_index: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'pages_authenticated'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(has_index, 1);
-        drop(db);
-    }
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = open_writer(&path).unwrap();
+ assert_eq!(
+ connection
+.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+.unwrap(),
+ SCHEMA_VERSION
+);
+ assert_eq!(counts(&connection), (2, 2, 2), "counts preserved");
+ // Every pre-v10 page is unauthenticated by construction.
+ let labelled: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM pages WHERE authenticated <> 0 OR auth_site IS NOT NULL",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(labelled, 0);
+ // The v10 index exists.
+ let has_index: i64 = connection
+.query_row(
+ "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'pages_authenticated'",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(has_index, 1);
+ drop(db);
+ }
 
-    #[test]
-    fn a_newer_file_is_refused_without_touching_it() {
-        // What a v9 binary sees for a v10 file, and what this binary sees for a
-        // future file: `version > SCHEMA_VERSION` is a typed refusal, not a
-        // downgrade and not a rewrite (the same check the v9 binary applies).
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v11.db");
-        v9_file(&path);
-        {
-            let connection = open_writer(&path).unwrap();
-            connection
-                .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
-                .unwrap();
-        }
-        let error = Database::open(&path, 1, &FtsConfig::default(), false).unwrap_err();
-        assert!(
-            error.to_string().contains("newer than this binary"),
-            "{error}"
-        );
-        let connection = open_writer(&path).unwrap();
-        assert_eq!(
-            connection
-                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_VERSION + 1,
-            "the refused file is untouched"
-        );
-    }
+ #[test]
+ fn a_newer_file_is_refused_without_touching_it() {
+ // What a v9 binary sees for a v10 file, and what this binary sees for a
+ // future file: `version > SCHEMA_VERSION` is a typed refusal, not a
+ // downgrade and not a rewrite (the same check the v9 binary applies).
+ let dir = tempfile::tempdir().unwrap();
+ let path = dir.path().join("v11.db");
+ v9_file(&path);
+ {
+ let connection = open_writer(&path).unwrap();
+ connection
+.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+.unwrap();
+ }
+ let error = Database::open(&path, 1, &FtsConfig::default(), false).unwrap_err();
+ assert!(
+ error.to_string().contains("newer than this binary"),
+ "{error}"
+);
+ let connection = open_writer(&path).unwrap();
+ assert_eq!(
+ connection
+.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+.unwrap(),
+ SCHEMA_VERSION + 1,
+ "the refused file is untouched"
+);
+ }
+}
+
+#[cfg(test)]
+mod v11_drill {
+ //! / IMP-DEC-FRESHNESS-003: the v10 → v11 backfill is conservative.
+ //! Synthetic, disposable files only; no live store is ever opened here.
+
+ use super::*;
+
+ fn v10_file(path: &Path) {
+ let connection = Connection::open(path).unwrap();
+ for script in [
+ SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8,
+ SCHEMA_V9, SCHEMA_V10,
+ ] {
+ connection.execute_batch(script).unwrap();
+ }
+ connection.pragma_update(None, "user_version", 10).unwrap();
+
+ // A: the only retained success is a 304; the old clock was that 304 time.
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched, outcome)
+ VALUES ('https://example.com/a', 'https://example.com/a', ?1, ?2, ?2, 'not_modified')",
+ params!["a".repeat(64), "2026-10-02T00:00:00.000Z"])
+.unwrap();
+ let a = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, http_status, mode)
+ VALUES (?1, ?2, 0, 304, 'main')",
+ params![a, "2026-10-02T00:00:00.000Z"])
+.unwrap();
+
+ // B: a 200 with an extraction, then a later failure.
+ connection
+.execute(
+ "INSERT INTO pages (url, canonical_url, url_hash, first_seen, last_fetched, outcome)
+ VALUES ('https://example.com/b', 'https://example.com/b', ?1, ?2, ?3,
+ 'error:http_error')",
+ params![
+ "b".repeat(64),
+ "2026-10-01T00:00:00.000Z",
+ "2026-10-03T00:00:00.000Z"
+ ])
+.unwrap();
+ let b = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO fetch_events (page_id, started_at, duration_ms, http_status, mode)
+ VALUES (?1, ?2, 0, 200, 'main')",
+ params![b, "2026-10-01T00:00:00.000Z"])
+.unwrap();
+ let event = connection.last_insert_rowid();
+ connection
+.execute(
+ "INSERT INTO extractions
+ (page_id, fetch_event_id, result_json, result_hash, record_count, created_at)
+ VALUES (?1, ?2, '{\"markdown\":\"old body\"}', 'r', 1, ?3)",
+ params![b, event, "2026-10-01T00:00:00.000Z"])
+.unwrap();
+ connection
+.execute(
+ "INSERT INTO fetch_events
+ (page_id, started_at, duration_ms, http_status, mode, error_kind)
+ VALUES (?1, ?2, 0, 500, 'main', 'http_error')",
+ params![b, "2026-10-03T00:00:00.000Z"])
+.unwrap();
+ }
+
+ fn counts(connection: &Connection) -> (i64, i64, i64) {
+ let count = |table: &str| -> i64 {
+ connection
+.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+ row.get(0)
+ })
+.unwrap()
+ };
+ (count("pages"), count("fetch_events"), count("extractions"))
+ }
+
+ #[tokio::test]
+ async fn v10_to_v11_backfills_the_attempt_pair_and_only_a_provable_success() {
+ let dir = tempfile::tempdir().unwrap();
+ let path = dir.path().join("v10.db");
+ v10_file(&path);
+ let before = {
+ let connection = Connection::open(&path).unwrap();
+ counts(&connection)
+ };
+
+ let db = Database::open(&path, 1, &FtsConfig::default(), false).unwrap();
+ let connection = Connection::open(&path).unwrap();
+
+ let version: i64 = connection
+.query_row("PRAGMA user_version", [], |row| row.get(0))
+.unwrap();
+ assert_eq!(version, SCHEMA_VERSION);
+ assert_eq!(version, 11);
+ assert_eq!(counts(&connection), before, "no row is added or removed");
+
+ // A 304-only history: the attempt pair is honest, the success clock is null.
+ let (seq, last_fetched, failed, attempt_at, content_at): (
+ i64,
+ Option<String>,
+ Option<i64>,
+ Option<String>,
+ Option<String>) = connection
+.query_row(
+ "SELECT write_seq, last_fetched, last_attempt_failed, last_attempt_at,
+ content_fetched_at
+ FROM pages WHERE url_hash = ?1",
+ params!["a".repeat(64)],
+ |row| {
+ Ok((
+ row.get(0)?,
+ row.get(1)?,
+ row.get(2)?,
+ row.get(3)?,
+ row.get(4)?))
+ })
+.unwrap();
+ assert_eq!(seq, 0);
+ assert!(last_fetched.is_none(), "a 304 is never a legacy anchor");
+ assert_eq!(failed, None, "a legacy 304 has an unknown success class");
+ assert_eq!(attempt_at.as_deref(), Some("2026-10-02T00:00:00.000Z"));
+ assert!(content_at.is_none(), "no capture is invented");
+
+ // A 200 event with an extraction is provable, even after a later failure.
+ let (seq, last_fetched, failed, attempt_at): (
+ i64,
+ Option<String>,
+ Option<i64>,
+ Option<String>) = connection
+.query_row(
+ "SELECT write_seq, last_fetched, last_attempt_failed, last_attempt_at
+ FROM pages WHERE url_hash = ?1",
+ params!["b".repeat(64)],
+ |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+.unwrap();
+ assert_eq!(seq, 0);
+ assert_eq!(
+ last_fetched.as_deref(),
+ Some("2026-10-01T00:00:00.000Z"),
+ "the event-scoped 200 is the success clock"
+);
+ assert_eq!(failed, Some(1));
+ assert_eq!(attempt_at.as_deref(), Some("2026-10-03T00:00:00.000Z"));
+ assert!(attempt_at.as_deref() > last_fetched.as_deref());
+
+ let source_write_seq: Option<i64> = connection
+.query_row(
+ "SELECT source_write_seq FROM extractions LIMIT 1",
+ [],
+ |row| row.get(0))
+.unwrap();
+ assert_eq!(source_write_seq, None, "legacy extractions prove no write");
+ drop(db);
+ }
+
+ /// The v11 write matrix, directly on the store: sequences, gates and the
+ /// attempt pair without a network.
+ #[tokio::test]
+ async fn the_write_matrix_assigns_sequences_and_gates_both_halves() {
+ let dir = tempfile::tempdir().unwrap();
+ let db = Database::open(
+ &dir.path().join("matrix.db"),
+ 1,
+ &FtsConfig::default(),
+ false)
+.unwrap();
+ let url = "https://example.com/matrix";
+ let hash = crate::core::url::content_hash(url.as_bytes());
+ let record = |outcome: &str, at: DateTime<Utc>| {
+ let mut record = FetchRecord::new(url, url, &hash);
+ record.site = "example.com".to_string();
+ record.status = Some(if outcome == "ok" { 200 } else { 500 });
+ record.fetched_at = at;
+ record.duration_ms = 1;
+ record.outcome = outcome.to_string();
+ record
+ };
+
+ let t1 = Utc::now() - chrono::Duration::seconds(300);
+ let mut first = record("ok", t1);
+ first.etag = Some("\"v1\"".to_string());
+ first.text_hash = Some(crate::core::url::content_hash(b"matrix body"));
+ first.index_text = Some(IndexText::replace("matrix body"));
+ let mut row = ExtractionRow {
+ profile_hash: "shape".to_string(),
+ result_json: "{\"records\":[]}".to_string(),
+ result_hash: "r".to_string(),
+ record_count: 0,
+ created_at: t1,
+ };
+ row.record_count = 0;
+ first.extraction = Some(row);
+ db.record_fetch(first).await.unwrap();
+
+ let page = db.page(&hash).await.unwrap().unwrap();
+ assert_eq!(page.write_seq, 1);
+ assert_eq!(page.content_write_seq, Some(1));
+ assert_eq!(page.index_write_seq, Some(1));
+ assert_eq!(page.validators_write_seq, Some(1));
+ assert_eq!(page.last_attempt_failed, Some(0));
+ assert_eq!(page.content_fetched_at, page.content_validated_at);
+
+ // A failure: attempt pair only, clocks untouched.
+ let t2 = t1 + chrono::Duration::seconds(60);
+ db.record_fetch(record("error:http_error", t2))
+.await
+.unwrap();
+ let page = db.page(&hash).await.unwrap().unwrap();
+ assert_eq!(page.write_seq, 1);
+ assert_eq!(page.last_attempt_failed, Some(1));
+ assert_eq!(page.last_status, Some(500));
+ assert_eq!(
+ page.content_fetched_at, page.content_validated_at,
+ "capture and validation stay on the last usable 200"
+);
+ let render_mode: Option<String> = db
+.read(move |connection| {
+ connection.query_row(
+ "SELECT render_mode FROM pages WHERE url_hash = ?1",
+ params![hash],
+ |row| row.get(0))
+ })
+.await
+.unwrap();
+ assert_eq!(
+ render_mode.as_deref(),
+ Some("static"),
+ "a failure does not overwrite the success render mode"
+);
+ }
 }

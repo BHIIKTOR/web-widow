@@ -42,18 +42,18 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
 mod send_sync_tests {
-    /// The MCP server is shared across runtime threads and the fetch path runs
-    /// concurrently, so these bounds are part of the design, not an accident.
-    #[test]
-    fn shared_components_are_send_and_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<crate::pipeline::Pipeline>();
-        assert_send_sync::<crate::store::Store>();
-        assert_send_sync::<crate::fetch::http::HttpClient>();
-        assert_send_sync::<crate::fetch::gate::HostGate>();
-        assert_send_sync::<crate::fetch::ssrf::SsrfGate>();
-        assert_send_sync::<crate::mcp::WebWidowServer>();
-        #[cfg(feature = "render")]
-        assert_send_sync::<crate::render::BrowserRenderer>();
-    }
+ /// The MCP server is shared across runtime threads and the fetch path runs
+ /// concurrently, so these bounds are part of the design, not an accident.
+ #[test]
+ fn shared_components_are_send_and_sync() {
+ fn assert_send_sync<T: Send + Sync>() {}
+ assert_send_sync::<crate::pipeline::Pipeline>();
+ assert_send_sync::<crate::store::Store>();
+ assert_send_sync::<crate::fetch::http::HttpClient>();
+ assert_send_sync::<crate::fetch::gate::HostGate>();
+ assert_send_sync::<crate::fetch::ssrf::SsrfGate>();
+ assert_send_sync::<crate::mcp::WebWidowServer>();
+ #[cfg(feature = "render")]
+ assert_send_sync::<crate::render::BrowserRenderer>();
+ }
 }

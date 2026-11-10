@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>v0.6 tall fixture</title>
+<html lang="en"><head><meta charset="utf-8"><title> tall fixture</title>
 <style>html,body{margin:0}.block{height:1200px;background:linear-gradient(#ffffff,#dddddd)}
 #middle{height:80px;background:#cccccc}</style>
 </head><body><h1>Tall capture fixture</h1>
@@ -10,12 +10,12 @@
 <script>
 let timer;
 addEventListener('scroll', () => {
-  clearTimeout(timer);
-  timer = setTimeout(() => {
-    const middle = document.getElementById('middle');
-    fetch('/scroll?y=' + Math.round(window.scrollY) +
-          '&top=' + Math.round(middle.getBoundingClientRect().top));
-  }, 60);
+ clearTimeout(timer);
+ timer = setTimeout(() => {
+ const middle = document.getElementById('middle');
+ fetch('/scroll?y=' + Math.round(window.scrollY) +
+ '&top=' + Math.round(middle.getBoundingClientRect().top));
+ }, 60);
 });
 </script>
 </body></html>

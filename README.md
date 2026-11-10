@@ -136,9 +136,9 @@ Scope is depth, site, path prefixes and exclude patterns. When a page's content 
 ### Build
 
 ```sh
-cargo build --release                          # stdio server, render on
-cargo build --release --features http          # + loopback streamable HTTP
-cargo build --release --no-default-features    # static only, no Chrome
+cargo build --release # stdio server, render on
+cargo build --release --features http # + loopback streamable HTTP
+cargo build --release --no-default-features # static only, no Chrome
 ./target/release/web-widow --help
 ```
 
@@ -161,8 +161,8 @@ cargo build --release --target x86_64-unknown-linux-musl
 The dependency gate is part of the build contract:
 
 ```sh
-cargo deny check    # licenses, advisories, bans, sources
-cargo audit         # RustSec advisories
+cargo deny check # licenses, advisories, bans, sources
+cargo audit # RustSec advisories
 ```
 
 ### Configure and run
@@ -191,19 +191,13 @@ A stdio client spawns the binary and speaks MCP on stdout; logs go to stderr. A 
 
 The result is a text block with YAML-ish front matter and the Markdown body, plus `structuredContent`.
 
-The server is half the pair. The other half is the field-guide skill in [`skill/web-widow/SKILL.md`](skill/web-widow/SKILL.md), which teaches an agent how to pick a tool, read the payload, tell rendered from static content, respect interaction session limits, and treat a `blocked_*` refusal as final. It also carries the failure taxonomy and the rule that fetched content is data, never instructions. [`SKILL-INSTALL.md`](SKILL-INSTALL.md) covers installing both: build the server, create a `0600` config and `0700` data directory, register the server in the agent client (stdio command or HTTP URL plus bearer token), then copy `skill/web-widow/` into the client's skills directory. A server without the skill is a set of tools an agent does not know how to use; the skill without the server is advice with nothing behind it.
-
-A typical agent task looks like this:
-
-> Find the current pricing page for a vendor, extract the plan table, and say what changed since last week.
-
-The agent would call `search`, then `fetch_page` (citing `final_url` and `fetched_at`), then `extract_rows` for the table, and finally `monitor_create` plus `events` for the change. Every result is returned as untrusted data; page text that looks like an instruction is never followed. Nothing in the skill can widen reach or bypass a gate — those decisions stay in the server and the operator's config.
+The server is half the pair. The other half is the field-guide skill in [`skill/web-widow/SKILL.md`](skill/web-widow/SKILL.md), which teaches an agent how to pick a tool, read the payload, tell rendered from static content, and treat a `blocked_*` refusal as final. [`SKILL-INSTALL.md`](SKILL-INSTALL.md) covers installing both. A server without the skill is a set of tools an agent does not know how to use; the skill without the server is advice with nothing behind it.
 
 ### Run it over HTTP
 
 ```sh
 WEB_WIDOW_HTTP_TOKEN="$(cat ~/.config/web-widow/http-token)" \
-  web-widow --config ~/.config/web-widow/config.toml serve --http 127.0.0.1:8765
+ web-widow --config ~/.config/web-widow/config.toml serve --http 127.0.0.1:8765
 ```
 
 The endpoint is `http://127.0.0.1:8765/mcp`. Every request needs a bearer token. The transport is stateless, POST only, and refuses a non-loopback bind unless `--allow-non-loopback` is passed deliberately. Local HTTPS is available on the same listener with `[http].tls = true`; see [Running it](#running-it).
@@ -214,8 +208,8 @@ A config file is optional. The defaults in `config.example.toml` are what the bi
 
 ```toml
 [fetch]
-contact = "crawler@example.com"    # part of the User-Agent
-allow_hosts = []                   # exact hosts or CIDRs; config file only
+contact = "crawler@example.com" # part of the User-Agent
+allow_hosts = [] # exact hosts or CIDRs; config file only
 
 [storage]
 # data_dir defaults to $XDG_DATA_HOME/web-widow; must be 0700
@@ -255,13 +249,13 @@ Neither is reachable from the MCP tool surface, an environment variable or a CLI
 
 ```toml
 [render]
-# chrome_path = "/usr/bin/chromium"   # recommended; config file only
-discovery = true                      # else check $CHROME_PATH and well-known paths
+# chrome_path = "/usr/bin/chromium" # recommended; config file only
+discovery = true # else check $CHROME_PATH and well-known paths
 max_concurrent_pages = 2
-settle_ms = 500                       # network-quiet window after the load event
-ceiling_ms = 10000                    # hard navigation ceiling, yields rendered_partial
-max_bytes = 5242880                   # 5 MiB transferred per page
-max_requests = 200                    # requests per page
+settle_ms = 500 # network-quiet window after the load event
+ceiling_ms = 10000 # hard navigation ceiling, yields rendered_partial
+max_bytes = 5242880 # 5 MiB transferred per page
+max_requests = 200 # requests per page
 restart_max = 3
 restart_window_s = 600
 launch_timeout_ms = 20000
@@ -312,8 +306,14 @@ A crawl, a monitor check, a feed read, a sitemap fetch, a PDF, a screenshot and 
 
 This list is the honest part. Read it before pointing the browser at a hostile page.
 
-- A rendered page loads its own subresources. The gate covers the top-level navigation, not every CSS, font or image URL the page names.
-- DNS is resolved by the vet and again by the browser, so a rebinding zone can still reach a private address.
+- A rendered page loads its own subresources. The gate covers the top-level navigation, not every CSS, font or image URL the page names ().
+- **DNS pinning ().** The gate resolves each hop once and the connection is pinned to exactly the vetted
+ addresses (`resolve_to_addrs`); there is no second lookup at connect time, and an empty vetted set fails
+ closed. `fetch.allow_hosts` hostnames are resolved and pinned the same way. This covers the shared HTTP
+ path (fetch_page, extract, extract_rows, fetch_feed, sitemap, pdf_extract, robots, crawl, monitor).
+- **Render-path residual (disclosed).** The rendered browser path still resolves names inside
+ Chrome, so a rebinding zone can reach a private address there. Chromium's own private-network protections
+ are the remaining control; this is a disclosed residual, not a solved problem.
 - The launch flags disable DNS prefetch and non-proxied WebRTC UDP. WebRTC and DNS-only channels remain outside the gate.
 - Worker-created targets (a nested `Worker`, `importScripts`, a `SharedWorker` created inside a worker) are an unvetted egress channel. This is a known hole, not an untested path.
 - The interaction gate is an SSRF filter, not an egress filter. It stops a page reaching your private network; it does not stop a page sending data to a public host.
@@ -357,14 +357,15 @@ The sections above describe intent. This part is the contract.
 
 ### `fetch_page` payload
 
-Text block: YAML-ish front matter, then the Markdown body. `structuredContent` carries `url`, `final_url`, `status`, `content_type`, `title`, `byline`, `site_name`, `published`, `lang`, `markdown_chars`, `markdown`, `truncated`, `limit_hit`, `render_mode`, optional `render_warning`, `cached`, `fetched_at`, `duration_ms`, `links`, `links_requested`, `links_truncated`, optional `render_quality`, optional `content_warning`, `word_count`.
+Text block: YAML-ish front matter, then the Markdown body. `structuredContent` carries `url`, `final_url`, `status`, `content_type`, `title`, `byline`, `site_name`, `published`, `lang`, `markdown_chars`, `markdown`, `truncated`, `limit_hit`, `render_mode`, optional `render_warning`, `cached`, `fetched_at`, `validated_at`, `last_attempt_at`, `last_attempt_failed`, `duration_ms`, `links`, `links_requested`, `links_truncated`, optional `render_quality`, optional `content_warning`, `word_count`.
 
 - `links` is **always a list**. It is `[]` when `include_links` was false or omitted; `links_requested` says which request shape produced the answer. A cached answer re-derives `links_requested` from the current call. A client that used `links: null` to mean "not requested" must read `links_requested`.
 - `markdown` is the delivered body — the Markdown the text block carries, without the front matter — when `include_content` is true (the default). `include_content: false` omits it from `structuredContent` and turns the text block into a one-line metadata summary (`url`, `status`, `title`, `words`, `render_mode`). The body crosses twice when included; the cache stores it once and a cache hit reconstructs it. `max_chars`/`markdown_chars` bound it.
 - `render_quality` is `ok` or `thin` (fewer than 200 main-content words) on rendered `fetch_page` **and `extract`** results. It is absent on `static` and `static_fallback`, where a short page is simply a short page. It is not part of `crawl_results`.
+- **Freshness facts.** Every content result carries four independent facts (schema v11). `fetched_at` is the capture of the body/records/snippet you got back. `validated_at` is the last successful origin confirmation of **that same representation**: a usable 200 sets capture = validation; a 304 sets it only when the validators actually sent belong to the write that produced the served row; a local cache read uses that row's own write's confirmation; a failed attempt and an unclassifiable 304 leave it null. `last_attempt_at` is the completion time of the last recorded terminal attempt, and `last_attempt_failed` is `false` (usable 200 or bound 304), `true` (terminal failure) or `null` (unknown: no attempt, or a 304 that could not be bound). Attribution is row → write (`pages.write_seq`, `extractions.source_write_seq`), never a content hash, so two representations with identical Markdown cannot borrow each other's confirmation.
 - `content_warning: "interstitial_suspect"` is set only for the whole conjunction: status 200, the final URL drifted from the requested URL in host or path, the final path has a **whole** verification/login segment (`account-verification`, `verification`, `verify`, `challenge`, `captcha`, `login`, `sign-in`, `signin`, `security-check`, `checkpoint`, `auth`, `authorize`, `validate`, case-insensitive), and `word_count < 50`. It is a warning, never an error, and the body is still delivered; it appears in the text front matter too. A direct login page (no redirect drift) and a short article on a normal path do **not** warn. `render_quality` and `render_mode` keep their meanings independently.
 
-Errors are in-band: `isError: true` with `structuredContent.error = { code, message, detail? }`, using these codes (`invalid_url`, `blocked_scheme`, `blocked_private_address`, `blocked_by_robots`, `dns_error`, `tls_error`, `timeout`, `too_large`, `unsupported_content_type`, `http_error`, `render_unavailable`, ...).
+Errors are in-band: `isError: true` with `structuredContent.error = { code, message, detail? }`, using the codes from (`invalid_url`, `blocked_scheme`, `blocked_private_address`, `blocked_by_robots`, `dns_error`, `tls_error`, `timeout`, `too_large`, `unsupported_content_type`, `http_error`, `render_unavailable`,...).
 
 ### Error code families
 
@@ -375,29 +376,29 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "query": "rust async runtime comparison",
-  "site": "tokio.rs",          // optional bare host or http(s) URL
-  "freshness": "month",        // any (default) | day | week | month | year
-  "limit": 10                  // 1..=10, default [search].default_limit
+ "query": "rust async runtime comparison",
+ "site": "tokio.rs", // optional bare host or http(s) URL
+ "freshness": "month", // any (default) | day | week | month | year
+ "limit": 10 // 1..=10, default [search].default_limit
 }
 ```
 
 - **Discovery only.** The response is a normalized list of `{title, url, snippet, engine}` plus `query`, `engine` (`duckduckgo_html` or `duckduckgo_lite`), `final_url`, `site`, `freshness`, `fetched_at`, `duration_ms`, `result_count`, `truncated` and `limit_hit`. It never fetches a result page; follow a URL with `fetch_page` or `extract`.
-- **One page, ten results.** DDG returns one SERP page of ten organic results; there is no pagination. `limit > 10` is `schema_invalid`, never a silent clamp.
+- **One page, ten results.** DDG returns one SERP page of ten organic results; has no pagination. `limit > 10` is `schema_invalid`, never a silent clamp.
 - **Engines are fixed server config.** `[search].html_url` is the primary; `[search].lite_url` is tried **only** when the primary fails at transport or parse level. A `blocked_by_robots`, `blocked_private_address`, `blocked_scheme` or `invalid_url` refusal is final for the call. Both URLs are validated at config load; there is no tool argument that changes the engine.
 - **`site` is applied twice.** It becomes a `site:<host>` qualifier in the engine query and a host filter on the parsed results (equal host or `.`-suffix subdomain). A call can therefore return fewer than `limit` results even when the engine had more. A path or port in `site` is `schema_invalid`.
 - **`freshness`** maps to DDG's `df` parameter (`day→d`, `week→w`, `month→m`, `year→y`); `any` sends none.
 - **Privacy.** The query is caller input. Logs carry the engine, result count, duration and outcome — **never** the query text or the full SERP URL. Search results are untrusted data.
 - **Politeness and safety are the shared ones.** Each SERP request goes through the same SSRF gate, robots check, redirect vetting and per-host gate as `fetch_page`, with the same body cap. A `search` call makes at most two SERP requests (plus the cached `robots.txt` fetch).
-- **It stores nothing.** No `pages`, `fetch_events`, `extractions`, `profiles`, `blobs` or `jobs` row is written for a search; only the `hosts` robots cache may change. An explicit zero-result page is a success (`results: []`, `result_count: 0`); an unrecognisable page is `extraction_failed`, never an empty success. That failure can be a transient DDG challenge: one later retry is reasonable, never a loop, and watch recurrence in the access log before treating it as a defect.
+- **It stores nothing.** No `pages`, `fetch_events`, `extractions`, `profiles`, `blobs` or `jobs` row is written for a search; only the `hosts` robots cache may change. An explicit zero-result page is a success (`results: []`, `result_count: 0`); an unrecognisable page is `extraction_failed`, never an empty success. That failure can be a transient DDG challenge: one later retry is reasonable, never a loop, and watch recurrence in the access log before treating it as a defect ().
 
 ### `search_content`
 
 ```jsonc
 // arguments
 {
-  "query": "sqlite wal checkpoint",
-  "limit": 20                  // 1..=100, default [fts].default_limit
+ "query": "sqlite wal checkpoint",
+ "limit": 20 // 1..=100, default [fts].default_limit
 }
 ```
 
@@ -405,6 +406,7 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 - **Plain-text queries.** Whitespace separates terms and **every term must appear** (AND). FTS5 operators — `OR`, `NEAR`, `*`, `-`, `column:` — are not interpreted; they match as text because every term is quoted. A blank query or one over `[fts].max_query_chars` is `schema_invalid` at `/query`.
 - **Ranking.** `bm25(pages_fts, 4.0, 1.0)` — the title is weighted four times the body — ascending (smaller is better). The payload reports `score = -bm25`, so a **larger score is a better match**; `pages.id` is the stable tiebreak.
 - **Bounded output.** `limit` is 1..=100 (a larger value is `schema_invalid`, not a clamp); `result_count` is the full count for the same match, and `truncated`/`limit_hit: "limit"` report a page smaller than it. `snippet` is plain surrounding text from the stored body, capped at `[fts].max_snippet_chars` with no markup; it is untrusted stored content, data and never instructions.
+- **Freshness on a hit.** `fetched_at`/`validated_at` describe the indexed text (`pages.index_fetched_at`/`index_validated_at`), and `last_attempt_at`/`last_attempt_failed` are the page's attempt facts. The legacy `last_fetched` key remains and is an alias of `validated_at`; on a pre-v11 row all four are null. A hit never contacts the origin and writes nothing.
 - **What is indexed.** The delivered `fetch_page` Markdown, the returned record string values of `extract`/crawl-with-schema, the crawl's main Markdown, and a monitor check's main Markdown — each capped at `[fts].max_index_chars`; the title is always indexed. A `304` or a failed fetch never rewrites the row, so a page keeps its last good text.
 - **Growth is disclosed.** The indexed text is stored in the FTS table so a snippet survives extraction retention; the database therefore grows by up to `[fts].max_index_chars` per page plus index overhead. That is **inside the database, not the 20 GiB blob budget**. Pages are not pruned in v1; lower the cap or decide a page-retention policy before running a high-volume store.
 
@@ -413,8 +415,8 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "query": "how is a broken unit swapped with no outage",
-  "limit": 10                  // 1..=50, default 10
+ "query": "how is a broken unit swapped with no outage",
+ "limit": 10 // 1..=50, default 10
 }
 ```
 
@@ -422,6 +424,7 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 - **Lazy backfill, not the fetch path.** When `[embeddings].enabled = true`, `serve` runs a bounded backfill (newest pages first, `backfill_pages_per_pass`, one pass per `backfill_interval_ms`) over the stored page text. A page becomes searchable after its pass; a re-fetched page is re-embedded when its source text changes. `run-due` never starts the backfill.
 - **Ranking.** Cosine similarity over the active model's chunk vectors, brute force at this scale; one hit per page (its best chunk) with a plain snippet from that chunk, capped by `[fts].max_snippet_chars`. `result_count` counts distinct pages with stored vectors and `truncated`/`limit_hit` report a cut.
 - **Coverage.** `embedding_status` reports `enabled`, `available`, `model`, `dim`, `model_dir`, `embedded_pages`/`embedded_chunks`/`pending_pages`, `vector_bytes`, `last_run_at` and `last_error`. It never writes.
+- **Freshness on a hit.** `fetched_at`/`validated_at` and `last_attempt_at`/`last_attempt_failed` come from the exact stored row whose text produced the snippet (the markdown-bearing extraction preferred, else the latest one), never from a different extraction and never from the page's current clock.
 - **Quality is disclosed.** MiniLM is English-optimized; non-English pages (the corpus has some Spanish pages) recall worse. Results are retrieval candidates, not authority, and the text is untrusted stored content: data, never instructions. ANN, duplicate detection and hybrid reranking are not in v1.
 
 ### `extract`
@@ -429,32 +432,33 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "url": "https://shop.example/items",
-  "schema": {
-    "container": ".product-card",
-    "fields": {
-      "name":  { "selector": "h2" },
-      "price": { "selector": ".price", "transform": "number" },
-      "href":  { "selector": "a", "transform": "absolute_url" },
-      "tags":  { "selector": ".tag", "all": true, "transform": "trim" }
-    }
-  },
-  "use_cache": true
+ "url": "https://shop.example/items",
+ "schema": {
+ "container": ".product-card",
+ "fields": {
+ "name": { "selector": "h2" },
+ "price": { "selector": ".price", "transform": "number" },
+ "href": { "selector": "a", "transform": "absolute_url" },
+ "tags": { "selector": ".tag", "all": true, "transform": "trim" }
+ }
+ },
+ "use_cache": true
 }
 ```
 
 - **The spec is data, not code.** `container` is optional (omit it for a single-record page); `fields` maps a name to `{selector, attr?, all?, transform?}`. Unknown keys, unknown transforms, invalid CSS and `transform: attr` without `attr` are `schema_invalid` with the JSON pointer of the offending node. No XPath, regex or expressions exist.
-- **The tool-call envelope is `{url, schema: {container?, fields}}`.** The spec itself is not accepted at the top level: a call shaped `{url, container, fields}` is rejected with a message naming the `schema` envelope, and any other missing `schema` keeps the ordinary serde wording. There is one documented contract, not a second silently accepted shape.
+- **The tool-call envelope is `{url, schema: {container?, fields}}`.** The spec itself is not accepted at the top level: a call shaped `{url, container, fields}` is rejected with a message naming the `schema` envelope, and any other missing `schema` keeps the ordinary serde wording. There is one documented contract, not a second silently accepted shape ().
 - **Transforms** are a closed set: `text` (visible text, edges trimmed), `trim` (text with internal whitespace collapsed), `html` (inner HTML), `attr` (reads `attr`), `absolute_url` (resolves the `attr`, else `href`, else `src` against the response's **final** URL) and `number` (parses a number, understanding currency symbols and both `1,234.56` and `1.234,56`). An `attr` without a transform implies `attr`.
-- **`text`/`trim`/`number` see visible text only.** `script`, `style`, `template` and `head` subtrees are skipped before collecting a field's text; a field that *is* a `<script>` returns `""`. `html` and `attr` still return source by definition. A 178k inline-script body therefore no longer becomes the field value.
+- **`text`/`trim`/`number` see visible text only.** `script`, `style`, `template` and `head` subtrees are skipped before collecting a field's text; a field that *is* a `<script>` returns `""`. `html` and `attr` still return source by definition. This is the fix: a 178k inline-script body no longer becomes the field value.
 - **`:main` is the article `fetch_page mode=main` delivers.** `container: ":main"` (exact, trimmed) evaluates fields inside the **`body` of that same readability article** — one readability pass per acquisition, so the scope and the delivered Markdown describe the same source. The article wrapper `<html>`/`<head>` is never a field root. If readability finds nothing usable, the scope falls back to the document body. It works identically for `extract`, `crawl_start` and `monitor_create`. `":main"` as a *field* selector is still invalid CSS and returns `schema_invalid` at that field's pointer.
-- **`selector: "*"` is the record scope itself.** A field selector of exactly `*` (trimmed) selects the scope element, not its first descendant: `text` → its visible text, `html` → its inner HTML, `attr` → the named attribute, and `all: true` → a one-element array. With no container the scope is the document root, so `*` is the page's visible text. Any other selector (including `* .item` or `div *`) keeps ordinary CSS semantics.
+- **`selector: "*"` is the record scope itself.** A field selector of exactly `*` (trimmed) selects the scope element, not its first descendant: `text` → its visible text, `html` → its inner HTML, `attr` → the named attribute, and `all: true` → a one-element array. With no container the scope is the document root, so `*` is the page's visible text. Any other selector (including `*.item` or `div *`) keeps ordinary CSS semantics.
 - **Field selectors are descendant-scoped** within the record root (the container element itself is not a match, except for the `*` form above).
 - **Failures are explicit.** A scalar selector that matches nothing is reported as `selector_no_match` with the field absent — never `null` or `""`. An `all: true` field that matches nothing is an empty array. Transform failures are `attr_missing`, `url_join_failed` or `number_parse_failed`. A container that matches nothing returns `records: []` plus a page-level error (`record: null`), never a fabricated record.
 - **Caps and counts.** Records are capped by `extract.max_records` (5 000); `record_count` is the full match count and `truncated`/`limit_hit` (`max_records`) say so. Two additive presentation caps bound the response: `max_field_chars` (default `[extract].max_field_chars`, 16 384) cuts every string value and array element and reports `truncated_fields`; `max_chars` stops records in evaluation order at the serialized budget and reports `limit_hit: "max_chars"`. Precedence is `max_records` → `max_chars` → `max_field_chars`. The cache stores the **full** records (caps are presentation-only), so a later larger-cap call still sees the full values.
 - **Rendered thin signal.** `render_quality: "ok" | "thin"` is present on `rendered`/`rendered_partial` extract results (an approximation from the delivered page's visible words), absent on static/static_fallback, and also in the text front matter.
-- **Evaluation is independent of Markdown.** The spec runs over the parsed DOM with one parse per page, so content that `mode=main` omits from its Markdown is still reachable by a spec.
-- **Reuse.** `use_cache: true` may answer from a stored extraction for the same page and spec inside `extract.cache_freshness_s`, otherwise the page is revalidated and a 304 reuses the stored result. `profiles` stores each spec once, keyed by the BLAKE3 hash of its canonical JSON. The spec text is part of that identity, so the `:main` scope change and the `*` meaning do **not** change `profiles.hash`: a record cached under the pre-v0.4 semantics can be served for up to `extract.cache_freshness_s` (default 300 s) after an upgrade — use `use_cache: false` when the new scope matters immediately.
+- **Evaluation is independent of Markdown.** The spec runs over the parsed DOM with one parse per page, so content that `mode=main` omits from its Markdown is still reachable by a spec (see in the milestone plan).
+- **Reuse.** `use_cache: true` may answer from a stored extraction for the same page and spec inside `extract.cache_freshness_s`, otherwise the page is revalidated and a 304 reuses the stored result. `profiles` stores each spec once, keyed by the BLAKE3 hash of its canonical JSON. The spec text is part of that identity, so the `:main` scope change and the `*` meaning do **not** change `profiles.hash`: a record cached under the pre- semantics can be served for up to `extract.cache_freshness_s` (default 300 s) after an upgrade — use `use_cache: false` when the new scope matters immediately.
+- **Freshness facts.** `fetch_page`'s four facts apply here too, bound to the served extraction row: a 304 sets `validated_at` only when the validators sent belong to that row's write, and a cached answer uses that row's own capture plus its write's confirmation. A failed attempt advances neither clock.
 - **Empty is a value.** A matched `text` field with nothing visible returns `""` and is not a `field_error`; `field_errors` reports selectors/attributes that did not match.
 
 ### `extract_rows`
@@ -462,16 +466,16 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "url": "https://example.com/prices.csv",
-  "format": "auto",            // auto | csv | tsv | json | html_table
-  "selector": "table.results", // html_table only; first <table> when omitted
-  "delimiter": ",",            // csv only; omit to sniff
-  "header_row": true,          // csv/tsv/html_table default true
-  "json_pointer": "/items",    // json only; default "" (document root)
-  "limit": 200,                // 1..=1000
-  "max_field_chars": 8000,     // 1..=20000
-  "render": "auto",            // html tables only: auto|never|always
-  "use_cache": false
+ "url": "https://example.com/prices.csv",
+ "format": "auto", // auto | csv | tsv | json | html_table
+ "selector": "table.results", // html_table only; first <table> when omitted
+ "delimiter": ",", // csv only; omit to sniff
+ "header_row": true, // csv/tsv/html_table default true
+ "json_pointer": "/items", // json only; default "" (document root)
+ "limit": 200, // 1..=1000
+ "max_field_chars": 8000, // 1..=20000
+ "render": "auto", // html tables only: auto|never|always
+ "use_cache": false
 }
 ```
 
@@ -489,15 +493,15 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // recipe_save
 {
-  "name": "shop:products",
-  "schema": {"container": ".product-card", "fields": {"name": {"selector": "h2"}}},
-  "description": "product cards on the shop"
+ "name": "shop:products",
+ "schema": {"container": ".product-card", "fields": {"name": {"selector": "h2"}}},
+ "description": "product cards on the shop"
 }
 
 // recipe_apply
 {
-  "name": "shop:products", "version": 1,
-  "url": "https://shop.example/items", "use_cache": true
+ "name": "shop:products", "version": 1,
+ "url": "https://shop.example/items", "use_cache": true
 }
 ```
 
@@ -512,9 +516,9 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "url": "https://example.com/report.pdf",
-  "max_pages": 200,            // 1..=[pdf].max_pages (default 200)
-  "max_chars": 1000000         // 1..=[pdf].max_chars (default 1 000 000)
+ "url": "https://example.com/report.pdf",
+ "max_pages": 200, // 1..=[pdf].max_pages (default 200)
+ "max_chars": 1000000 // 1..=[pdf].max_chars (default 1 000 000)
 }
 ```
 
@@ -523,7 +527,7 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 - **Caps.** Body `[pdf].max_bytes` (default 32 MiB); `max_pages` and `max_chars` may only lower the server ceilings; truncation is at a page boundary with `truncated`/`limit_hit`. A single first page larger than `max_chars` is cut at the character cap (documented edge case) so the delivered Markdown stays bound.
 - **Typed failures.** `pdf_encrypted` (a real user password; an empty-user-password PDF opens normally and is not an error), `pdf_invalid` (malformed; a Rust parser panic is caught), `render_unavailable` when the native PDFium library cannot be loaded (the message names `[pdf].pdfium_path` / `[pdf].pdfium_discovery`), `unsupported_content_type` when the body is neither `application/pdf` nor starts with `%PDF-`, the normal `http_error` for a non-2xx response, and `too_large` for the body cap.
 - **Store and index.** A complete text layer (`outcome: "ok"`) becomes a page row (`content_type: "application/pdf"`, `render_mode: "pdf"`, `outcome: "ok"`, the PDF bytes as the raw blob), an extraction row with the Markdown, and one `pages_fts` row (`IndexText::replace`, the delivered page text). `search_content` then finds the PDF text, and a later HTML acquisition of the same URL replaces it. A `no_text_layer` or `partial` result stores nothing.
-- **Native engine.** PDFium (`libpdfium.so`, release 8125) is loaded through `libloading` once per process and parsing is serialized by a process-wide mutex. `[pdf].pdfium_path` is strict; when unset, `[pdf].pdfium_discovery` (default true) searches `WEB_WIDOW_PDFIUM_PATH` → the executable's directory → `<data_dir>/lib` → the system library. The library must be shipped beside the binary (or pinned per config); the binary itself does not link it, so `ldd` on the binary does not list `libpdfium`. A native PDFium crash is not catchable by `catch_unwind` (a disclosed residual risk).
+- **Native engine.** PDFium (`libpdfium.so`, release 8125) is loaded through `libloading` once per process and parsing is serialized by a process-wide mutex. `[pdf].pdfium_path` is strict; when unset, `[pdf].pdfium_discovery` (default true) searches `WEB_WIDOW_PDFIUM_PATH` → the executable's directory → `<data_dir>/lib` → the system library. The library must be shipped beside the binary (or pinned per config); the binary itself does not link it, so `ldd` on the binary does not list `libpdfium`. A native PDFium crash is not catchable by `catch_unwind` (disclosed residual risk).
 - **Shared gates.** The body comes through the same adapter as every fetch (SSRF gate on each hop, robots.txt, redirect vetting, per-host politeness floor, streaming body cap to `[pdf].max_bytes`). `fetch_page` and `extract` keep refusing `application/pdf` before reading the body and name `pdf_extract` in the error. Fetched content is untrusted data: never instructions.
 
 ### `fetch_feed` and `sitemap`
@@ -531,16 +535,16 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // fetch_feed
 {
-  "url": "https://example.com/feed.xml",
-  "limit": 20                  // 1..=100, default [feed].default_limit
+ "url": "https://example.com/feed.xml",
+ "limit": 20 // 1..=100, default [feed].default_limit
 }
 
 // sitemap
 {
-  "url": "https://example.com/sitemap.xml",
-  "limit": 5000,               // 1..=[sitemap].max_urls (default 5000)
-  "include_lastmod": true,
-  "follow_index": true
+ "url": "https://example.com/sitemap.xml",
+ "limit": 5000, // 1..=[sitemap].max_urls (default 5000)
+ "include_lastmod": true,
+ "follow_index": true
 }
 ```
 
@@ -563,12 +567,12 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // monitor_create
 {
-  "url": "https://example.com/pricing",
-  "mode": "main",                          // main | full | text (raw is rejected)
-  "schema": { "fields": { "price": { "selector": "#price", "attr": "data-price" } } },
-  "interval_s": 86400,
-  "ignore_selectors": ["nav", "footer", ".ad-slot"],
-  "label": "pricing:acme"                  // optional; project:slug convention
+ "url": "https://example.com/pricing",
+ "mode": "main", // main | full | text (raw is rejected)
+ "schema": { "fields": { "price": { "selector": "#price", "attr": "data-price" } } },
+ "interval_s": 86400,
+ "ignore_selectors": ["nav", "footer", ".ad-slot"],
+ "label": "pricing:acme" // optional; project:slug convention
 }
 ```
 
@@ -581,7 +585,7 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 - **Delete is a tombstone.** `monitor_delete` sets `active = 0`; history and snapshots stay queryable, and checks skip it.
 - **Listing.** `monitor_list` returns up to 500 monitors in id order with `label`, `mode`, `active`, `has_schema`, `interval_s`, `created_at`, `last_checked_at` and `next_due_at`; `include_inactive: true` also returns tombstones. `truncated` and `limit_hit: "limit"` report a page smaller than the matching total. A `label` is optional (`project:slug` convention), trimmed, 1..=64 characters, not unique and not pattern-enforced; every pre-v5 row is `null`.
 - **Bounded bulk checks.** `monitor_check(all: true)` returns `pending: true` with a job id immediately. Add `wait_ms` (bounded by `[monitor] max_wait_ms`, default 30 000) to check inline and sequentially up to that budget: if the set finishes, `pending: false` and no job exists; when the deadline hits between monitors, the remainder is enqueued as **one** job with the remaining ids and the partial typed results are returned. One in-flight check may overrun by at most one check. `monitor_id` with `wait_ms` is `schema_invalid`.
-- **Scheduler: opt-in in-process timer.** With `[scheduler].enabled = true` (default **false**), `serve` runs a resident timer that checks due monitors via the same `run_due` pass; `tick_ms` (default 30 s) and `max_checks_per_tick` (also clamped by `[monitor].max_checks_per_call`) bound each pass. `run-due` is unchanged, and one driver per instance is enforced by the data-directory lock: a local `run-due` fails while the server runs, while `run-due --http` goes through the server (the per-monitor lock and `next_due_at` re-read prevent doubles). Default off keeps cron/systemd valid.
+- **Scheduler: opt-in in-process timer (amended).** The decision chose no scheduler. amends it: with `[scheduler].enabled = true` (default **false**), `serve` runs a resident timer that checks due monitors via the same `run_due` pass; `tick_ms` (default 30 s) and `max_checks_per_tick` (also clamped by `[monitor].max_checks_per_call`) bound each pass. `run-due` is unchanged, and one driver per instance is enforced by the data-directory lock: a local `run-due` fails while the server runs, while `run-due --http` goes through the server (the per-monitor lock and `next_due_at` re-read prevent doubles). Default off keeps cron/systemd valid.
 - **Retention.** The newest 20 snapshots per monitor plus every change point (and the snapshots its diffs reference) survive GC; blobs are retained while a page or snapshot references them.
 
 #### `events`
@@ -589,11 +593,11 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // arguments
 {
-  "format": "json",          // json (default) | rss
-  "monitor_id": null,        // one monitor
-  "since": "2026-01-01T00:00:00Z",  // RFC3339, inclusive
-  "limit": 50,               // 1..=200
-  "include_diff": false
+ "format": "json", // json (default) | rss
+ "monitor_id": null, // one monitor
+ "since": "2026-01-01T00:00:00Z", // RFC3339, inclusive
+ "limit": 50, // 1..=200
+ "include_diff": false
 }
 ```
 
@@ -606,8 +610,8 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // webhook_target
 {
-  "monitor_id": 7,
-  "targets": ["ops"]          // configured names only; [] clears; 0..=8
+ "monitor_id": 7,
+ "targets": ["ops"] // configured names only; [] clears; 0..=8
 }
 ```
 
@@ -623,22 +627,23 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // crawl_start
 {
-  "start_urls": ["https://docs.example.com/"],
-  "sitemap_urls": [],                    // up to 5; start_urls may be empty
-  "scope": { "include_paths": ["/docs/"], "exclude_patterns": ["\\?page="],
-             "max_depth": 3, "allow_offsite": false },
-  "render_policy": "thin_only",          // never | thin_only | always; auto = thin_only
-  "limits": { "max_pages": 500, "per_host_rate": 1.0, "max_duration_s": 1800 },
-  "schema": { "container": ".entry", "fields": { "title": { "selector": "h1" } } }
+ "start_urls": ["https://docs.example.com/"],
+ "sitemap_urls": [], // up to 5; start_urls may be empty
+ "scope": { "include_paths": ["/docs/"], "exclude_patterns": ["\\?page="],
+ "max_depth": 3, "allow_offsite": false },
+ "render_policy": "thin_only", // never | thin_only | always; auto = thin_only
+ "limits": { "max_pages": 500, "per_host_rate": 1.0, "max_duration_s": 1800 },
+ "schema": { "container": ".entry", "fields": { "title": { "selector": "h1" } } }
 }
 ```
 
-- **Frontier in SQLite, dedup as a constraint.** Every enqueue is `INSERT ... ON CONFLICT DO NOTHING` on `PRIMARY KEY(job_id, url_hash)`, so a URL cannot be enqueued twice even if a caller forgets to check. Canonical identity is the same rule `fetch_page` uses (lowercase host, default port and fragment dropped, tracking parameters removed, query parameters sorted); a trailing slash is a different resource.
+- **Frontier in SQLite, dedup as a constraint.** Every enqueue is `INSERT... ON CONFLICT DO NOTHING` on `PRIMARY KEY(job_id, url_hash)`, so a URL cannot be enqueued twice even if a caller forgets to check. Canonical identity is the same rule `fetch_page` uses (lowercase host, default port and fragment dropped, tracking parameters removed, query parameters sorted); a trailing slash is a different resource.
 - **Leases, not in-memory queues.** A worker leases a row with `lease_until`; an expired lease is requeued with `attempts+1`, and after `crawl.max_attempts` the URL becomes `failed` with its last error. A killed process therefore resumes on the next start (`crawl_status` reports `running` until leases expire), and no completed page is fetched again.
 - **Politeness and safety are the shared ones.** Each page goes through the same `fetch_page` path: SSRF gate on every address and redirect hop, robots.txt per hop, streamed caps, retries. `per_host_rate` adds a per-job interval floor; the configured minimum interval and any robots `Crawl-delay` can only raise it. A crawl cannot widen its own reach.
 - **Scope** applies to discovered links (seeds are taken as given): depth, registrable site (off-site skipped unless `allow_offsite`), `include_paths` prefixes, and `exclude_patterns` regexes matched against `path?query`.
 - **Trap resistance.** When a fetched page's content identity — the Markdown with link targets removed — was already seen in the same job, the page is stored but its links are not followed. A calendar trap therefore stops after the first duplicate instead of consuming the page budget.
 - **Limits are honest.** `max_pages` and `max_duration_s` stop the job with `state: done`, `limits_hit` naming the limit, and the remaining frontier reported as `counters.queued`. `crawl_results` paginates with an opaque cursor bound to the job (a cursor from another job is `not_found`).
+- **Per-item freshness.** Each `crawl_results` item carries `fetched_at`, `validated_at`, `last_attempt_at` and `last_attempt_failed` for the exact row it reports: with a schema, the joined extraction row's own capture and write sequence, so a later same-spec `extract` is dated from its own write and never from the earlier crawl's clock; without one, the page write the crawl made. A failed attempt renews nothing.
 - **Sitemap seeding.** `sitemap_urls` (at most 5) are fetched and parsed **before** the job is persisted, each through the same gate. Their entries are *discovered* URLs, not explicit seeds: the job's `scope` filters them (`include_paths`, `exclude_patterns`, off-site) and they are deduped against `start_urls` and `max_pages`, then enqueued at depth 0. Explicit `start_urls` keep the "seeds bypass scope" rule. With empty `start_urls`, the scope's site set comes from the sitemap URL, so a cross-site entry is skipped. The start payload gains `sitemap: {urls_found, urls_enqueued, urls_skipped, errors: [{url, code}]}` only when `sitemap_urls` is supplied; a sitemap failure is recorded there and the other seeds still start. `lastmod` is never used for ordering or scheduling.
 - **Cancel is cooperative.** In-flight pages finish, no new rows are leased, the job ends `cancelled`, and partial results stay readable.
 
@@ -647,27 +652,27 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // corpus_export
 {
-  "format": "jsonl",            // jsonl | markdown
-  "name": "corpus",             // slug [a-z0-9][a-z0-9._-]{0,63}
-  "site": "example.com",        // optional canonical-site filter
-  "since": "2026-10-01T00:00:00Z",
-  "limit": 1000,                // 1..=10000
-  "include_text": true, "include_extraction": true,
-  "max_bytes": 268435456        // 1 MiB..=1 GiB
+ "format": "jsonl", // jsonl | markdown
+ "name": "corpus", // slug [a-z0-9][a-z0-9._-]{0,63}
+ "site": "example.com", // optional canonical-site filter
+ "since": "2026-10-01T00:00:00Z",
+ "limit": 1000, // 1..=10000
+ "include_text": true, "include_extraction": true,
+ "max_bytes": 268435456 // 1 MiB..=1 GiB
 }
 
 // snapshot_compare
 {
-  "kind": "monitor",            // monitor (snapshots.id) | page (fetch_events.id)
-  "from": 12, "to": 15,
-  "include_diff": true,
-  "max_chars": 20000            // 1..=100000
+ "kind": "monitor", // monitor (snapshots.id) | page (fetch_events.id)
+ "from": 12, "to": 15,
+ "include_diff": true,
+ "max_chars": 20000 // 1..=100000
 }
 ```
 
 - **What a corpus row is.** A page whose latest fetch succeeded and that has stored text. The text is the delivered Markdown or the record text, capped at 200 000 characters per row (`text_truncated`); the latest extraction is embedded (omitted with `extraction_truncated: true` when it alone exceeds the same cap). A page with no stored text (failure-only, or an extraction pruned by retention) is counted in `skipped_no_text` and never emitted with an invented body.
 - **The boundary.** **Monitors and recipes are not corpus rows**: monitor history is `monitor_changes`/`changes`, and the recipe library is a configuration surface over `profiles`. The export covers `pages` + their extractions only.
-- **Shapes.** JSONL: one JSON object per line with `url, canonical_url, title, lang, site, first_seen, last_fetched, status, content_type, render_mode, text_hash, text, text_truncated, extraction, extraction_truncated`. Markdown: a directory with `index.md` (front matter: generated_at, filters, record count) and `pages/<url_hash>.md` (front matter url/title/fetched_at + body).
+- **Shapes.** JSONL: one JSON object per line with `url, canonical_url, title, lang, site, first_seen, last_fetched, fetched_at, validated_at, last_attempt_at, last_attempt_failed, status, content_type, render_mode, text_hash, text, text_truncated, extraction, extraction_truncated`. Markdown: a directory with `index.md` (front matter: generated_at, filters, record count) and `pages/<url_hash>.md` (front matter url/title/fetched_at/validated_at/last_attempt_at/last_attempt_failed + body). In both shapes `fetched_at` is the page text's capture, the JSONL `last_fetched` key aliases `validated_at`, and a failed attempt renews neither.
 - **Paths are not caller-controlled.** The filename is `<slug>-<UTC stamp>` inside `<data_dir>/exports/` (created `0700`), written to a dot-temp and renamed on success, `create_new` and never overwritten. An invalid name is `schema_invalid` at `/name`.
 - **Bounds.** Streamed page by page (no job, no corpus in the response): the record `limit` or `max_bytes` stops it, with `truncated` and `limit_hit` (`limit`|`max_bytes`). The response carries the path, counts and bytes only.
 - **Compare pairs.** `kind: monitor` takes two `snapshots.id` values from the same monitor (text from the stored normalized Markdown; a schema monitor also compares its canonical records and reports the first 20 changed indices in `record_changes`). `kind: page` takes two `fetch_events.id` values with a stored extraction and the same canonical URL (the delivered text is compared as stored). Stats are never capped; `diff` is capped at `max_chars` (`truncated` + `limit_hit: "max_chars"`). A missing id/version is `not_found` naming the constraint; a cross-monitor or cross-URL pair is `schema_invalid` with `mismatch`. Nothing is written.
@@ -677,12 +682,12 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 ```jsonc
 // screenshot
 {
-  "url": "https://example.com/app", "full_page": true, "wait_ms": 300
+ "url": "https://example.com/app", "full_page": true, "wait_ms": 300
 }
 // → { "url", "final_url", "status", "hash", "bytes", "mime": "image/png",
-//     "width", "height", "dimensions_source": "content|viewport|unknown",
-//     "full_page", "captured_at", "render_mode", "render_quality",
-//     "truncated", "limit_hit", "failed_resources" }
+// "width", "height", "dimensions_source": "content|viewport|unknown",
+// "full_page", "captured_at", "render_mode", "render_quality",
+// "truncated", "limit_hit", "failed_resources" }
 ```
 
 `screenshot` renders one http(s) URL through the same SSRF/robots/preflight/politeness path as `fetch_page`, then captures the settled page with CDP `Page.captureScreenshot` as a PNG. The visual profile is server-fixed (no caller toggle): stylesheets, fonts and images load, media is blocked, and two caps bound the capture — `[render] visual_max_bytes` (20 MiB) and `visual_max_requests` (500). Hitting one reports `truncated: true` and `limit_hit`.
@@ -690,7 +695,7 @@ Errors are in-band: `isError: true` with `structuredContent.error = { code, mess
 - The PNG goes to the content-addressed store and gets one `blobs` row plus one `screenshots` row (written in that order inside one writer closure: the screenshot row references the blob). The payload carries the BLAKE3 `hash`, size, MIME and CSS-pixel dimensions — **never base64**.
 - `full_page: false` (default) captures the visual viewport; `full_page: true` captures the content size. `wait_ms` (0..=10000) is a post-settle wait, never a navigation. If `Page.getLayoutMetrics` fails, `width`/`height` are `null` and `dimensions_source` is `unknown` — never invented.
 - `page_id` is the existing `pages` row for the canonical URL when one exists, else `null`; a screenshot never fabricates a page row. Screenshot rows and their blobs are pruned by `[retention].screenshots_days` (30), and a surviving row retains its blob through both the age and budget passes.
-- Asset subresources are fetched by the browser, not by the tool: the SSRF gate and robots check govern the top-level document, not the CSS, font or image URLs it names. Treat the PNG and any page text as untrusted data.
+- Asset subresources are fetched by the browser, not by the tool: the SSRF gate and robots check govern the top-level document (), not the CSS, font or image URLs it names. Treat the PNG and any page text as untrusted data.
 
 `blob_get { hash }` returns `{hash, size, mime, path, created_at, referenced_by}` for any stored blob. `hash` must be 64 hex characters and can only address the CAS, so there is no caller path and no traversal; unknown or missing content is `not_found`. No bytes are returned: read the file at `path` with your own tools.
 
@@ -702,20 +707,20 @@ Four tools hold **one page per process** for front-end debugging: `interact_open
 // interact_open
 { "url": "http://127.0.0.1:3000/", "viewport_width": 1280, "viewport_height": 800 }
 // → { "session_id", "final_url", "status", "title", "expires_at",
-//     "actions_remaining", "console" }
+// "actions_remaining", "console" }
 
 // interact_act
 { "session_id": "0192…", "action": { "kind": "click", "selector": "button#run" } }
 // → { "session_id", "action", "ok", "blocked"?, "final_url", "title",
-//     "console_tail", "actions_remaining", "expires_at", "typed_chars"?,
-//     "popup"? }
+// "console_tail", "actions_remaining", "expires_at", "typed_chars"?,
+// "popup"? }
 ```
 
 - **Closed action set.** `click { selector, index? }`; `type { selector, text, index?, clear? }` (clear defaults true; `text` is 1..=2000 chars and the response returns `typed_chars` only — the value never appears in a payload or log); `wait` with exactly one of `selector` (presence, not visibility; polled every 100 ms), `ms` (≤ 10 000) or `network_quiet_ms` (≤ 5 000), all bounded by `timeout_ms` (≤ 30 000); `scroll { to: "element"|"top"|"bottom", selector? }`. There is **no caller JavaScript**, no `script`/`eval` field, no XPath and no text-based targeting — pass an exact CSS selector and disambiguate repeats with `index`. An unknown action kind or field is `schema_invalid`.
 - **One action at a time.** A concurrent action returns `session_busy`; a second `interact_open` while a session is live returns `session_busy` with the existing id. An idle-expired id is `session_expired`; an unknown or already-closed id is `session_not_found`; the action ceiling is `limit_exceeded`.
 - **Console capture.** `interact_state` returns the last `console_limit` entries (default 50, max 200; ring of 200): `{level, text, at, source}` from `Runtime.consoleAPICalled` and `Log.entryAdded`, plus uncaught exceptions. Primitive arguments become text; objects are reduced to their description or a bounded preview, never expanded, and each entry is capped at 500 chars. Console text is untrusted data.
 - **Network gate (defense in depth).** Every request routed through the session page's target is paused with CDP `Fetch` before it leaves the browser: `data:`/`blob:` continue, `file:`/`ws:`/`wss:` and any non-http(s) scheme are refused, and every http(s) request passes the SSRF gate. **Documents** additionally pass robots.txt; **every** request takes a per-host politeness lease, so the session keeps the ≤1 request/s host floor. A refusal appears on the action as `blocked: {reason, detail}` (`blocked_private_address`, `blocked_by_robots`, `blocked_scheme`, `blocked_iframe`, `request_cap`, or a visual cap) and no request reaches the target. `interact_open` itself passes the normal top-level render path. Per-session bounds: the visual caps, a 500-paused-request abuse cap (refused requests included), and 10 state screenshots.
-- **Target scope (what the gate does and does not cover).** The gate covers requests routed through the intercepted page target's network stack. It does **not** cover requests from other targets, so this implementation refuses **subframe documents** (iframes are out of scope), disables service-worker registration and the `SharedWorker` constructor, and prevents popups at the document level (`window.open` own property and prototype, `form.submit()`/`requestSubmit()` reading the content attribute, shadow-root forms, and a **server-side pre-dispatch hit-test** at the click point: the deepest node is resolved in the pierced DOM and its ancestor chain (shadow hosts included) is checked against the hit node's own document's first `<base target>`. Every click-policy input — the base target, each `target`/`formtarget`/`type` attribute, and a submit control's **form owner** (a non-empty `form` attribute resolved by id in that control's own tree — resolved per chain node, so a chain crossing a shadow boundary never borrows the hit node's tree — so a sibling form in a shadow tree is modelled even though it is invisible to an event path) — is read through `DOM.querySelector`/`DOM.getAttributes` and the pierced DOM tree, so page JavaScript cannot intercept or fake it. A hit `<label>` is resolved to its labeled control (`for` in the same tree, otherwise the first labelable descendant) and that control is evaluated with the same rule, because label activation forwards a click the guard cannot see through a closed declarative root (review 2026-11-02). The label pass is suppressed only for the spec's interactive content — an anchor **with `href`**, button, form control outside the hidden state, select, textarea, details, embed, iframe, label, `audio`/`video` with `controls`, or `img` with `usemap` — not for a bare `tabindex` element or an href-less anchor, which the UA still forwards to the control (g33, g33d). The hit test sets `ignorePointerEventsNone`, so a `pointer-events:none` overlay is transparent to the check as it is to the press. The click point is computed once from the browser's content quads and dispatched with `Input.dispatchMouseEvent`; `DOM.scrollIntoViewIfNeeded` replaces page `scrollIntoView`, and the element's box is re-read immediately before the press, so a box that moved between the check and the dispatch is refused (`click_point_moved`). There is no page-order candidate budget; the pierced-tree read itself is bounded (5 s, 50 000 examined nodes) and a limit is reported (`walk_truncated`), never an unchecked dispatch, and an action refusal is reported even when a subresource was blocked earlier in the same action). A `mousedown`/`pointerdown` handler *is* a page callback between the check and the click default action; the box re-read closes the layout version of it, and the guard's window `click` capture listener (re-asserted across `document.open`/`write`) cancels a target flipped by it; the `submit` listener applies the same effective-target rule (a **present** `formtarget` takes precedence over the form's `target`, even when empty; an empty effective target then falls to the base target and then `_self` — g35/g36 measured both halves), so a `formtarget="_self"` submit inside a `_blank` form is not over-blocked, and the listener is load-bearing for any submit whose effective target differs from the form's target and for shadow-tree submissions. Typing cannot deliver Enter (the key table has no newline entry, so a newline fails the action), so an implicit submission is not reachable from `type_text`. **The close-on-attach backstop is cleanup, not an egress control:** the guard-disabled discriminator evidence shows every creation shape reached the private listener (2 TCP) with the backstop alone, so creation prevention is the only egress control. A dedicated worker's own `fetch()` is observed on the page target and gated on the verified Chrome 156 build; **worker-created targets (a nested `Worker`, `importScripts`, and a `SharedWorker` created from a worker's `WorkerGlobalScope`) are an unvetted egress channel — a known hole, not only untested — and are a recorded residual (review 2026-11-01).** It is an **SSRF filter, not an egress filter**: it does not stop a page sending data to a public host, and WebRTC/UDP and DNS-only channels are outside it (launch flags disable DNS prefetch and non-proxied WebRTC UDP). The vet resolves DNS and the browser resolves again, so a rebinding zone can still reach a private address — a disclosed residual (the wording is in this section and in `docs/operations.md` §7), not a solved problem.
+- **Target scope (what the gate does and does not cover).** The gate covers requests routed through the intercepted page target's network stack. It does **not** cover requests from other targets, so this implementation refuses **subframe documents** (iframes are out of scope), disables service-worker registration and the `SharedWorker` constructor, and prevents popups at the document level (`window.open` own property and prototype, `form.submit()`/`requestSubmit()` reading the content attribute, shadow-root forms, and a **server-side pre-dispatch hit-test** at the click point: the deepest node is resolved in the pierced DOM and its ancestor chain (shadow hosts included) is checked against the hit node's own document's first `<base target>`. Every click-policy input — the base target, each `target`/`formtarget`/`type` attribute, and a submit control's **form owner** (a non-empty `form` attribute resolved by id in that control's own tree — resolved per chain node, so a chain crossing a shadow boundary never borrows the hit node's tree — so a sibling form in a shadow tree is modelled even though it is invisible to an event path) — is read through `DOM.querySelector`/`DOM.getAttributes` and the pierced DOM tree, so page JavaScript cannot intercept or fake it. A hit `<label>` is resolved to its labeled control (`for` in the same tree, otherwise the first labelable descendant) and that control is evaluated with the same rule, because label activation forwards a click the guard cannot see through a closed declarative root (review 2026-11-02). The label pass is suppressed only for the spec's interactive content — an anchor **with `href`**, button, form control outside the hidden state, select, textarea, details, embed, iframe, label, `audio`/`video` with `controls`, or `img` with `usemap` — not for a bare `tabindex` element or an href-less anchor, which the UA still forwards to the control (g33, g33d). The hit test sets `ignorePointerEventsNone`, so a `pointer-events:none` overlay is transparent to the check as it is to the press. The click point is computed once from the browser's content quads and dispatched with `Input.dispatchMouseEvent`; `DOM.scrollIntoViewIfNeeded` replaces page `scrollIntoView`, and the element's box is re-read immediately before the press, so a box that moved between the check and the dispatch is refused (`click_point_moved`). There is no page-order candidate budget; the pierced-tree read itself is bounded (5 s, 50 000 examined nodes) and a limit is reported (`walk_truncated`), never an unchecked dispatch, and an action refusal is reported even when a subresource was blocked earlier in the same action). A `mousedown`/`pointerdown` handler *is* a page callback between the check and the click default action; the box re-read closes the layout version of it, and the guard's window `click` capture listener (re-asserted across `document.open`/`write`) cancels a target flipped by it; the `submit` listener applies the same effective-target rule (a **present** `formtarget` takes precedence over the form's `target`, even when empty; an empty effective target then falls to the base target and then `_self` — g35/g36 measured both halves), so a `formtarget="_self"` submit inside a `_blank` form is not over-blocked, and the listener is load-bearing for any submit whose effective target differs from the form's target and for shadow-tree submissions. Typing cannot deliver Enter (the key table has no newline entry, so a newline fails the action), so an implicit submission is not reachable from `type_text`. **The close-on-attach backstop is cleanup, not an egress control:** the guard-disabled discriminator evidence shows every creation shape reached the private listener (2 TCP) with the backstop alone, so creation prevention is the only egress control. A dedicated worker's own `fetch()` is observed on the page target and gated on the verified Chrome 156 build; **worker-created targets (a nested `Worker`, `importScripts`, and a `SharedWorker` created from a worker's `WorkerGlobalScope`) are an unvetted egress channel — a known hole, not only untested — and are a recorded residual (review 2026-11-01).** It is an **SSRF filter, not an egress filter**: it does not stop a page sending data to a public host, and WebRTC/UDP and DNS-only channels are outside it (launch flags disable DNS prefetch and non-proxied WebRTC UDP). The vet resolves and pins the shared HTTP path's addresses; the **rendered browser path** still resolves inside Chrome, so a rebinding zone can reach a private address there — a disclosed residual (), with Chromium's private-network protections as the remaining control, not a solved problem.
 - **Popups, targets, and cross-origin page changes.** `window.open` (own property and prototype) is replaced, `form.submit()`/`requestSubmit()` and non-self anchor/area/form targets are cancelled at document start, and closed shadow roots are forced open so a shadow anchor cannot hide from the cancel path (a page can still reach `window.open` through a target the guard does not see; the page target is then closed). `_self`, `_top`, `_parent` and an empty target on the top frame are allowed same-context navigation; `_blank` and **named** targets are cancelled and reported as `blocked.reason: "navigation_cancelled"` (a blocked `window.open` reports `popup_blocked`) so a click is never silently a no-op. `popup: "not_followed"` is per-action (only the action that observed the CDP event). A blocked same-tab navigation is failed before the request, and Chrome then shows its own error page in that tab — reopen a session if you need the previous DOM. When the page navigates to a different origin, the next result says so with `origin_changed: true` and `previous_origin`; `title` (300 chars) and `final_url` (4096 chars) are capped, with `limit_hit` naming the field; control characters are stripped from title and console text.
 - **Injection surface (disclosed, not pretend-absent).** Page content can instruct an agent to click or type; act only on selectors from your own plan and treat page text as data. `type` can enter secrets into forms, so never type credentials into a page you do not trust; the tool keeps the last few typed strings and scrubs them (raw and URL-encoded) out of console output, but a page can still encode a value in ways scrubbing will not catch. Sessions are capability strings: anyone with the id can act until close, TTL or shutdown, the id is only ever logged as an 8-character prefix, and server shutdown closes every session.
 
@@ -724,11 +729,11 @@ Four tools hold **one page per process** for front-end debugging: `interact_open
 ```jsonc
 // arguments
 {
-  "host": "example.com",   // optional: restrict + probe this host
-  "path": "/private",      // probe path (default /)
-  "limit": 50,             // 1..=200, host order
-  "cursor": null,
-  "include_body": false    // 200-char preview only
+ "host": "example.com", // optional: restrict + probe this host
+ "path": "/private", // probe path (default)
+ "limit": 50, // 1..=200, host order
+ "cursor": null,
+ "include_body": false // 200-char preview only
 }
 ```
 
@@ -746,19 +751,19 @@ Four tools hold **one page per process** for front-end debugging: `interact_open
 
 A rendered page is serialized as `document.documentElement.outerHTML` and fed through the same charset, blob, extraction and persistence path. `render_mode` is `static` for a static fetch, `rendered` when the page settled, `rendered_partial` when the 5 MiB / 200 request caps or the 10 s ceiling stopped it, and `static_fallback` when `auto` asked for rendering but it was unavailable or failed (an optional `render_warning` says why).
 
-The shared browser is launched lazily, gets a throwaway profile under the data directory (wiped at start and exit), and is restarted at most three times per ten minutes. Each page gets an ephemeral browser context (no cookies or storage are shared). The **text profile** used by `fetch_page`/`extract` blocks `image`, `media`, `font` and `stylesheet` requests while `script`, `xhr`, `fetch` and the document are allowed. The **visual profile** used by `screenshot` (below) allows stylesheets, fonts and images so the capture matches what a user sees; media stays blocked. Rendered pages execute untrusted JavaScript: the SSRF gate governs the **top-level URL**, not every subresource the page chooses to load — a disclosed residual risk, not a claim of sandboxing the network.
+The shared browser is launched lazily, gets a throwaway profile under the data directory (wiped at start and exit), and is restarted at most three times per ten minutes. Each page gets an ephemeral browser context (no cookies or storage are shared). The **text profile** used by `fetch_page`/`extract` blocks `image`, `media`, `font` and `stylesheet` requests while `script`, `xhr`, `fetch` and the document are allowed. The **visual profile** used by `screenshot` (below) allows stylesheets, fonts and images so the capture matches what a user sees; media stays blocked. Rendered pages execute untrusted JavaScript: the SSRF gate governs the **top-level URL**, not every subresource the page chooses to load — a disclosed residual risk in, not a claim of sandboxing the network.
 
 ### HTTP transport and local HTTPS
 
 - Endpoint: `http://127.0.0.1:8765/mcp`. Every request needs `Authorization: Bearer <token>` and `Accept: application/json, text/event-stream` (MCP clients send the latter for you; a raw `curl` probe must include it or the streamable transport answers `406`). A missing/wrong token is `401` with `WWW-Authenticate: Bearer`; the token is read from `WEB_WIDOW_HTTP_TOKEN` (wins) or a `0600` file and is never logged.
 - `--http` refuses a non-loopback address unless `--allow-non-loopback` is also passed. Local HTTPS is available on the same listener with `[http].tls = true` (see below); multi-user auth remains out of scope. Keep the bind on loopback unless you have deliberately reviewed the network exposure.
 - **The change feed is loopback-only.** A non-loopback `--http` bind with `[events].feed_enabled` is refused at startup (before any token is resolved or provisioned): set `[events].feed_enabled = false` for an MCP-only network deployment. `http::serve` re-checks the bound address, so a library caller cannot bypass the refusal.
-- **The loopback HTTP transport is stateless.** Every POST is served directly; `Mcp-Session-Id` is neither required nor issued, and stale/unknown/absent ids are ignored instead of returning `404`. `initialize` completes the handshake normally (`application/json`). Only POST is served: `GET` and `DELETE` on `/mcp` return `405` with `Allow: POST`, and the server emits no server-initiated messages. Bearer auth, Host validation and the body cap are unchanged.
+- **The loopback HTTP transport is stateless.** Every POST is served directly; `Mcp-Session-Id` is neither required nor issued, and stale/unknown/absent ids are ignored instead of returning `404` (). `initialize` completes the handshake normally (`application/json`). Only POST is served: `GET` and `DELETE` on `/mcp` return `405` with `Allow: POST`, and the server emits no server-initiated messages. Bearer auth, Host validation and the body cap are unchanged.
 - Each request writes one access line to stderr: `method`, `path`, `status`, `session` (the first 8 characters of a supplied id, or `none`) and `duration_ms`; INFO for status ≥ 400, DEBUG otherwise. The bearer token, the body and the query string are never logged.
 - stdout stays empty in HTTP mode; all logs are stderr.
 - SIGINT/SIGTERM stops the listener, cancels job workers, closes the browser, wipes the throwaway profile and releases the data-directory lock (target: exit within 10 s).
 
-#### Local HTTPS
+#### Local HTTPS ()
 
 Set `[http].tls = true` to serve the same `/mcp` and `/feeds` routes over HTTPS on the `--http` listener. TLS is strict either-or: that port is HTTPS only, never plaintext. With no certificate paths, the first start generates a local CA and server certificate under `<data>/tls/` (`ca.pem`/`server.pem` 0644, `ca-key.pem`/`server-key.pem` 0600, `meta.json`; directory 0700). Trust the CA once in each client, or provide an operator PEM pair with `tls_cert_file`/`tls_key_file` (both or neither; an override skips generation).
 
@@ -766,10 +771,10 @@ Set `[http].tls = true` to serve the same `/mcp` and `/feeds` routes over HTTPS 
 openssl verify -CAfile <data>/tls/ca.pem <data>/tls/server.pem
 openssl x509 -in <data>/tls/ca.pem -noout -subject -dates -fingerprint -sha256
 curl --cacert <data>/tls/ca.pem https://127.0.0.1:8765/feeds/changes.xml
-export NODE_EXTRA_CA_CERTS=<data>/tls/ca.pem   # Node-based MCP clients
+export NODE_EXTRA_CA_CERTS=<data>/tls/ca.pem # Node-based MCP clients
 ```
 
-Firefox: Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import → `ca.pem` → trust for websites. Chrome/Chromium (Linux, NSS): `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "web-widow local CA" -i <data>/tls/ca.pem` (needs `nss-tools`), or import in `chrome://settings/certificates`. System store (Debian/Ubuntu): copy `ca.pem` to `/usr/local/share/ca-certificates/web-widow-local-ca.crt` and run `sudo update-ca-certificates`. The SANs are `localhost`, `127.0.0.1` and `::1`; connect by one of those names. The CA lasts ~10 years and the leaf ~13 months with startup renewal; an expired CA is a typed startup error (delete `<data>/tls/` to re-mint, then re-import). Generated material is loopback-only; a non-loopback bind needs an override with the right SAN. See [`docs/operations.md`](docs/operations.md#local-https) for the full lifecycle, override and error contract.
+Firefox: Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import → `ca.pem` → trust for websites. Chrome/Chromium (Linux, NSS): `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "web-widow local CA" -i <data>/tls/ca.pem` (needs `nss-tools`), or import in `chrome://settings/certificates`. System store (Debian/Ubuntu): copy `ca.pem` to `/usr/local/share/ca-certificates/web-widow-local-ca.crt` and run `sudo update-ca-certificates`. The SANs are `localhost`, `127.0.0.1` and `::1`; connect by one of those names. The CA lasts ~10 years and the leaf ~13 months with startup renewal; an expired CA is a typed startup error (delete `<data>/tls/` to re-mint, then re-import). Generated material is loopback-only; a non-loopback bind needs an override with the right SAN. See [`docs/operations.md`](docs/operations.md#local-https-m08-t1) for the full lifecycle, override and error contract.
 
 ### Authenticated fetching
 
@@ -777,57 +782,58 @@ Credentials are **config-only**. A secret reference (`op://`, `bw://`, `pass://`
 
 ```toml
 [auth]
-audit_days = 90                  # auth_audit retention, 1..=3650
-manager_timeout_ms = 5000        # hard per-resolution timeout, 100..=60000
-allow_loopback_http = false      # plain HTTP for literal loopback addresses only
-persist = false                  # store authenticated bodies (return-only when false)
-index_authenticated = false      # include stored ones in FTS + embeddings
-events_authenticated = false     # include events derived from them in the feed
-page_retention_days = 7          # retention for stored authenticated pages
+audit_days = 90 # auth_audit retention, 1..=3650
+manager_timeout_ms = 5000 # hard per-resolution timeout, 100..=60000
+allow_loopback_http = false # plain HTTP for literal loopback addresses only
+persist = false # store authenticated bodies (return-only when false)
+index_authenticated = false # include stored ones in FTS + embeddings
+events_authenticated = false # include events derived from them in the feed
+page_retention_days = 7 # retention for stored authenticated pages
 
-[auth.managers.op]               # absolute path; PATH is never searched
+[auth.managers.op] # absolute path; PATH is never searched
 path = "/usr/bin/op"
-env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"]   # the only extra vars the child sees
+env_allow = ["OP_SERVICE_ACCOUNT_TOKEN"] # the only extra vars the child sees
 
-[auth.profiles.github]           # bearer (default) | basic | header
+[auth.profiles.github] # bearer (default) | basic | header
 kind = "bearer"
-host = "github.com"              # lowercase bare host
-port = 443                       # exact credential origin port, 1..=65535
+host = "github.com" # lowercase bare host
+port = 443 # exact credential origin port, 1..=65535
 reference = "op://Private/github/token"
 ```
 
 - **Per-site opt-in.** The operator configures the profile, the binding host and the reference (or, for `kind = "session"`, the login/verify URLs); nothing is authenticated until a profile exists and is named. A **header** profile refuses a redirect to another host (`auth_redirect_blocked`); an **SSO/session-gated** site uses a `kind = "session"` profile, where the operator logs in with `auth login` (once per session lifetime; `session_max_age_days`, default 30) and the sealed jar is reused.
-- **Return-only by default.** An authenticated `fetch_page` persists no authenticated content and no credential — no page or extraction row, no blob, no FTS/embedding, no cache, no event, no webhook — and reports `cached: false`, `authenticated: true` and the profile name. The only store writes are its single value-free `auth_audit` row and the unauthenticated robots cache (`hosts`), which the hop guard updates before the binding check. `[auth].persist = true` opts in to storing the body **labelled** (`authenticated`, `auth_site`) and extraction-only; stored pages are excluded from `corpus_export`, the feed and webhooks, and from FTS/embeddings and events unless `index_authenticated` / `events_authenticated` is set, with `page_retention_days` (default 7) retention. A header profile stays static (`render = always` → `auth_render_unsupported`); with `render = always`, a session profile renders through the dedicated authenticated browser.
+- **Return-only by default.** An authenticated `fetch_page` persists no authenticated content and no credential — no page or extraction row, no blob, no FTS/embedding, no cache, no event, no webhook — and reports `cached: false`, `authenticated: true` and the profile name. The only store writes are its single value-free `auth_audit` row and the unauthenticated robots cache (`hosts`), which the hop guard updates before the binding check. `[auth].persist = true` opts in to storing the body **labelled** (`authenticated`, `auth_site`) and extraction-only; stored pages are excluded from `corpus_export`, the feed and webhooks, and from FTS/embeddings and events unless `index_authenticated` / `events_authenticated` is set, with `page_retention_days` (default 7) retention. A store failure on that persistence path is a typed error that stores nothing (no page, event or extraction row, and no failure record, which would store an unlabelled page); return-only calls are unaffected because they write no row. A header profile stays static (`render = always` → `auth_render_unsupported`); with `render = always`, a session profile renders through the dedicated authenticated browser.
 - **Trail.** Exactly one value-free `auth_audit` row per attempt (profile name, host, method, status, bytes, outcome, resolution time — never a value, a reference, a path or a query), pruned after `[auth].audit_days`. The runbook and the SQL to read it are in `docs/operations.md` §12.
 - **Exact origin.** A credential attaches only to the configured `host:port` (default 443) and never to a subdomain, even with `allow_subdomains = true`, which widens browser reachability only. Plain HTTP is admitted for the literal addresses `127.0.0.1` and `::1` only, and only with `allow_loopback_http`.
-- **Authenticated reuse.** A session profile uses a sealed jar against a dedicated pipe-only headless browser (ephemeral context per fetch, host-only cookie injection, the egress policy on every request plus a loopback proxy) or the static cookie path. It is **read-only**: GET/HEAD only, no mutation authority. An HTTP auth challenge fails the fetch (`auth_challenge_refused`). The launch carries `--webrtc-ip-handling-policy=disable_non_proxied_udp` — the `force-` spelling is a **no-op** on Chrome 156 and must not be reintroduced. The requested document is SSRF/robots/lease-vetted before the browser starts; a rendered page's own subresources are outside robots (they remain subject to the egress policy). Details: `docs/operations.md` §12.8.
+- **Authenticated reuse ().** A session profile uses a sealed jar against a dedicated pipe-only headless browser (ephemeral context per fetch, host-only cookie injection, the egress policy on every request plus a loopback proxy) or the static cookie path. It is **read-only**: GET/HEAD only, no mutation authority. An HTTP auth challenge fails the fetch (`auth_challenge_refused`). The launch carries `--webrtc-ip-handling-policy=disable_non_proxied_udp` — the `force-` spelling is a **no-op** on Chrome 156 and must not be reintroduced. The requested document is SSRF/robots/lease-vetted before the browser starts; a rendered page's own subresources are outside robots (they remain subject to the egress policy). Details: `docs/operations.md` §12.8.
 - **Errors.** `auth_profile_unknown`, `auth_manager_failed`, `auth_manager_timeout`, `auth_secret_unavailable`, `auth_rejected`, `auth_redirect_blocked`, `auth_host_not_allowed`, `auth_insecure_url`, `auth_render_unsupported`, `auth_header_rejected`, `auth_store_unavailable`, `auth_store_locked`, `auth_store_invalid`, `auth_session_missing`, `auth_session_expired`, `auth_challenge_refused`, `auth_method_refused`, `auth_session_unsupported`. A failure never falls back to an unauthenticated fetch.
 - **Disclosure.** Authenticated fetching is the operator's responsibility: use a credential you are entitled to use against that site, respect its terms of service and robots policy, and prefer a narrow read-only token. By default the server returns the body to the calling agent and never persists it; with `[auth].persist` the body is stored labelled and egress-restricted as above, and the operator owns the decision. What the agent does with a returned body is outside the server's control.
 
 ### Schema and upgrades
 
-Current schema: v10.
+Current schema: v11.
 
 Migrations are forward-only. An older binary refuses a newer database with `database schema vN is newer than this binary`, so rolling back the binary requires restoring a pre-migration backup.
 
 - `profiles.hash` is versioned (`spec/v1/...`). Cached extraction rows written by an older unversioned build are simply missed and re-fetched; nothing is corrupted. An **in-flight pre-upgrade crawl job that carried a schema** should be restarted as a new job so its profile identity and `crawl_results.extracted` join stay consistent.
-- If a unit passes `--http`, install a release built with the `http` feature and keep the rollback artifact outside the build tree. The shared unit's `ExecStart` points into `target/release`, so any feature-different `cargo build --release` overwrites the deployed file (the running process keeps its image) and the next restart fails with `this binary was built without the http feature`. Verify the installed file's `sha256sum` **and** that it is http-capable before starting; the default build is not a rollback for an `--http` unit. `docs/operations.md` names the durable release artifacts by sha.
-- **v0.3 is code-only** (no schema or data change). The previous `99ab3a4` http binary is the rollback; preserve/install a feature-matched artifact and check its sha before start, as above. `docs/operations.md` records the v0.3 upgrade/rollback note.
+- If a unit passes `--http`, install a release built with the `http` feature and keep the rollback artifact outside the build tree. The shared unit's `ExecStart` points into `target/release`, so any feature-different `cargo build --release` overwrites the deployed file (the running process keeps its image) and the next restart fails with `this binary was built without the http feature`. Verify the installed file's `sha256sum` **and** that it is http-capable before starting; the B01 default build is not a rollback for an `--http` unit. `docs/operations.md` names the durable artifacts by sha.
+- ** is code-only** (no schema or data change). The previous `99ab3a4` http binary is the rollback; preserve/install a feature-matched artifact and check its sha before start, as above. `docs/operations.md` records the upgrade/rollback note.
 - v5 added the nullable `monitors.label`; v6 added the FTS5 table `pages_fts` and the `meta` marker table, then backfilled one index row per existing page in 200-page transactions at the first start (idempotent; the `fts_backfill_v6` marker makes a second start a no-op). Back up the database **and** the blob directory before running a newer binary; an older binary refuses a newer schema (`database schema vN is newer than this binary`), so rolling back the binary requires restoring a pre-migration backup. `docs/operations.md` has the stop → backup → install → start → verify runbook, the v6 note and the restore drill.
+- v11 added the corpus-freshness provenance (`pages.write_seq`, `content_*`, `index_*`, `validators_write_seq`, `last_attempt_*` and `extractions.source_write_seq`) and backfilled conservatively in the same transaction: the old `pages.last_fetched` became the attempt pair (`not_modified` → unknown), and the success clock was recomputed from retained events that prove a usable 200 (no error, HTTP 200, a body hash or an extraction created by that same event). No capture or validation is invented for a legacy row: those columns stay null, and a page whose only retained success is a 304 gets a null internal clock. `pages.last_fetched` is now success-anchored (see `docs/operations.md` §13).
 - Snapshots created before v4 have an unknown render mode; their first post-upgrade check fetches the body unconditionally and records the actual mode, so the static 304 shortcut only applies from then on.
 
 ## Limits and intended use
 
-**Intended use.** Internal agent tooling over publicly accessible pages such as docs, news and reference sites, with robots.txt respected and at most one request per second per host. Authenticated access is operator-configured, per-site and opt-in. Session-gated sites are reached only through an operator-captured `kind = "session"` login, and only for content the operator is entitled to access; the server adds no paywall or access-control bypass. There is no open-web discovery, proxy rotation, distributed crawling or multi-user auth.
+Intended use (): internal agent tooling over publicly accessible pages such as docs, news and reference sites, with robots.txt respected and at most one request per second per host. Authenticated access is operator-configured, per-site and opt-in. Session-gated sites are reached only through an operator-captured `kind = "session"` login, and only for content the operator is entitled to access; the server adds no paywall or access-control bypass. There is no open-web discovery, proxy rotation, distributed crawling or multi-user auth.
 
 Known limits, stated rather than hidden:
 
-- `mode=main` uses readability and can drop sibling blocks, for example a comparison table beside an article. A bounded repair restores a missing run only when it starts with an undelivered sibling section heading and the repair stays under 25% of the delivered text. Use `mode=full` or `mode=text` when completeness matters.
+- `mode=main` uses readability and can drop sibling blocks, for example a comparison table beside an article. A bounded repair restores a missing run only when it starts with an undelivered sibling section heading and the repair stays under 25% of the delivered text. Use `mode=full` or `mode=text` when completeness matters ().
 - Monitors watch one URL each. Schema monitors compare declared fields, not a full JSON delta.
 - A rendered monitor re-fetches every check, because the static validator cannot prove the rendered DOM is unchanged.
 - `monitor_check(all: true)` has no cancel tool; shutdown is cooperative, and a crash marks the job failed while monitors stay due.
 - A permanent 404 is one terminal check, not a three-attempt retry.
-- `crawl_results` rows are page-current, not per-attempt snapshots.
+- `crawl_results` rows are page-current, not per-attempt snapshots: each item's freshness facts come from the exact row it reports, and a later unrelated write is never retro-dated onto it. The page's `status`/`title`/`raw_hash` remain the page's current values (a pre- behaviour, unchanged).
 - A crawl whose seeds are all blocked ends `done` with `fetched: 0` and `limits_hit` distinguishing a limit stop.
 - Local search has no `OR`, `NEAR` or prefix operators, no page-level retention, and no authenticated crawling.
 - The change feed is loopback-only with its own token, not a multi-user service.
@@ -837,29 +843,29 @@ Known limits, stated rather than hidden:
 ## Layout
 
 ```text
-src/core/       pure domain: URL canonicalization, IP classification, robots decisions, truncation
-src/config.rs   TOML + env + CLI, path resolution, permission checks
-src/fetch/      HTTP adapter, SSRF gate, per-host gate, robots cache, charset, content scope
-src/extract/    readability + Markdown + metadata + links; spec validation and evaluation
-src/render/     renderer port, CDP browser lifecycle, discovery, auto heuristic
-src/store/      SQLite repository, migrations, content-addressed blobs, retention, jobs/frontier
-src/crawl/      crawl scope predicate, job worker, crawl service
-src/monitor/    normalization, classification, monitor service, run-due
-src/search/     DuckDuckGo html/lite parser and the search payload
-src/fts/        query validation, FTS5 expression, payload
-src/auth/       credential profiles, egress policy, sealed sessions
-src/pdf/        PDFium loading and text-layer extraction
-src/sitemap/    sitemap parsing
-src/rows/       CSV, TSV, JSON and HTML table parsing
-src/webhooks/   outbox dispatcher and signing
-src/export/     corpus export and snapshot comparison
+src/core/ pure domain: URL canonicalization, IP classification, robots decisions, truncation
+src/config.rs TOML + env + CLI, path resolution, permission checks
+src/fetch/ HTTP adapter, SSRF gate, per-host gate, robots cache, charset, content scope
+src/extract/ readability + Markdown + metadata + links; spec validation and evaluation
+src/render/ renderer port, CDP browser lifecycle, discovery, auto heuristic
+src/store/ SQLite repository, migrations, content-addressed blobs, retention, jobs/frontier
+src/crawl/ crawl scope predicate, job worker, crawl service
+src/monitor/ normalization, classification, monitor service, run-due
+src/search/ DuckDuckGo html/lite parser and the search payload
+src/fts/ query validation, FTS5 expression, payload
+src/auth/ credential profiles, egress policy, sealed sessions
+src/pdf/ PDFium loading and text-layer extraction
+src/sitemap/ sitemap parsing
+src/rows/ CSV, TSV, JSON and HTML table parsing
+src/webhooks/ outbox dispatcher and signing
+src/export/ corpus export and snapshot comparison
 src/interaction/ page session and the click guard
-src/tls.rs      generated local CA and leaf lifecycle
+src/tls.rs generated local CA and leaf lifecycle
 src/mcp/http.rs loopback streamable HTTP transport (feature `http`)
-src/mcp/        rmcp server and the tool surface
+src/mcp/ rmcp server and the tool surface
 src/pipeline.rs single-URL orchestration
-docs/operations.md  operator runbook: data, GC, backup, HTTP, troubleshooting
-AGENTS.md       short repository build, test and run instructions
+docs/operations.md operator runbook: data, GC, backup, HTTP, troubleshooting
+AGENTS.md short repository build, test and run instructions
 ```
 
 ## Documentation
@@ -874,6 +880,4 @@ AGENTS.md       short repository build, test and run instructions
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The crate metadata declares the same single
-license (`license = "MIT"` in `Cargo.toml`), so packaged metadata, the
-dependency-license gate and the repository file agree.
+MIT. See [LICENSE](LICENSE).

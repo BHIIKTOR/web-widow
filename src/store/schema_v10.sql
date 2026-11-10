@@ -1,4 +1,4 @@
--- Migration 010_authenticated_pages.sql — schema v10 (v0.9).
+-- Migration 010_authenticated_pages.sql — schema v10 ( B5b).
 --
 -- Additive only: two page labels and their index. No existing column, row or
 -- value is rewritten; `authenticated` defaults to 0 so every pre-v10 page stays
